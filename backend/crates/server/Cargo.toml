@@ -16,4 +16,6 @@ serde.workspace = true
 api = { path = "../api" }
 ws = { path = "../ws" }
 cache = { path = "../cache" }
+services = { path = "../services" }
+reqwest.workspace = true
 url.workspace = true

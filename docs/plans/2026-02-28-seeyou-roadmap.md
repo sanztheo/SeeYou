@@ -8,8 +8,7 @@
 | Backend | Rust (Axum) + WebSocket | Gratuit |
 | Cache | Redis | Gratuit (local) |
 | 3D Batiments | CesiumJS + OSM Buildings | Gratuit |
-| Avions civils | OpenSky Network API | Gratuit |
-| Avions militaires | adsb.lol API | Gratuit |
+| Avions (civils + militaires) | adsb.lol API (`/v2/all` + `/v2/mil`) | Gratuit |
 | Satellites | CelesTrak TLE | Gratuit |
 | Trafic routier | OpenStreetMap Overpass API | Gratuit |
 | Cameras | Cameras publiques reelles (TfL, DOT, etc.) | Gratuit |
@@ -47,28 +46,32 @@
 
 ---
 
-## Phase 2 — Donnees aeriennes temps reel
+## Phase 2 — Donnees aeriennes temps reel ✅
 
 > Objectif : Voir les avions civils et militaires bouger en temps reel sur le globe.
 
 ### Backend
-- [ ] Service OpenSky : appeler l'API `/states/all`, parser la reponse JSON
-- [ ] Service adsb.lol : appeler l'API `/v2/ladd` et `/v2/mil`, parser la reponse
-- [ ] Normaliser les donnees des deux sources dans un format unifie (callsign, lat, lon, altitude, vitesse, heading, type)
-- [ ] Cache Redis : stocker les positions avec TTL (ex: 15s)
-- [ ] Endpoint WebSocket : streamer les positions toutes les 5 secondes
-- [ ] Gerer le rate limiting OpenSky (max 4000 credits/jour)
-- [ ] Differencier avions civils vs militaires dans les donnees
+- [x] Service adsb.lol : appeler `/v2/mil` (militaires) et `/v2/all` (global), parser la reponse JSON
+- [x] Normaliser les donnees dans un format unifie (`Aircraft` struct : icao, callsign, lat, lon, altitude_m, speed_ms, heading, type, is_military)
+- [x] Conversions d'unites : feet→metres, knots→m/s, ft/min→m/s
+- [x] Differencier civils vs militaires via `dbFlags` bitfield
+- [x] Cache Redis : stocker les positions avec TTL 15s
+- [x] Broadcast WebSocket : streamer les positions toutes les 5 secondes (`AircraftUpdate` message)
+- [x] Background task (`aircraft_tracker`) avec polling configurable (`POLL_INTERVAL_SECS`)
+- [x] Cap a 5000 avions (priorite militaires) pour ne pas surcharger les clients
+- [ ] ~~Service OpenSky~~ (reporte — adsb.lol couvre civils ET militaires sans auth)
 
 ### Frontend
-- [ ] Recevoir les positions avions via WebSocket
-- [ ] Afficher chaque avion comme entite CesiumJS sur le globe (icone avion)
-- [ ] Orienter l'icone selon le heading
-- [ ] Interpoler les mouvements entre les updates (smooth animation)
-- [ ] Couleur differente civils (bleu) vs militaires (rouge)
-- [ ] Popup au clic : callsign, altitude, vitesse, type
-- [ ] Filtres dans la sidebar : civils on/off, militaires on/off
-- [ ] Compteur total d'avions affiches
+- [x] Recevoir les positions avions via WebSocket (`onMessage` callback)
+- [x] Store aircraft avec `Map<icao, AircraftPosition>` et compteurs derives
+- [x] Afficher chaque avion comme billboard CesiumJS (icone avion SVG)
+- [x] Orienter l'icone selon le heading (rotation billboard)
+- [x] Couleur differente civils (bleu `#3B82F6`) vs militaires (rouge `#EF4444`)
+- [x] Popup au clic : callsign, type, altitude (ft), vitesse (kt), heading, V/S, position
+- [x] Camera tracking : au clic, la camera suit l'avion selectionne (`viewer.trackedEntity`)
+- [x] Filtres toggle dans la sidebar : civils on/off, militaires on/off
+- [x] Compteur total/civil/militaire dans la sidebar
+- [ ] Interpolation smooth entre les updates (SampledPositionProperty) — amelioration future
 
 ---
 

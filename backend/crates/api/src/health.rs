@@ -9,9 +9,7 @@ pub struct HealthResponse {
 }
 
 /// GET /health -- lightweight probe that reports Redis connectivity.
-pub async fn health_check(
-    State(pool): State<RedisPool>,
-) -> (StatusCode, Json<HealthResponse>) {
+pub async fn health_check(State(pool): State<RedisPool>) -> (StatusCode, Json<HealthResponse>) {
     let redis_status = match cache::ping_redis(&pool).await {
         Ok(()) => "connected",
         Err(_) => "disconnected",

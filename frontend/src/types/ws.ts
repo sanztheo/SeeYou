@@ -1,4 +1,12 @@
-export type WsMessageType = "Connected" | "Ping" | "Pong" | "Error";
+import type { AircraftPosition } from "./aircraft";
+
+export type WsMessageType =
+  | "Connected"
+  | "Ping"
+  | "Pong"
+  | "Error"
+  | "AircraftUpdate"
+  | "AircraftBatch";
 
 export interface WsConnected {
   type: "Connected";
@@ -18,6 +26,26 @@ export interface WsError {
   payload: { message: string };
 }
 
-export type WsMessage = WsConnected | WsPing | WsPong | WsError;
+export interface WsAircraftUpdate {
+  type: "AircraftUpdate";
+  payload: { aircraft: AircraftPosition[] };
+}
+
+export interface WsAircraftBatch {
+  type: "AircraftBatch";
+  payload: {
+    aircraft: AircraftPosition[];
+    chunk_index: number;
+    total_chunks: number;
+  };
+}
+
+export type WsMessage =
+  | WsConnected
+  | WsPing
+  | WsPong
+  | WsError
+  | WsAircraftUpdate
+  | WsAircraftBatch;
 
 export type ConnectionStatus = "connected" | "connecting" | "disconnected";

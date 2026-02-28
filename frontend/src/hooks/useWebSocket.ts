@@ -6,13 +6,25 @@ import {
 } from "../lib/constants";
 import type { WsMessage, ConnectionStatus } from "../types/ws";
 
+interface UseWebSocketOptions {
+  onMessage?: (msg: WsMessage) => void;
+}
+
 interface UseWebSocketReturn {
   status: ConnectionStatus;
   lastMessage: WsMessage | null;
   send: (message: WsMessage) => void;
 }
 
-export function useWebSocket(): UseWebSocketReturn {
+export function useWebSocket(
+  options?: UseWebSocketOptions,
+): UseWebSocketReturn {
+  const onMessageRef = useRef<((msg: WsMessage) => void) | undefined>(
+    options?.onMessage,
+  );
+  useEffect(() => {
+    onMessageRef.current = options?.onMessage;
+  }, [options?.onMessage]);
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [lastMessage, setLastMessage] = useState<WsMessage | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -39,6 +51,7 @@ export function useWebSocket(): UseWebSocketReturn {
         try {
           const message = JSON.parse(String(event.data)) as WsMessage;
           setLastMessage(message);
+          onMessageRef.current?.(message);
 
           if (message.type === "Ping") {
             ws.send(JSON.stringify({ type: "Pong" }));

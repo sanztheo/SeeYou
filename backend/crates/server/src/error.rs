@@ -5,6 +5,7 @@ use axum::{
 };
 use serde::Serialize;
 
+#[allow(dead_code)]
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
     #[error("internal error: {0}")]

@@ -21,9 +21,7 @@ pub async fn ws_handler(
 /// Serialize a `WsMessage` into a text frame, returning `None`
 /// if serialization fails so callers can skip rather than crash.
 fn encode_message(msg: &WsMessage) -> Option<Message> {
-    serde_json::to_string(msg)
-        .ok()
-        .map(Message::Text)
+    serde_json::to_string(msg).ok().map(Message::Text)
 }
 
 /// Core per-connection loop. Splits the socket into read/write halves

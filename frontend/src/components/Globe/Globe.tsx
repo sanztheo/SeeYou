@@ -8,12 +8,31 @@ import {
   OpenStreetMapImageryProvider,
 } from "cesium";
 import { hasValidToken } from "../../lib/cesium-config";
+import { AircraftLayer } from "../Aircraft/AircraftLayer";
+import type { AircraftPosition, AircraftFilter } from "../../types/aircraft";
 
 interface ViewerRef {
   cesiumElement?: Viewer;
 }
 
-export function Globe(): React.ReactElement {
+interface GlobeProps {
+  aircraft?: Map<string, AircraftPosition>;
+  filter?: AircraftFilter;
+  trackedIcao?: string | null;
+  onSelectAircraft?: (aircraft: AircraftPosition) => void;
+}
+
+const DEFAULT_FILTER: AircraftFilter = {
+  showCivilian: true,
+  showMilitary: true,
+};
+
+export function Globe({
+  aircraft,
+  filter,
+  trackedIcao,
+  onSelectAircraft,
+}: GlobeProps): React.ReactElement {
   const viewerRef = useRef<ViewerRef>(null);
 
   useEffect(() => {
@@ -67,6 +86,15 @@ export function Globe(): React.ReactElement {
       sceneModePicker={false}
       selectionIndicator={false}
       timeline={false}
-    />
+    >
+      {aircraft && (
+        <AircraftLayer
+          aircraft={aircraft}
+          filter={filter ?? DEFAULT_FILTER}
+          trackedIcao={trackedIcao ?? null}
+          onSelect={onSelectAircraft}
+        />
+      )}
+    </ResiumViewer>
   );
 }

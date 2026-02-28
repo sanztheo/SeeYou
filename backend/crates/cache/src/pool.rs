@@ -14,10 +14,10 @@ pub enum CacheError {
     Command(#[from] redis::RedisError),
 
     #[error("unexpected redis response: expected {expected}, got {actual}")]
-    UnexpectedResponse {
-        expected: String,
-        actual: String,
-    },
+    UnexpectedResponse { expected: String, actual: String },
+
+    #[error("serialization failed: {0}")]
+    Serialization(#[from] serde_json::Error),
 }
 
 /// Build a connection pool from a Redis URL.

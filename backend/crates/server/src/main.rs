@@ -2,6 +2,8 @@ mod app_state;
 mod config;
 mod error;
 
+use std::time::Duration;
+
 use axum::{routing::get, Router};
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -30,6 +32,16 @@ async fn main() -> anyhow::Result<()> {
     info!(redis_url = %redact_url(&config.redis_url), "redis pool created");
 
     let ws_broadcast = ws::Broadcaster::new(BROADCAST_CAPACITY);
+
+    let http_client = reqwest::Client::new();
+    let poll_interval = Duration::from_secs(config.poll_interval_secs);
+
+    tokio::spawn(services::aircraft_tracker::run_aircraft_tracker(
+        http_client,
+        redis_pool.clone(),
+        ws_broadcast.clone(),
+        poll_interval,
+    ));
 
     let state = AppState {
         redis_pool,
