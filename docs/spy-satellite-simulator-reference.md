@@ -84,116 +84,51 @@ WorldView represente la couche prototype de **SpatialOS** :
 
 ---
 
-## Stack technique detaille utilise par l'auteur
+## Notre stack 100% gratuite
 
 ### Rendu 3D
-| Techno | Role | Notes |
+| Techno | Role | Cout |
 |---|---|---|
-| **WebGPU** | Moteur de rendu GPU dans le navigateur | Successeur de WebGL, ~70% support navigateurs (Chrome, Edge, Firefox, Safari) |
-| **Google Photorealistic 3D Tiles** | Modeles 3D photorealistes des villes | Via Map Tiles API, format OGC 3D Tiles |
-| **Custom GLSL/WGSL Shaders** | Modes visuels (NVG, FLIR, CRT, cel-shading) | Shaders post-processing appliques au rendu 3D |
+| **CesiumJS (Resium)** | Globe 3D, rendu WebGL, entites geospatiales | Gratuit (Apache 2.0) |
+| **OSM Buildings** | Batiments 3D extruds depuis OpenStreetMap | Gratuit (ODbL) |
+| **Post-processing GLSL** | Shaders surveillance (NVG, FLIR, CRT, cel-shading) | Gratuit (natif CesiumJS) |
 
 ### Donnees temps reel
-| Source | Role | Format |
-|---|---|---|
-| **OpenSky Network** | Positions avions civils (7000+) | REST API, JSON |
-| **ADS-B Exchange** | Avions militaires + callsigns | REST API via RapidAPI |
-| **CelesTrak** | Orbites satellites (180+ TLE) | TLE/3LE text, JSON, XML |
-| **OpenStreetMap / Overpass** | Donnees routes/vehicules → particules | Overpass QL, JSON/XML |
-| **CCTV publiques** | Flux video cameras de circulation | MJPEG/HLS streams |
+| Source | Donnees | Type | Cout | Limites |
+|---|---|---|---|---|
+| **OpenSky Network** | Avions civils (7000+ positions live) | REST, JSON | Gratuit | 4 000 credits/jour (inscrit), refresh 5s |
+| **adsb.lol** | Avions militaires + callsigns | REST, JSON | Gratuit | Aucune limite documentee |
+| **CelesTrak** | Satellites (orbites TLE, 180+) | TLE/JSON/XML | Gratuit | Aucune (non-profit 501c3) |
+| **Overpass API** | Routes reelles (OSM) → particules trafic | Overpass QL, JSON | Gratuit | Rate limit auto, timeout 180s |
+| **Cameras publiques** | Flux video CCTV reels | MJPEG/HLS/JPEG | Gratuit | Depend des villes |
 
-### IA (developpement)
-| Modele | Usage |
-|---|---|
-| **Claude 4.6** | Generation de code, architecture |
-| **Gemini 3.1** | Generation de code |
-| **Codex 5.3** | Generation de code |
+### Sources de cameras CCTV gratuites
+| Source | Couverture | Lien |
+|---|---|---|
+| TfL JamCams | Londres | https://api.tfl.gov.uk |
+| NYCDOT | New York | https://webcams.nyctmc.org |
+| Caltrans CCTV | Californie | https://cwwp2.dot.ca.gov/vm/iframemap.htm |
+| Insecam | Mondial | http://www.insecam.org |
+
+### Backend + Frontend
+| Techno | Role | Cout |
+|---|---|---|
+| **Rust (Axum)** | Backend API REST + WebSocket | Gratuit |
+| **Redis** | Cache des donnees API externes | Gratuit (local) |
+| **React + TypeScript** | Frontend UI | Gratuit |
+| **Resium** | Wrapper React pour CesiumJS | Gratuit |
+| **TailwindCSS** | Styling | Gratuit |
+
+### Nature des donnees
+
+| Couche | Donnees reelles ? | Detail |
+|---|---|---|
+| Avions civils | **OUI** | Positions GPS live via ADS-B |
+| Avions militaires | **OUI** | Positions GPS live via ADS-B |
+| Satellites | **OUI** | Orbites reelles, positions calculees par propagation SGP4 |
+| Cameras CCTV | **OUI** | Vrais flux video de vraies cameras publiques |
+| Trafic routier | **PARTIEL** | Routes reelles (OSM), vehicules simules par particules |
 
 ---
 
-## Cout des APIs et services
-
-### Google Photorealistic 3D Tiles API
-- **Lien :** https://developers.google.com/maps/documentation/tile
-- **Free tier :** 1 000 requetes/mois gratuites
-- **Pricing (par 1 000 requetes) :**
-
-| Volume mensuel | Prix / 1 000 req |
-|---|---|
-| 0 - 1 000 | **Gratuit** |
-| 1 001 - 100 000 | **$6.00** |
-| 100 001 - 500 000 | **$5.10** |
-| 500 001 - 1 000 000 | **$4.20** |
-| 1 000 001 - 5 000 000 | **$3.30** |
-| 5 000 000+ | **$2.40** |
-
-- **Limites :** 10 000 root tileset queries/jour, sessions de 3h max, 12 000 queries/min
-- **Estimation pour dev/proto :** ~gratuit si < 1 000 sessions/mois, ~$60-300/mois pour usage modere
-
-### OpenSky Network API
-- **Lien :** https://opensky-network.org/apidoc/
-- **Prix : GRATUIT** (non-commercial)
-- **Limites :**
-
-| Tier | Credits/jour | Resolution | Historique |
-|---|---|---|---|
-| Anonyme | 400 | 10s | Temps reel uniquement |
-| Inscrit | 4 000 | 5s | Jusqu'a 1h |
-| Contributeur actif | 8 000 | 5s | Jusqu'a 1h |
-
-- **Usage commercial :** Necessite autorisation speciale
-- **Note :** Gratuit et largement suffisant pour un prototype
-
-### ADS-B Exchange
-- **Lien :** https://www.adsbexchange.com/
-- **Plans :**
-
-| Plan | Prix | Requetes |
-|---|---|---|
-| RapidAPI Personal | **$10/mois** | 10 000 req/mois |
-| Enterprise | **Sur devis** | Illimite |
-
-- **Alternative gratuite :** [adsb.lol](https://api.adsb.lol/docs) - API communautaire open-source, gratuite et sans limite
-
-### CelesTrak (donnees orbitales TLE)
-- **Lien :** https://celestrak.org/
-- **Prix : ENTIEREMENT GRATUIT**
-- **Organisation :** 501(c)(3) non-profit
-- **Formats :** TLE/3LE, JSON, XML, CSV
-- **Limites :** Aucune limite documentee, usage raisonnable attendu
-
-### OpenStreetMap / Overpass API
-- **Lien :** https://overpass-api.de/
-- **Prix : GRATUIT** (serveurs publics)
-- **Limites :** Rate limiting automatique (HTTP 429), timeout max 180s, memoire max 512 MiB
-- **Alternative payante :** [Geofabrik](https://www.geofabrik.de/data/overpass-api.html) pour de meilleures performances
-
-### Cameras CCTV publiques
-- **Options gratuites :**
-  - [Insecam](http://www.insecam.org/) - Repertoire mondial de cameras publiques
-  - [TfL Traffic Cameras](https://pusher.com/blog/realtime-tfl-traffic-camera-api/) - Cameras de Londres (gratuit, API TfL)
-  - DOT cameras locales - Beaucoup de villes exposent leurs cameras de trafic gratuitement
-- **Options payantes :**
-  - [TrafficLand](http://www.trafficland.com/api.html) - 25 000+ cameras, 200+ villes (sur devis)
-  - [Vizzion](https://www.vizzion.com/API.html) - Plus grand aggregateur mondial (sur devis)
-  - [INRIX](https://docs.inrix.com/traffic/trafficcameras/) - API images JPEG (sur devis)
-
-### WebGPU
-- **Prix : GRATUIT** (API navigateur native)
-- **Support :** Chrome, Edge, Firefox (Windows + macOS ARM), Safari (macOS/iOS/visionOS)
-- **Doc :** https://www.w3.org/TR/webgpu/
-
----
-
-## Resume des couts
-
-| Service | Cout pour prototype | Cout production |
-|---|---|---|
-| Google 3D Tiles | Gratuit (< 1K req/mois) | $60-300+/mois |
-| OpenSky Network | **Gratuit** | Gratuit (non-commercial) |
-| ADS-B Exchange | $10/mois ou gratuit via adsb.lol | $10+/mois |
-| CelesTrak | **Gratuit** | Gratuit |
-| OpenStreetMap | **Gratuit** | Gratuit |
-| CCTV cameras | **Gratuit** (sources publiques) | Sur devis (aggregateurs) |
-| WebGPU | **Gratuit** | Gratuit |
-| **TOTAL prototype** | **~$0 - $10/mois** | |
+## Cout total : $0
