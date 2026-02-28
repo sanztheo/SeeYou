@@ -4,12 +4,17 @@ import {
   Viewer,
   Cartesian3,
   Math as CesiumMath,
+  ClockStep,
   createOsmBuildingsAsync,
   OpenStreetMapImageryProvider,
 } from "cesium";
 import { hasValidToken } from "../../lib/cesium-config";
 import { AircraftLayer } from "../Aircraft/AircraftLayer";
-import type { AircraftPosition, AircraftFilter } from "../../types/aircraft";
+import type {
+  AircraftPosition,
+  AircraftFilter,
+  FlightRoute,
+} from "../../types/aircraft";
 
 interface ViewerRef {
   cesiumElement?: Viewer;
@@ -20,6 +25,7 @@ interface GlobeProps {
   filter?: AircraftFilter;
   trackedIcao?: string | null;
   onSelectAircraft?: (aircraft: AircraftPosition) => void;
+  flightRoute?: FlightRoute | null;
 }
 
 const DEFAULT_FILTER: AircraftFilter = {
@@ -32,12 +38,17 @@ export function Globe({
   filter,
   trackedIcao,
   onSelectAircraft,
+  flightRoute,
 }: GlobeProps): React.ReactElement {
   const viewerRef = useRef<ViewerRef>(null);
 
   useEffect(() => {
     const viewer = viewerRef.current?.cesiumElement;
     if (!viewer) return;
+
+    // Real-time clock for SampledPositionProperty interpolation
+    viewer.clock.clockStep = ClockStep.SYSTEM_CLOCK;
+    viewer.clock.shouldAnimate = true;
 
     // Replace default imagery with OSM tiles
     viewer.imageryLayers.removeAll();
@@ -93,6 +104,7 @@ export function Globe({
           filter={filter ?? DEFAULT_FILTER}
           trackedIcao={trackedIcao ?? null}
           onSelect={onSelectAircraft}
+          flightRoute={flightRoute ?? null}
         />
       )}
     </ResiumViewer>

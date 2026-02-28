@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Globe } from "./components/Globe/Globe";
 import { Sidebar } from "./components/Sidebar/Sidebar";
 import { ConnectionStatus } from "./components/ConnectionStatus/ConnectionStatus";
@@ -7,7 +7,12 @@ import { AircraftFilters } from "./components/Sidebar/AircraftFilters";
 import { AircraftPopup } from "./components/Aircraft/AircraftPopup";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useAircraftStore } from "./hooks/useAircraftStore";
-import type { AircraftPosition, AircraftFilter } from "./types/aircraft";
+import { fetchFlightRoute } from "./services/flightRoute";
+import type {
+  AircraftPosition,
+  AircraftFilter,
+  FlightRoute,
+} from "./types/aircraft";
 import type { WsMessage } from "./types/ws";
 
 export function App(): React.ReactElement {
@@ -25,6 +30,36 @@ export function App(): React.ReactElement {
   });
   const [selectedAircraft, setSelectedAircraft] =
     useState<AircraftPosition | null>(null);
+  const [flightRoute, setFlightRoute] = useState<FlightRoute | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedAircraft?.callsign) {
+      setFlightRoute(null);
+      return;
+    }
+
+    let cancelled = false;
+    setRouteLoading(true);
+    setFlightRoute(null);
+
+    fetchFlightRoute(
+      selectedAircraft.callsign,
+      selectedAircraft.lat,
+      selectedAircraft.lon,
+    )
+      .then((route) => {
+        if (!cancelled) setFlightRoute(route);
+      })
+      .finally(() => {
+        if (!cancelled) setRouteLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAircraft?.icao]);
 
   const handleWsMessage = useCallback(
     (msg: WsMessage): void => {
@@ -57,6 +92,7 @@ export function App(): React.ReactElement {
         filter={filter}
         trackedIcao={selectedAircraft?.icao ?? null}
         onSelectAircraft={setSelectedAircraft}
+        flightRoute={flightRoute}
       />
       <Sidebar>
         <div className="space-y-4">
@@ -69,7 +105,12 @@ export function App(): React.ReactElement {
           <AircraftFilters filter={filter} onFilterChange={setFilter} />
         </div>
       </Sidebar>
-      <AircraftPopup aircraft={selectedAircraft} onClose={handleClosePopup} />
+      <AircraftPopup
+        aircraft={selectedAircraft}
+        onClose={handleClosePopup}
+        flightRoute={flightRoute}
+        routeLoading={routeLoading}
+      />
     </div>
   );
 }

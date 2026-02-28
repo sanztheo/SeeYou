@@ -16,3 +16,16 @@ export interface AircraftFilter {
   showCivilian: boolean;
   showMilitary: boolean;
 }
+
+export interface Airport {
+  iata: string;
+  icao: string;
+  name: string;
+  lat: number;
+  lon: number;
+}
+
+export interface FlightRoute {
+  departure: Airport;
+  arrival: Airport;
+}
