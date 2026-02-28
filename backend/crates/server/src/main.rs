@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env()?;
 
     let redis_pool = cache::create_pool(&config.redis_url)?;
-    info!(redis_url = %config.redis_url, "redis pool created");
+    info!(redis_url = %redact_url(&config.redis_url), "redis pool created");
 
     let ws_broadcast = ws::Broadcaster::new(BROADCAST_CAPACITY);
 
@@ -57,6 +57,21 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     Ok(())
+}
+
+/// Mask credentials in a URL so it is safe to log.
+/// `redis://:secret@host:6379` → `redis://***@host:6379`
+fn redact_url(raw: &str) -> String {
+    match url::Url::parse(raw) {
+        Ok(mut u) => {
+            if !u.username().is_empty() || u.password().is_some() {
+                let _ = u.set_username("***");
+                let _ = u.set_password(None);
+            }
+            u.to_string()
+        }
+        Err(_) => "***".to_string(),
+    }
 }
 
 /// Wait for Ctrl-C to enable graceful shutdown.

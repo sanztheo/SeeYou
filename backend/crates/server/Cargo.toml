@@ -16,3 +16,4 @@ serde.workspace = true
 api = { path = "../api" }
 ws = { path = "../ws" }
 cache = { path = "../cache" }
+url.workspace = true

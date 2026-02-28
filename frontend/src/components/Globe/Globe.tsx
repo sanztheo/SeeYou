@@ -20,6 +20,15 @@ export function Globe(): React.ReactElement {
     const viewer = viewerRef.current?.cesiumElement;
     if (!viewer) return;
 
+    // Replace default imagery with OSM tiles
+    viewer.imageryLayers.removeAll();
+    viewer.imageryLayers.addImageryProvider(
+      new OpenStreetMapImageryProvider({
+        url: "https://tile.openstreetmap.org/",
+      }),
+    );
+
+    // Fly to Paris on mount
     viewer.camera.flyTo({
       destination: Cartesian3.fromDegrees(2.3522, 48.8566, 2500),
       orientation: {
@@ -30,6 +39,7 @@ export function Globe(): React.ReactElement {
       duration: 0,
     });
 
+    // Load OSM 3D Buildings if Ion token available
     if (hasValidToken()) {
       createOsmBuildingsAsync()
         .then((tileset) => {
@@ -43,15 +53,10 @@ export function Globe(): React.ReactElement {
     }
   }, []);
 
-  const osmImagery = new OpenStreetMapImageryProvider({
-    url: "https://tile.openstreetmap.org/",
-  });
-
   return (
     <ResiumViewer
       ref={viewerRef as React.RefObject<never>}
       full
-      imageryProvider={osmImagery}
       animation={false}
       baseLayerPicker={false}
       fullscreenButton={false}

@@ -18,32 +18,32 @@
 
 ---
 
-## Phase 1 — Fondations
+## Phase 1 — Fondations ✅
 
 > Objectif : Globe 3D navigable avec batiments, projet structure, backend qui tourne.
 
 ### Backend
-- [ ] Init projet Rust avec Cargo (workspace)
-- [ ] Setup Axum avec un serveur HTTP basique (health check)
-- [ ] Configurer CORS pour autoriser le frontend
-- [ ] Setup WebSocket server basique (connexion/deconnexion)
-- [ ] Setup Redis (connexion, test read/write)
-- [ ] Structurer les modules : `api/`, `ws/`, `cache/`, `services/`
+- [x] Init projet Rust avec Cargo (workspace)
+- [x] Setup Axum avec un serveur HTTP basique (health check)
+- [x] Configurer CORS pour autoriser le frontend
+- [x] Setup WebSocket server basique (connexion/deconnexion)
+- [x] Setup Redis (connexion, test read/write)
+- [x] Structurer les modules : `api/`, `ws/`, `cache/`, `services/`
 
 ### Frontend
-- [ ] Init projet React + TypeScript + Vite
-- [ ] Installer et configurer Resium (wrapper CesiumJS)
-- [ ] Afficher un globe CesiumJS navigable (zoom, rotation, tilt)
-- [ ] Charger OSM Buildings 3D sur le globe
-- [ ] Setup TailwindCSS
-- [ ] Creer le layout principal : globe plein ecran + sidebar retractable
-- [ ] Connexion WebSocket au backend
+- [x] Init projet React + TypeScript + Vite
+- [x] Installer et configurer Resium (wrapper CesiumJS)
+- [x] Afficher un globe CesiumJS navigable (zoom, rotation, tilt)
+- [x] Charger OSM Buildings 3D sur le globe
+- [x] Setup TailwindCSS
+- [x] Creer le layout principal : globe plein ecran + sidebar retractable
+- [x] Connexion WebSocket au backend
 
 ### Infra
-- [ ] Setup monorepo (workspaces ou dossiers `frontend/` + `backend/`)
-- [ ] Docker Compose pour Redis
-- [ ] Scripts de dev (`dev`, `build`, `start`)
-- [ ] Setup .env pour les cles API (CelesTrak, OpenSky, etc.)
+- [x] Setup monorepo (workspaces ou dossiers `frontend/` + `backend/`)
+- [x] Docker Compose pour Redis (+ support Redis cloud via .env)
+- [x] Scripts de dev (`dev`, `build`, `start`)
+- [x] Setup .env pour les cles API (CelesTrak, OpenSky, etc.)
 
 ---
 
