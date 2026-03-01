@@ -17,7 +17,27 @@ export interface WeatherGrid {
 
 export interface WeatherFilter {
   enabled: boolean;
+  showRadar: boolean;
   showWind: boolean;
-  showTemperature: boolean;
-  showClouds: boolean;
+  radarOpacity: number;
+  windOpacity: number;
+  animationSpeed: number;
+}
+
+export interface RainViewerFrame {
+  time: number;
+  path: string;
+}
+
+export interface RainViewerData {
+  version: string;
+  generated: number;
+  host: string;
+  radar: {
+    past: RainViewerFrame[];
+    nowcast: RainViewerFrame[];
+  };
+  satellite: {
+    infrared: RainViewerFrame[];
+  };
 }

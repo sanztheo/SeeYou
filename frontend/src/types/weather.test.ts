@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import type { WeatherPoint, WeatherGrid, WeatherFilter } from "./weather";
+import type {
+  WeatherPoint,
+  WeatherGrid,
+  WeatherFilter,
+  RainViewerFrame,
+  RainViewerData,
+} from "./weather";
 
 describe("weather types", () => {
   it("WeatherPoint has all required numeric fields", () => {
@@ -40,16 +46,50 @@ describe("weather types", () => {
     expect(grid.fetched_at).toBe("2026-01-01T00:00:00Z");
   });
 
-  it("WeatherFilter has enabled, showWind, showTemperature, showClouds", () => {
+  it("WeatherFilter has enabled, showRadar, showWind, opacity and animation", () => {
     const filter: WeatherFilter = {
       enabled: false,
+      showRadar: true,
       showWind: true,
-      showTemperature: true,
-      showClouds: true,
+      radarOpacity: 0.7,
+      windOpacity: 0.6,
+      animationSpeed: 500,
     };
     expect(filter.enabled).toBe(false);
+    expect(filter.showRadar).toBe(true);
     expect(filter.showWind).toBe(true);
-    expect(filter.showTemperature).toBe(true);
-    expect(filter.showClouds).toBe(true);
+    expect(filter.radarOpacity).toBe(0.7);
+    expect(filter.windOpacity).toBe(0.6);
+    expect(filter.animationSpeed).toBe(500);
+  });
+
+  it("RainViewerFrame has time and path", () => {
+    const frame: RainViewerFrame = {
+      time: 1772373600,
+      path: "/v2/radar/1772373600",
+    };
+    expect(frame.time).toBe(1772373600);
+    expect(frame.path).toBe("/v2/radar/1772373600");
+  });
+
+  it("RainViewerData has version, generated, host, radar and satellite", () => {
+    const data: RainViewerData = {
+      version: "2.0",
+      generated: 1772381133,
+      host: "https://tilecache.rainviewer.com",
+      radar: {
+        past: [{ time: 1772373600, path: "/v2/radar/1772373600" }],
+        nowcast: [],
+      },
+      satellite: {
+        infrared: [],
+      },
+    };
+    expect(data.version).toBe("2.0");
+    expect(data.generated).toBe(1772381133);
+    expect(data.host).toBe("https://tilecache.rainviewer.com");
+    expect(data.radar.past).toHaveLength(1);
+    expect(data.radar.nowcast).toEqual([]);
+    expect(data.satellite.infrared).toEqual([]);
   });
 });
