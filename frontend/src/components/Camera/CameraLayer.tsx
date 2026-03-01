@@ -17,7 +17,6 @@ import type { Camera, CameraFilter } from "../../types/camera";
 import { CAMERA_ICON_ONLINE, CAMERA_ICON_OFFLINE } from "./cameraIcon";
 
 const LABEL_DISTANCE = 50_000;
-const BILLBOARD_SHOW_DISTANCE = 800_000;
 
 interface CameraLayerProps {
   cameras: Camera[];
@@ -112,11 +111,7 @@ function createEntity(cam: Camera): Entity.ConstructorOptions {
       width: 24,
       height: 24,
       verticalOrigin: VerticalOrigin.CENTER,
-      scaleByDistance: new NearFarScalar(5_000, 1.0, 500_000, 0.15),
-      distanceDisplayCondition: new DistanceDisplayCondition(
-        0,
-        BILLBOARD_SHOW_DISTANCE,
-      ),
+      scaleByDistance: new NearFarScalar(5_000, 1.0, 8_000_000, 0.05),
     },
     label: {
       text: cam.name,
