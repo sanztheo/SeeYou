@@ -12,7 +12,6 @@ export function CameraFilters({
   onFilterChange,
 }: CameraFiltersProps): React.ReactElement {
   const onlineCount = cameras.filter((c) => c.is_online).length;
-
   const cities = Array.from(new Set(cameras.map((c) => c.city))).sort();
 
   const toggleCity = (city: string): void => {
@@ -23,41 +22,49 @@ export function CameraFilters({
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-          Cameras
-        </h3>
-        <span className="text-[10px] font-mono text-green-400">
-          {onlineCount} online
-        </span>
-      </div>
-
-      <button
-        onClick={() => onFilterChange({ ...filter, enabled: !filter.enabled })}
-        className="flex items-center gap-2 w-full text-left text-sm text-gray-200 hover:text-gray-100 transition-colors"
-      >
-        <div
-          className={`w-8 h-4 rounded-full transition-colors ${filter.enabled ? "bg-green-500" : "bg-gray-600"} relative`}
+    <div className="px-4 py-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] font-medium uppercase tracking-widest text-zinc-500">
+            Cameras
+          </span>
+          {cameras.length > 0 && (
+            <span className="font-mono text-[9px] tabular-nums text-emerald-400">
+              {onlineCount} online
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() =>
+            onFilterChange({ ...filter, enabled: !filter.enabled })
+          }
+          className="shrink-0"
         >
           <div
-            className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${filter.enabled ? "translate-x-4" : "translate-x-0.5"}`}
-          />
-        </div>
-        <span>Show cameras</span>
-      </button>
+            className={`h-3.5 w-7 rounded-full transition-colors ${filter.enabled ? "bg-emerald-500" : "bg-zinc-700"} relative`}
+          >
+            <div
+              className={`absolute top-[2px] h-2.5 w-2.5 rounded-full bg-white shadow transition-transform ${filter.enabled ? "translate-x-[14px]" : "translate-x-[2px]"}`}
+            />
+          </div>
+        </button>
+      </div>
 
       {filter.enabled && cities.length > 0 && (
-        <div className="pl-2 space-y-1 max-h-32 overflow-y-auto">
+        <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto scrollbar-thin">
           {cities.map((city) => {
             const active = filter.cities.size === 0 || filter.cities.has(city);
             return (
               <button
                 key={city}
                 onClick={() => toggleCity(city)}
-                className={`block text-xs font-mono transition-colors ${active ? "text-gray-200" : "text-gray-600"} hover:text-gray-100`}
+                className={`rounded-full px-2 py-0.5 font-mono text-[9px] border transition-colors ${
+                  active
+                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                    : "border-zinc-700 bg-zinc-800/50 text-zinc-600 hover:text-zinc-400"
+                }`}
               >
-                {active ? "◉" : "○"} {city}
+                {city}
               </button>
             );
           })}
