@@ -1,4 +1,5 @@
 import type { AircraftPosition, PredictedTrajectory } from "./aircraft";
+import type { SatellitePosition } from "./satellite";
 
 export type WsMessageType =
   | "Connected"
@@ -7,7 +8,8 @@ export type WsMessageType =
   | "Error"
   | "AircraftUpdate"
   | "AircraftBatch"
-  | "Predictions";
+  | "Predictions"
+  | "SatelliteBatch";
 
 export interface WsConnected {
   type: "Connected";
@@ -46,6 +48,15 @@ export interface WsPredictions {
   payload: { trajectories: PredictedTrajectory[] };
 }
 
+export interface WsSatelliteBatch {
+  type: "SatelliteBatch";
+  payload: {
+    satellites: SatellitePosition[];
+    chunk_index: number;
+    total_chunks: number;
+  };
+}
+
 export type WsMessage =
   | WsConnected
   | WsPing
@@ -53,6 +64,7 @@ export type WsMessage =
   | WsError
   | WsAircraftUpdate
   | WsAircraftBatch
-  | WsPredictions;
+  | WsPredictions
+  | WsSatelliteBatch;
 
 export type ConnectionStatus = "connected" | "connecting" | "disconnected";
