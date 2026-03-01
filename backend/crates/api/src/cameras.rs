@@ -8,11 +8,13 @@ use serde::Deserialize;
 use cameras::{Camera, CamerasResponse};
 
 #[derive(Debug, Deserialize)]
-pub struct BboxFilter {
+pub struct CameraQuery {
     south: Option<f64>,
     west: Option<f64>,
     north: Option<f64>,
     east: Option<f64>,
+    offset: Option<usize>,
+    limit: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -20,17 +22,17 @@ pub struct ProxyQuery {
     url: String,
 }
 
-/// GET /cameras - list all cameras, optionally filtered by bounding box.
+/// GET /cameras - list cameras with optional bbox filter and pagination.
 pub async fn list_cameras(
     State(pool): State<RedisPool>,
-    Query(bbox): Query<BboxFilter>,
+    Query(q): Query<CameraQuery>,
 ) -> Result<Json<CamerasResponse>, (StatusCode, String)> {
     let cameras: Vec<Camera> = cache::cameras::get_cameras(&pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .unwrap_or_default();
 
-    let filtered: Vec<Camera> = match (bbox.south, bbox.west, bbox.north, bbox.east) {
+    let filtered: Vec<Camera> = match (q.south, q.west, q.north, q.east) {
         (Some(s), Some(w), Some(n), Some(e)) => cameras
             .into_iter()
             .filter(|c| c.lat >= s && c.lat <= n && c.lon >= w && c.lon <= e)
@@ -39,8 +41,12 @@ pub async fn list_cameras(
     };
 
     let total = filtered.len();
+    let offset = q.offset.unwrap_or(0).min(total);
+    let limit = q.limit.unwrap_or(total);
+    let page = filtered.into_iter().skip(offset).take(limit).collect();
+
     Ok(Json(CamerasResponse {
-        cameras: filtered,
+        cameras: page,
         total,
     }))
 }
