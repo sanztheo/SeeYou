@@ -25,49 +25,84 @@ function pushCache(bbox: BoundingBox, roads: Road[]): void {
   while (cache.length > LRU_MAX) cache.shift();
 }
 
-export interface TrafficProgress {
-  loading: boolean;
-  roadCount: number;
+export interface RoadChunkProgress {
+  loaded: number;
+  total: number;
+  done: boolean;
 }
 
-export async function fetchRoads(
+interface RoadsResponse {
+  roads: Road[];
+  total: number;
+}
+
+const ROAD_CHUNK_SIZE = 100;
+
+export async function fetchRoadsChunked(
   bbox: BoundingBox,
+  onChunk: (roads: Road[], progress: RoadChunkProgress) => void,
   signal?: AbortSignal,
-): Promise<Road[]> {
+): Promise<void> {
   const hit = findCovering(bbox);
   if (hit) {
     hit.ts = Date.now();
-    return hit.roads;
+    onChunk(hit.roads, {
+      loaded: hit.roads.length,
+      total: hit.roads.length,
+      done: true,
+    });
+    return;
   }
 
   const exact = cache.find((e) => e.key === bboxKey(bbox));
   if (exact) {
     exact.ts = Date.now();
-    return exact.roads;
+    onChunk(exact.roads, {
+      loaded: exact.roads.length,
+      total: exact.roads.length,
+      done: true,
+    });
+    return;
   }
 
-  const params = new URLSearchParams({
-    south: String(bbox.south),
-    west: String(bbox.west),
-    north: String(bbox.north),
-    east: String(bbox.east),
-  });
+  let offset = 0;
+  const accumulated: Road[] = [];
 
-  const res = await fetch(`${API_URL}/roads?${params}`, { signal });
+  while (true) {
+    if (signal?.aborted) return;
 
-  if (!res.ok) {
-    console.warn(`[Traffic] fetch failed: ${res.status}`);
-    return [];
+    const url = new URL(`${API_URL}/roads`);
+    url.searchParams.set("south", String(bbox.south));
+    url.searchParams.set("west", String(bbox.west));
+    url.searchParams.set("north", String(bbox.north));
+    url.searchParams.set("east", String(bbox.east));
+    url.searchParams.set("offset", String(offset));
+    url.searchParams.set("limit", String(ROAD_CHUNK_SIZE));
+
+    const res = await fetch(url.toString(), { signal });
+    if (!res.ok) {
+      console.warn(`[Traffic] fetch failed: ${res.status}`);
+      return;
+    }
+
+    const data: RoadsResponse = await res.json();
+    accumulated.push(...data.roads);
+
+    const done = accumulated.length >= data.total || data.roads.length === 0;
+
+    onChunk([...accumulated], {
+      loaded: accumulated.length,
+      total: data.total,
+      done,
+    });
+
+    if (done) {
+      pushCache(bbox, accumulated);
+      break;
+    }
+
+    offset += ROAD_CHUNK_SIZE;
   }
-
-  const data: unknown = await res.json();
-  if (typeof data !== "object" || data === null || !("roads" in data)) {
-    return [];
-  }
-
-  const roads = (data as { roads: Road[] }).roads;
-  pushCache(bbox, roads);
-  return roads;
 }
 
 export function getCachedRoads(bbox: BoundingBox): Road[] | null {
