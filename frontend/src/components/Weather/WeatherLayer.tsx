@@ -1,178 +1,152 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useCesium } from "resium";
 import {
-  CustomDataSource,
-  Cartesian3,
-  Color,
-  NearFarScalar,
-  DistanceDisplayCondition,
-  VerticalOrigin,
-  Math as CesiumMath,
-  EllipseGraphics,
-  HeightReference,
+  UrlTemplateImageryProvider,
+  WebMercatorTilingScheme,
+  Credit,
+  ImageryLayer,
 } from "cesium";
-import type { WeatherPoint, WeatherFilter } from "../../types/weather";
+import type { RainViewerData, WeatherFilter } from "../../types/weather";
 
-function makeArrowDataUri(): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-    <path d="M16 2 L22 14 L18 12 L18 30 L14 30 L14 12 L10 14 Z" fill="white" stroke="black" stroke-width="0.5"/>
-  </svg>`;
-  return `data:image/svg+xml;base64,${btoa(svg)}`;
-}
-
-const ARROW_URI = makeArrowDataUri();
-
-const TEMP_COLD = Color.fromCssColorString("#3b82f6");
-const TEMP_COOL = Color.fromCssColorString("#06b6d4");
-const TEMP_MILD = Color.fromCssColorString("#22c55e");
-const TEMP_WARM = Color.fromCssColorString("#eab308");
-const TEMP_HOT = Color.fromCssColorString("#ef4444");
-const PRECIP_COLOR = Color.fromCssColorString("#3b82f6");
-
-function temperatureColor(tempC: number): Color {
-  if (tempC <= -10) return TEMP_COLD;
-  if (tempC <= 0) {
-    const t = (tempC + 10) / 10;
-    return Color.lerp(TEMP_COLD, TEMP_COOL, t, new Color());
-  }
-  if (tempC <= 15) {
-    const t = tempC / 15;
-    return Color.lerp(TEMP_COOL, TEMP_MILD, t, new Color());
-  }
-  if (tempC <= 25) {
-    const t = (tempC - 15) / 10;
-    return Color.lerp(TEMP_MILD, TEMP_WARM, t, new Color());
-  }
-  if (tempC <= 35) {
-    const t = (tempC - 25) / 10;
-    return Color.lerp(TEMP_WARM, TEMP_HOT, t, new Color());
-  }
-  return TEMP_HOT;
-}
-
-function cloudRadiusMeters(coverPct: number): number {
-  const t = (coverPct - 10) / 90;
-  return 50_000 + t * 100_000;
-}
-
-function cloudAlpha(coverPct: number): number {
-  const t = (coverPct - 10) / 90;
-  return 0.05 + t * 0.3;
-}
-
-function windArrowScale(speedMs: number): number {
-  return Math.min(0.6 + speedMs * 0.04, 1.6);
-}
+const TILING_SCHEME = new WebMercatorTilingScheme();
+const CREDIT = new Credit("RainViewer", false);
+const COLOR_SCHEME = 6;
 
 interface WeatherLayerProps {
-  points: WeatherPoint[];
+  rainViewerData: RainViewerData | null;
   filter: WeatherFilter;
 }
 
-export function WeatherLayer({ points, filter }: WeatherLayerProps): null {
+export function WeatherLayer({
+  rainViewerData,
+  filter,
+}: WeatherLayerProps): null {
   const { viewer } = useCesium();
-  const dsRef = useRef<CustomDataSource | null>(null);
+  const layersRef = useRef<ImageryLayer[]>([]);
+  const frameIndexRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const radarOpacityRef = useRef(filter.radarOpacity);
 
   useEffect(() => {
-    if (!viewer) return;
-    const ds = new CustomDataSource("weather");
-    viewer.dataSources.add(ds);
-    dsRef.current = ds;
-    return () => {
-      if (!viewer.isDestroyed()) viewer.dataSources.remove(ds, true);
-      dsRef.current = null;
-    };
-  }, [viewer]);
+    radarOpacityRef.current = filter.radarOpacity;
+  }, [filter.radarOpacity]);
 
-  useEffect(() => {
-    const ds = dsRef.current;
-    if (!ds) return;
-
-    ds.entities.suspendEvents();
-    ds.entities.removeAll();
-
-    for (let i = 0; i < points.length; i++) {
-      const p = points[i];
-      const position = Cartesian3.fromDegrees(p.lon, p.lat);
-      const color = temperatureColor(p.temperature_c);
-
-      if (filter.showTemperature) {
-        ds.entities.add({
-          id: `weather-temp-${i}`,
-          position,
-          point: {
-            pixelSize: 6,
-            color,
-            outlineColor: Color.BLACK,
-            outlineWidth: 1,
-            scaleByDistance: new NearFarScalar(100_000, 1.0, 15_000_000, 0.3),
-          },
-        });
-      }
-
-      if (filter.showWind && p.wind_speed_ms > 0.5) {
-        ds.entities.add({
-          id: `weather-wind-${i}`,
-          position,
-          billboard: {
-            image: ARROW_URI,
-            width: 20,
-            height: 20,
-            scale: windArrowScale(p.wind_speed_ms),
-            rotation: CesiumMath.toRadians(-p.wind_direction_deg),
-            alignedAxis: Cartesian3.UNIT_Z,
-            verticalOrigin: VerticalOrigin.CENTER,
-            color: color.withAlpha(0.85),
-            scaleByDistance: new NearFarScalar(100_000, 1.0, 15_000_000, 0.2),
-          },
-        });
-      }
-
-      if (filter.showClouds && p.cloud_cover_pct > 10) {
-        const radius = cloudRadiusMeters(p.cloud_cover_pct);
-        const alpha = cloudAlpha(p.cloud_cover_pct);
-        const ellipse = new EllipseGraphics({
-          semiMajorAxis: radius,
-          semiMinorAxis: radius * 0.8,
-          material: Color.WHITE.withAlpha(alpha),
-          outline: false,
-          height: 2000,
-          heightReference: HeightReference.NONE,
-          distanceDisplayCondition: new DistanceDisplayCondition(0, 3_000_000),
-        });
-
-        ds.entities.add({
-          id: `weather-cloud-${i}`,
-          position,
-          ellipse,
-        });
-
-        if (p.precipitation_mm > 0) {
-          const precipAlpha = Math.min(0.05 + p.precipitation_mm * 0.02, 0.25);
-          const precipEllipse = new EllipseGraphics({
-            semiMajorAxis: radius * 0.6,
-            semiMinorAxis: radius * 0.5,
-            material: PRECIP_COLOR.withAlpha(precipAlpha),
-            outline: false,
-            height: 1800,
-            heightReference: HeightReference.NONE,
-            distanceDisplayCondition: new DistanceDisplayCondition(
-              0,
-              3_000_000,
-            ),
-          });
-
-          ds.entities.add({
-            id: `weather-precip-${i}`,
-            position,
-            ellipse: precipEllipse,
-          });
+  const clearLayers = useCallback(() => {
+    const layers = layersRef.current;
+    layersRef.current = [];
+    frameIndexRef.current = 0;
+    if (!viewer || viewer.isDestroyed()) return;
+    const imageryLayers = viewer.imageryLayers;
+    for (const layer of layers) {
+      try {
+        if (imageryLayers.contains(layer)) {
+          imageryLayers.remove(layer, true);
         }
+      } catch {
+        // Layer may have been removed externally
       }
     }
+  }, [viewer]);
 
-    ds.entities.resumeEvents();
-  }, [points, filter.showWind, filter.showTemperature, filter.showClouds]);
+  const stopAnimation = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!viewer || viewer.isDestroyed()) return;
+    if (!rainViewerData || !filter.showRadar) {
+      stopAnimation();
+      clearLayers();
+      return;
+    }
+
+    const frames = [
+      ...rainViewerData.radar.past,
+      ...rainViewerData.radar.nowcast,
+    ];
+    if (frames.length === 0) {
+      stopAnimation();
+      clearLayers();
+      return;
+    }
+
+    clearLayers();
+
+    const host = rainViewerData.host;
+    const newLayers: ImageryLayer[] = [];
+
+    for (const frame of frames) {
+      if (viewer.isDestroyed()) break;
+      const url = `${host}${frame.path}/256/{z}/{x}/{y}/${COLOR_SCHEME}/1_1.png`;
+      const provider = new UrlTemplateImageryProvider({
+        url,
+        maximumLevel: 7,
+        tileWidth: 256,
+        tileHeight: 256,
+        tilingScheme: TILING_SCHEME,
+        credit: CREDIT,
+      });
+      const layer = viewer.imageryLayers.addImageryProvider(provider);
+      layer.alpha = 0;
+      newLayers.push(layer);
+    }
+
+    if (viewer.isDestroyed()) return;
+
+    layersRef.current = newLayers;
+
+    if (newLayers.length > 0) {
+      frameIndexRef.current = newLayers.length - 1;
+      newLayers[frameIndexRef.current].alpha = radarOpacityRef.current;
+    }
+
+    return () => {
+      stopAnimation();
+      clearLayers();
+    };
+  }, [viewer, rainViewerData, filter.showRadar, clearLayers, stopAnimation]);
+
+  useEffect(() => {
+    const layers = layersRef.current;
+    if (layers.length === 0) return;
+
+    stopAnimation();
+
+    timerRef.current = setInterval(() => {
+      if (!viewer || viewer.isDestroyed()) return;
+
+      const current = frameIndexRef.current;
+      if (layers[current] && viewer.imageryLayers.contains(layers[current])) {
+        layers[current].alpha = 0;
+      }
+
+      const next = (current + 1) % layers.length;
+      frameIndexRef.current = next;
+
+      if (layers[next] && viewer.imageryLayers.contains(layers[next])) {
+        layers[next].alpha = radarOpacityRef.current;
+      }
+    }, filter.animationSpeed);
+
+    return stopAnimation;
+  }, [viewer, filter.animationSpeed, stopAnimation]);
+
+  useEffect(() => {
+    const layers = layersRef.current;
+    if (layers.length === 0) return;
+    const current = frameIndexRef.current;
+    if (
+      layers[current] &&
+      viewer &&
+      !viewer.isDestroyed() &&
+      viewer.imageryLayers.contains(layers[current])
+    ) {
+      layers[current].alpha = filter.radarOpacity;
+    }
+  }, [viewer, filter.radarOpacity]);
 
   return null;
 }
