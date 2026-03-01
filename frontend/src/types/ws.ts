@@ -1,4 +1,5 @@
 import type { AircraftPosition, PredictedTrajectory } from "./aircraft";
+import type { MetarStation } from "./metar";
 import type { SatellitePosition } from "./satellite";
 
 export type WsMessageType =
@@ -9,7 +10,8 @@ export type WsMessageType =
   | "AircraftUpdate"
   | "AircraftBatch"
   | "Predictions"
-  | "SatelliteBatch";
+  | "SatelliteBatch"
+  | "MetarUpdate";
 
 export interface WsConnected {
   type: "Connected";
@@ -57,6 +59,11 @@ export interface WsSatelliteBatch {
   };
 }
 
+export interface WsMetarUpdate {
+  type: "MetarUpdate";
+  payload: { stations: MetarStation[] };
+}
+
 export type WsMessage =
   | WsConnected
   | WsPing
@@ -65,6 +72,7 @@ export type WsMessage =
   | WsAircraftUpdate
   | WsAircraftBatch
   | WsPredictions
-  | WsSatelliteBatch;
+  | WsSatelliteBatch
+  | WsMetarUpdate;
 
 export type ConnectionStatus = "connected" | "connecting" | "disconnected";

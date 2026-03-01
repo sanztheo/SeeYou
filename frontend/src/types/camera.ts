@@ -16,4 +16,5 @@ export interface Camera {
 export interface CameraFilter {
   enabled: boolean;
   cities: Set<string>;
+  sources: Set<string>;
 }

@@ -31,4 +31,5 @@ export interface TrafficFilter {
   showTrunk: boolean;
   showPrimary: boolean;
   showSecondary: boolean;
+  showTertiary?: boolean;
 }
