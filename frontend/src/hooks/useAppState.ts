@@ -189,12 +189,16 @@ export function useAppState(): AppState {
   }, [selectedAircraft?.icao]);
 
   useEffect(() => {
-    if (!cameraFilter.enabled || !viewportBbox) {
+    if (!cameraFilter.enabled) {
       setCameras([]);
       setCameraProgress({ loaded: 0, total: 0, done: true });
       if (cameraAbortRef.current) cameraAbortRef.current.abort();
       return;
     }
+
+    setCameraProgress((prev) =>
+      prev.done ? { loaded: 0, total: 0, done: false } : prev,
+    );
 
     if (cameraDebounceRef.current) clearTimeout(cameraDebounceRef.current);
 
@@ -206,7 +210,7 @@ export function useAppState(): AppState {
       setCameraProgress({ loaded: 0, total: 0, done: false });
 
       fetchCamerasChunked(
-        viewportBbox,
+        viewportBbox ?? undefined,
         (cams, progress) => {
           setCameras(cams);
           setCameraProgress(progress);
@@ -215,6 +219,7 @@ export function useAppState(): AppState {
       ).catch((err) => {
         if (err instanceof DOMException && err.name === "AbortError") return;
         console.error("[Cameras] chunk fetch error:", err);
+        setCameraProgress({ loaded: 0, total: 0, done: true });
       });
     }, 300);
 
