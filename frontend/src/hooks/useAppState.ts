@@ -15,9 +15,14 @@ import type { SatellitePosition, SatelliteFilter } from "../types/satellite";
 import { DEFAULT_SATELLITE_FILTER } from "../types/satellite";
 import type { TrafficFilter } from "../types/traffic";
 import type { Camera, CameraFilter } from "../types/camera";
+import type { WeatherFilter, WeatherPoint } from "../types/weather";
+import type { MetarFilter, MetarStation } from "../types/metar";
+import type { NaturalEvent, EventFilter } from "../types/events";
 import type { ShaderMode } from "../shaders/types";
 import type { WsMessage } from "../types/ws";
 import type { ConnectionStatus } from "../types/ws";
+import { fetchWeather } from "../services/weatherService";
+import { fetchEvents } from "../services/eventService";
 
 export interface AppState {
   status: ConnectionStatus;
@@ -62,9 +67,31 @@ export interface AppState {
   selectedCamera: Camera | null;
   setSelectedCamera: (c: Camera | null) => void;
 
+  weatherFilter: WeatherFilter;
+  setWeatherFilter: (f: WeatherFilter) => void;
+  weatherPoints: WeatherPoint[];
+  weatherLoading: boolean;
+
+  metarFilter: MetarFilter;
+  setMetarFilter: (f: MetarFilter) => void;
+  metarStations: MetarStation[];
+  selectedMetar: MetarStation | null;
+  setSelectedMetar: (s: MetarStation | null) => void;
+
+  eventFilter: EventFilter;
+  setEventFilter: (f: EventFilter) => void;
+  events: NaturalEvent[];
+  selectedEvent: NaturalEvent | null;
+  setSelectedEvent: (e: NaturalEvent | null) => void;
+
   viewportBbox: BBox | null;
   setViewportBbox: (bbox: BBox | null) => void;
   cameraProgress: CameraProgress;
+
+  flyToTarget: { lat: number; lon: number; alt: number } | null;
+  setFlyToTarget: (
+    target: { lat: number; lon: number; alt: number } | null,
+  ) => void;
 
   shaderMode: ShaderMode;
   setShaderMode: (m: ShaderMode) => void;
@@ -118,18 +145,46 @@ export function useAppState(): AppState {
   const [cameraFilter, setCameraFilter] = useState<CameraFilter>({
     enabled: false,
     cities: new Set(),
+    sources: new Set(),
   });
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
 
   const [viewportBbox, setViewportBbox] = useState<BBox | null>(null);
-  const cameraDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cameraAbortRef = useRef<AbortController | null>(null);
   const [cameraProgress, setCameraProgress] = useState<CameraProgress>({
     loaded: 0,
     total: 0,
     done: true,
   });
+
+  const [flyToTarget, setFlyToTarget] = useState<{
+    lat: number;
+    lon: number;
+    alt: number;
+  } | null>(null);
+
+  const [weatherFilter, setWeatherFilter] = useState<WeatherFilter>({
+    enabled: false,
+    showWind: true,
+    showTemperature: true,
+  });
+  const [weatherPoints, setWeatherPoints] = useState<WeatherPoint[]>([]);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+
+  const [metarFilter, setMetarFilter] = useState<MetarFilter>({
+    enabled: false,
+    categories: new Set(),
+  });
+  const [metarStations, setMetarStations] = useState<MetarStation[]>([]);
+  const [selectedMetar, setSelectedMetar] = useState<MetarStation | null>(null);
+
+  const [eventFilter, setEventFilter] = useState<EventFilter>({
+    enabled: false,
+    categories: new Set(),
+  });
+  const [events, setEvents] = useState<NaturalEvent[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<NaturalEvent | null>(null);
 
   const [shaderMode, setShaderMode] = useState<ShaderMode>("normal");
 
@@ -157,8 +212,11 @@ export function useAppState(): AppState {
       } else if (msg.type === "SatelliteBatch") {
         const { satellites, chunk_index, total_chunks } = msg.payload;
         satelliteStore.ingestBatch(satellites, chunk_index, total_chunks);
+      } else if (msg.type === "MetarUpdate") {
+        setMetarStations(msg.payload.stations);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       aircraftStore.update,
       aircraftStore.ingestBatch,
@@ -194,44 +252,112 @@ export function useAppState(): AppState {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAircraft?.icao]);
 
-  const cameraLoadedRef = useRef(false);
-
   useEffect(() => {
     if (!cameraFilter.enabled) {
       setCameras([]);
       setCameraProgress({ loaded: 0, total: 0, done: true });
-      cameraLoadedRef.current = false;
       if (cameraAbortRef.current) cameraAbortRef.current.abort();
       return;
     }
 
-    if (cameraLoadedRef.current) return;
-    cameraLoadedRef.current = true;
-
-    setCameraProgress({ loaded: 0, total: 0, done: false });
-
-    if (cameraAbortRef.current) cameraAbortRef.current.abort();
     const ac = new AbortController();
     cameraAbortRef.current = ac;
+    setCameraProgress({ loaded: 0, total: 0, done: false });
 
-    fetchCamerasChunked(
-      undefined,
-      (cams, progress) => {
-        setCameras(cams);
-        setCameraProgress(progress);
-      },
-      ac.signal,
-    ).catch((err) => {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      console.error("[Cameras] chunk fetch error:", err);
-      setCameraProgress({ loaded: 0, total: 0, done: true });
-      cameraLoadedRef.current = false;
-    });
+    let retries = 0;
+    const MAX_RETRIES = 3;
+
+    const doFetch = (): void => {
+      fetchCamerasChunked(
+        undefined,
+        (cams, progress) => {
+          setCameras(cams);
+          setCameraProgress(progress);
+        },
+        ac.signal,
+      ).catch((err) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        console.error("[Cameras] fetch error:", err);
+        retries++;
+        if (retries <= MAX_RETRIES && !ac.signal.aborted) {
+          setTimeout(doFetch, retries * 2000);
+        } else {
+          setCameraProgress({ loaded: 0, total: 0, done: true });
+        }
+      });
+    };
+
+    doFetch();
+    return () => ac.abort();
+  }, [cameraFilter.enabled]);
+
+  useEffect(() => {
+    if (!weatherFilter.enabled) {
+      setWeatherPoints([]);
+      return;
+    }
+    const ac = new AbortController();
+    setWeatherLoading(true);
+    fetchWeather(ac.signal)
+      .then((grid) => {
+        if (!ac.signal.aborted) setWeatherPoints(grid.points);
+      })
+      .catch((e) => {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        console.error("[Weather] fetch error:", e);
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setWeatherLoading(false);
+      });
+
+    const interval = setInterval(() => {
+      fetchWeather(ac.signal)
+        .then((grid) => {
+          if (!ac.signal.aborted) setWeatherPoints(grid.points);
+        })
+        .catch((e) => {
+          if (e instanceof DOMException && e.name === "AbortError") return;
+          console.error("[Weather] refetch error:", e);
+        });
+    }, 600_000);
 
     return () => {
-      if (cameraAbortRef.current) cameraAbortRef.current.abort();
+      ac.abort();
+      clearInterval(interval);
     };
-  }, [cameraFilter.enabled]);
+  }, [weatherFilter.enabled]);
+
+  useEffect(() => {
+    if (!eventFilter.enabled) {
+      setEvents([]);
+      return;
+    }
+    const ac = new AbortController();
+    fetchEvents(ac.signal)
+      .then((data) => {
+        if (!ac.signal.aborted) setEvents(data.events);
+      })
+      .catch((e) => {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        console.error("[Events] fetch error:", e);
+      });
+
+    const interval = setInterval(() => {
+      fetchEvents(ac.signal)
+        .then((data) => {
+          if (!ac.signal.aborted) setEvents(data.events);
+        })
+        .catch((e) => {
+          if (e instanceof DOMException && e.name === "AbortError") return;
+          console.error("[Events] refetch error:", e);
+        });
+    }, 1_800_000);
+
+    return () => {
+      ac.abort();
+      clearInterval(interval);
+    };
+  }, [eventFilter.enabled]);
 
   const { status } = useWebSocket({ onMessage: handleWsMessage });
 
@@ -274,9 +400,29 @@ export function useAppState(): AppState {
     selectedCamera,
     setSelectedCamera,
 
+    weatherFilter,
+    setWeatherFilter,
+    weatherPoints,
+    weatherLoading,
+
+    metarFilter,
+    setMetarFilter,
+    metarStations,
+    selectedMetar,
+    setSelectedMetar,
+
+    eventFilter,
+    setEventFilter,
+    events,
+    selectedEvent,
+    setSelectedEvent,
+
     viewportBbox,
     setViewportBbox,
     cameraProgress,
+
+    flyToTarget,
+    setFlyToTarget,
 
     shaderMode,
     setShaderMode,

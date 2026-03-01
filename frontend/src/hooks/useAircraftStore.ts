@@ -32,9 +32,13 @@ export function useAircraftStore(): AircraftStore {
     for (const ac of positions) {
       next.set(ac.icao, ac);
     }
-    console.log(
-      `[AircraftStore] full update: ${next.size} aircraft (mil: ${[...next.values()].filter((a) => a.is_military).length}, civ: ${[...next.values()].filter((a) => !a.is_military).length})`,
-    );
+    if (import.meta.env.DEV) {
+      let mil = 0;
+      for (const a of next.values()) if (a.is_military) mil++;
+      console.log(
+        `[AircraftStore] full update: ${next.size} aircraft (mil: ${mil}, civ: ${next.size - mil})`,
+      );
+    }
     setAircraft(next);
   }, []);
 
