@@ -10,25 +10,18 @@ export function AircraftFilters({
   onFilterChange,
 }: AircraftFiltersProps): React.ReactElement {
   return (
-    <div className="space-y-2">
-      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-        Filters
-      </h3>
+    <div className="px-4 py-2.5 border-b border-zinc-800/60 flex items-center gap-3">
       <Toggle
         label="Civilian"
-        color="bg-blue-500"
+        color="bg-sky-500"
         checked={filter.showCivilian}
-        onChange={(checked) =>
-          onFilterChange({ ...filter, showCivilian: checked })
-        }
+        onChange={(v) => onFilterChange({ ...filter, showCivilian: v })}
       />
       <Toggle
         label="Military"
-        color="bg-red-500"
+        color="bg-rose-500"
         checked={filter.showMilitary}
-        onChange={(checked) =>
-          onFilterChange({ ...filter, showMilitary: checked })
-        }
+        onChange={(v) => onFilterChange({ ...filter, showMilitary: v })}
       />
     </div>
   );
@@ -43,25 +36,21 @@ function Toggle({
   label: string;
   color: string;
   checked: boolean;
-  onChange: (checked: boolean) => void;
-}): React.ReactElement {
+  onChange: (v: boolean) => void;
+}) {
   return (
     <button
       onClick={() => onChange(!checked)}
-      className="flex items-center gap-2 w-full text-left text-sm text-gray-200 hover:text-gray-100 transition-colors"
+      className="flex items-center gap-1.5 text-xs text-zinc-300 hover:text-zinc-100 transition-colors"
     >
       <div
-        className={`w-8 h-4 rounded-full transition-colors ${
-          checked ? color : "bg-gray-600"
-        } relative`}
+        className={`h-3.5 w-7 rounded-full transition-colors ${checked ? color : "bg-zinc-700"} relative`}
       >
         <div
-          className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
-            checked ? "translate-x-4" : "translate-x-0.5"
-          }`}
+          className={`absolute top-[2px] h-2.5 w-2.5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-[14px]" : "translate-x-[2px]"}`}
         />
       </div>
-      <span>{label}</span>
+      <span className="font-mono text-[11px]">{label}</span>
     </button>
   );
 }

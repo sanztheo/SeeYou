@@ -10,32 +10,36 @@ export function AircraftCounter({
   civilian,
 }: AircraftCounterProps): React.ReactElement {
   return (
-    <div className="space-y-2">
-      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+    <div className="px-4 py-3 border-b border-zinc-800/60">
+      <div className="mb-2 font-mono text-[10px] font-medium uppercase tracking-widest text-zinc-500">
         Aircraft
-      </h3>
-      <div className="grid grid-cols-3 gap-2">
-        <CountBox label="Total" count={total} color="text-gray-100" />
-        <CountBox label="Civil" count={civilian} color="text-blue-400" />
-        <CountBox label="Military" count={military} color="text-red-400" />
+      </div>
+      <div className="grid grid-cols-3 gap-1">
+        <Stat value={total} label="Total" color="text-zinc-100" />
+        <Stat value={civilian} label="Civil" color="text-sky-400" />
+        <Stat value={military} label="Mil" color="text-rose-400" />
       </div>
     </div>
   );
 }
 
-function CountBox({
+function Stat({
+  value,
   label,
-  count,
   color,
 }: {
+  value: number;
   label: string;
-  count: number;
   color: string;
-}): React.ReactElement {
+}) {
   return (
     <div className="text-center">
-      <div className={`text-lg font-bold font-mono ${color}`}>{count}</div>
-      <div className="text-[10px] text-gray-500 uppercase">{label}</div>
+      <div className={`font-mono text-base font-bold tabular-nums ${color}`}>
+        {value}
+      </div>
+      <div className="font-mono text-[9px] uppercase tracking-wider text-zinc-600">
+        {label}
+      </div>
     </div>
   );
 }
