@@ -80,7 +80,7 @@ export function App(): React.ReactElement {
         satelliteFilter={state.satelliteFilter}
         onSelectSatellite={state.setSelectedSatellite}
         trafficFilter={state.trafficFilter}
-        roads={state.roads}
+        onTrafficLoading={state.setTrafficLoadState}
         cameras={state.cameras}
         cameraFilter={state.cameraFilter}
         onSelectCamera={state.setSelectedCamera}
@@ -112,6 +112,8 @@ export function App(): React.ReactElement {
           <TrafficControls
             filter={state.trafficFilter}
             onFilterChange={state.setTrafficFilter}
+            loading={state.trafficLoading}
+            roadCount={state.trafficRoadCount}
           />
           <CameraFilters
             filter={state.cameraFilter}
