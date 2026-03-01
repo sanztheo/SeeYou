@@ -32,29 +32,22 @@ function fmtAlt(m: number): string {
 
 export function CameraInfo({ altitude, heading, pitch }: CameraInfoProps) {
   const dir = compassDir(heading);
-
   return (
-    <div className="fixed top-4 right-4 z-40 rounded bg-black/70 px-3 py-1.5 font-mono text-xs text-emerald-400 backdrop-blur-sm border border-emerald-400/15 select-none shadow-lg shadow-emerald-400/5">
-      <div className="flex gap-3 items-center">
-        <span>
-          ALT{" "}
-          <span className="text-emerald-300 drop-shadow-[0_0_3px_rgba(52,211,153,0.35)]">
-            {fmtAlt(altitude)}
-          </span>
+    <div className="fixed top-3 right-3 z-30 flex items-center gap-3 rounded-md border border-zinc-800/60 bg-zinc-950/70 px-3 py-1.5 font-mono text-[10px] text-emerald-400/80 backdrop-blur-md select-none">
+      <span>
+        ALT <span className="text-emerald-300">{fmtAlt(altitude)}</span>
+      </span>
+      <span className="text-zinc-700">|</span>
+      <span>
+        HDG{" "}
+        <span className="text-emerald-300">
+          {heading.toFixed(0)}° {dir}
         </span>
-        <span>
-          HDG{" "}
-          <span className="text-emerald-300 drop-shadow-[0_0_3px_rgba(52,211,153,0.35)]">
-            {heading.toFixed(0)}° {dir}
-          </span>
-        </span>
-        <span>
-          PIT{" "}
-          <span className="text-emerald-300 drop-shadow-[0_0_3px_rgba(52,211,153,0.35)]">
-            {pitch.toFixed(1)}°
-          </span>
-        </span>
-      </div>
+      </span>
+      <span className="text-zinc-700">|</span>
+      <span>
+        PIT <span className="text-emerald-300">{pitch.toFixed(1)}°</span>
+      </span>
     </div>
   );
 }

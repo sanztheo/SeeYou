@@ -2,6 +2,7 @@ interface CursorCoordsProps {
   lat: number | null;
   lon: number | null;
   altitude: number | null;
+  sidebarOpen?: boolean;
 }
 
 function fmt(deg: number | null, pos: string, neg: string): string {
@@ -16,29 +17,28 @@ function fmtAlt(m: number | null): string {
   return `${Math.round(m)}m`;
 }
 
-export function CursorCoords({ lat, lon, altitude }: CursorCoordsProps) {
+export function CursorCoords({
+  lat,
+  lon,
+  altitude,
+  sidebarOpen,
+}: CursorCoordsProps) {
+  const left = sidebarOpen ? "left-[292px]" : "left-3";
   return (
-    <div className="fixed bottom-4 left-4 z-40 rounded bg-black/70 px-3 py-1.5 font-mono text-xs text-emerald-400 backdrop-blur-sm border border-emerald-400/15 select-none shadow-lg shadow-emerald-400/5">
-      <div className="flex gap-4 items-center">
-        <span>
-          LAT{" "}
-          <span className="text-emerald-300 drop-shadow-[0_0_3px_rgba(52,211,153,0.35)]">
-            {fmt(lat, "N", "S")}
-          </span>
-        </span>
-        <span>
-          LON{" "}
-          <span className="text-emerald-300 drop-shadow-[0_0_3px_rgba(52,211,153,0.35)]">
-            {fmt(lon, "E", "W")}
-          </span>
-        </span>
-        <span>
-          ALT{" "}
-          <span className="text-emerald-300 drop-shadow-[0_0_3px_rgba(52,211,153,0.35)]">
-            {fmtAlt(altitude)}
-          </span>
-        </span>
-      </div>
+    <div
+      className={`fixed bottom-12 ${left} z-20 flex items-center gap-3 rounded-md border border-zinc-800/60 bg-zinc-950/70 px-3 py-1 font-mono text-[10px] text-emerald-400/80 backdrop-blur-md select-none transition-all`}
+    >
+      <span>
+        LAT <span className="text-emerald-300">{fmt(lat, "N", "S")}</span>
+      </span>
+      <span className="text-zinc-700">|</span>
+      <span>
+        LON <span className="text-emerald-300">{fmt(lon, "E", "W")}</span>
+      </span>
+      <span className="text-zinc-700">|</span>
+      <span>
+        ALT <span className="text-emerald-300">{fmtAlt(altitude)}</span>
+      </span>
     </div>
   );
 }
