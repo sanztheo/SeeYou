@@ -11,6 +11,13 @@ members = [
     "crates/satellites",
     "crates/events",
     "crates/weather",
+    "crates/cables",
+    "crates/seismic",
+    "crates/fires",
+    "crates/gdelt",
+    "crates/maritime",
+    "crates/cyber",
+    "crates/space_weather",
 ]
 resolver = "2"
 
