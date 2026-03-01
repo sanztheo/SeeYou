@@ -1,14 +1,17 @@
 import type { Camera, CameraFilter } from "../../types/camera";
+import type { CameraProgress } from "../../services/cameraService";
 
 interface CameraFiltersProps {
   filter: CameraFilter;
   cameras: Camera[];
+  progress: CameraProgress;
   onFilterChange: (filter: CameraFilter) => void;
 }
 
 export function CameraFilters({
   filter,
   cameras,
+  progress,
   onFilterChange,
 }: CameraFiltersProps): React.ReactElement {
   const onlineCount = cameras.filter((c) => c.is_online).length;
@@ -21,6 +24,12 @@ export function CameraFilters({
     onFilterChange({ ...filter, cities: next });
   };
 
+  const loading = filter.enabled && !progress.done;
+  const pct =
+    progress.total > 0
+      ? Math.round((progress.loaded / progress.total) * 100)
+      : 0;
+
   return (
     <div className="px-4 py-3">
       <div className="flex items-center justify-between mb-2">
@@ -28,9 +37,14 @@ export function CameraFilters({
           <span className="font-mono text-[10px] font-medium uppercase tracking-widest text-zinc-500">
             Cameras
           </span>
-          {cameras.length > 0 && (
+          {filter.enabled && progress.total > 0 && (
             <span className="font-mono text-[9px] tabular-nums text-emerald-400">
-              {onlineCount} online
+              {progress.loaded.toLocaleString()}
+              {!progress.done && (
+                <span className="text-zinc-500">
+                  /{progress.total.toLocaleString()}
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -49,6 +63,25 @@ export function CameraFilters({
           </div>
         </button>
       </div>
+
+      {loading && (
+        <div className="mb-2">
+          <div className="h-1 w-full rounded-full bg-zinc-800 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {filter.enabled && cameras.length > 0 && (
+        <div className="flex items-center gap-2 mb-2">
+          <span className="font-mono text-[9px] text-zinc-500">
+            {onlineCount} online
+          </span>
+        </div>
+      )}
 
       {filter.enabled && cities.length > 0 && (
         <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto scrollbar-thin">
