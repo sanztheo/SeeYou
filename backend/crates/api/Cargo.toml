@@ -11,4 +11,6 @@ tracing.workspace = true
 reqwest.workspace = true
 cache = { path = "../cache" }
 cameras = { path = "../cameras" }
+events = { path = "../events" }
 traffic = { path = "../traffic" }
+weather = { path = "../weather" }

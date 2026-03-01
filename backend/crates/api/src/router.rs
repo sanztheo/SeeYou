@@ -14,4 +14,7 @@ where
         .route("/roads", get(super::roads::get_roads))
         .route("/cameras", get(super::cameras::list_cameras))
         .route("/cameras/proxy", get(super::cameras::proxy_camera))
+        .route("/geocode", get(super::geocode::geocode))
+        .route("/events", get(super::events::get_events))
+        .route("/weather", get(super::weather::get_weather))
 }
