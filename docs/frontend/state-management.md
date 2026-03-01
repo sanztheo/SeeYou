@@ -100,7 +100,30 @@ setState triggers re-render → layers receive new Map
 
 The accumulation logic is extracted into `batchAccumulator.ts` as a pure function for unit testing.
 
-`useSatelliteStore` uses the identical pattern.
+## useSatelliteStore — Progressive Chunk Rendering
+
+Unlike `useAircraftStore` which buffers all chunks before flushing, `useSatelliteStore` updates state **after each chunk** for progressive rendering:
+
+```
+WebSocket SatelliteBatch messages arrive in N chunks
+  │
+  ▼
+chunk_index === 0? → clear previous Map, start fresh
+  │
+  ▼
+Merge chunk positions into Map immediately → setSatellites()
+  │
+  ▼
+setState triggers re-render → SatelliteLayer renders available satellites
+  │
+  ▼
+Next chunk arrives → merge into growing Map → re-render
+  │
+  ▼
+All chunks received → tracking refs reset
+```
+
+This means satellites appear on the globe within 1-2 seconds of the first chunk arriving, instead of waiting 5-10 seconds for all ~10,000 satellites to transfer.
 
 ## useLevelOfDetail — Altitude-Based Configuration
 

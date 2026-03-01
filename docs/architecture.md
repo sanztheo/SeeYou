@@ -160,14 +160,15 @@ App.tsx
 
 ### Rendering Strategy
 
-All visualization layers use **imperative Cesium APIs** (not JSX-based Resium components) for performance:
+All visualization layers use **imperative Cesium Primitive collections** (not JSX-based Resium components or Entity API) for maximum GPU throughput:
 
-- Layers return `null` from React render
-- Entity management happens in `useEffect` hooks via `CustomDataSource`
-- Batch operations wrapped in `suspendEvents()` / `resumeEvents()`
-- Incremental entity diffing (add/update/remove) avoids full recreation
-- `requestAnimationFrame` chunking for large batch additions (500 entities per frame)
-- Viewport culling via `computeViewRectangle()` + `Rectangle.contains()`
+- Layers return `null` from React render — zero React DOM output
+- `BillboardCollection`, `LabelCollection`, `PointPrimitiveCollection` added to `viewer.scene.primitives`
+- Each collection batches all objects into 1-2 draw calls (vs. 1 per entity with Entity API)
+- Incremental updates via entry maps (`Map<id, { billboard, label }>`) — add new, update existing, remove stale
+- Frustum culling handled automatically by Primitive collections
+- `NearFarScalar` and `DistanceDisplayCondition` on all primitives for LOD
+- Entity API retained only where required: `clampToGround` polylines, `viewer.trackedEntity`
 
 ### Level of Detail (LOD)
 

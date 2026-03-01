@@ -60,7 +60,7 @@ cd frontend && npm run dev       # Frontend on :5173
 2. **Add WS handler**: In `useAppState.ts` — handle new message type
 3. **Create store** (if real-time): New hook following `useAircraftStore` pattern
 4. **Create service** (if REST): New module in `services/`
-5. **Build layer component**: In `components/YourDomain/` following imperative Cesium pattern
+5. **Build layer component**: In `components/YourDomain/` using Primitive collections (`BillboardCollection`, etc.)
 6. **Add sidebar controls**: Filter component in `Sidebar/`
 7. **Mount in Globe**: Add layer to `Globe.tsx`
 8. **Update App.tsx**: Wire state and pass props
@@ -68,7 +68,7 @@ cd frontend && npm run dev       # Frontend on :5173
 ## Architecture Principles
 
 1. **Poll-Cache-Broadcast**: Backend polls → Redis caches → WebSocket broadcasts
-2. **Imperative Cesium**: Layers use `CustomDataSource` APIs, not JSX entities
+2. **Primitive Collections**: Layers use `BillboardCollection`/`LabelCollection`/`PointPrimitiveCollection` — Entity API only where required (`clampToGround`, `trackedEntity`)
 3. **Chunked delivery**: Large datasets split into 2,000-item WebSocket chunks
 4. **Zero-dependency state**: No external state management libraries
 5. **Domain isolation**: Each domain (aircraft, satellites, etc.) is self-contained
