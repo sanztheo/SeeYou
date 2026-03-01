@@ -9,6 +9,8 @@ members = [
     "crates/traffic",
     "crates/cameras",
     "crates/satellites",
+    "crates/events",
+    "crates/weather",
 ]
 resolver = "2"
 

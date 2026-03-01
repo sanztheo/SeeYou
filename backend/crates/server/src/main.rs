@@ -51,14 +51,73 @@ async fn main() -> anyhow::Result<()> {
         camera_poll_interval,
     ));
 
+    let events_poll_interval = Duration::from_secs(config.events_poll_interval_secs);
+
+    tokio::spawn({
+        let client = http_client.clone();
+        let pool = redis_pool.clone();
+        async move {
+            loop {
+                match events::eonet::fetch_active_events(&client).await {
+                    Ok(evts) => {
+                        let resp = events::EventsResponse {
+                            events: evts,
+                            fetched_at: chrono::Utc::now().to_rfc3339(),
+                        };
+                        if let Err(e) = cache::events::set_events(&pool, &resp).await {
+                            tracing::warn!(error = %e, "failed to cache events");
+                        }
+                        tracing::info!(count = resp.events.len(), "natural events updated");
+                    }
+                    Err(e) => tracing::warn!(error = %e, "events fetch failed"),
+                }
+                tokio::time::sleep(events_poll_interval).await;
+            }
+        }
+    });
+
     let satellite_poll_interval = Duration::from_secs(config.satellite_poll_interval_secs);
 
     tokio::spawn(satellites::run_satellite_tracker(
-        http_client,
+        http_client.clone(),
         redis_pool.clone(),
         ws_broadcast.clone(),
         satellite_poll_interval,
     ));
+
+    let metar_poll_interval = Duration::from_secs(config.metar_poll_interval_secs);
+
+    tokio::spawn(services::metar_tracker::run_metar_tracker(
+        http_client.clone(),
+        redis_pool.clone(),
+        ws_broadcast.clone(),
+        metar_poll_interval,
+    ));
+
+    let weather_poll_interval = Duration::from_secs(config.weather_poll_interval_secs);
+
+    tokio::spawn({
+        let client = http_client;
+        let pool = redis_pool.clone();
+        async move {
+            loop {
+                match weather::openmeteo::fetch_weather_grid(&client).await {
+                    Ok(points) => {
+                        let grid = weather::WeatherGrid {
+                            points,
+                            fetched_at: chrono::Utc::now().to_rfc3339(),
+                        };
+                        if let Err(e) = cache::weather::set_weather(&pool, &grid).await {
+                            tracing::warn!(error = %e, "failed to cache weather");
+                        }
+                        tracing::info!(count = grid.points.len(), "weather grid updated");
+                    }
+                    Err(e) => tracing::warn!(error = %e, "weather fetch failed"),
+                }
+                tokio::time::sleep(weather_poll_interval).await;
+            }
+        }
+    });
 
     let state = AppState {
         redis_pool,

@@ -16,9 +16,12 @@ serde.workspace = true
 api = { path = "../api" }
 ws = { path = "../ws" }
 cache = { path = "../cache" }
+events = { path = "../events" }
 services = { path = "../services" }
 traffic = { path = "../traffic" }
 cameras = { path = "../cameras" }
 satellites = { path = "../satellites" }
+weather = { path = "../weather" }
 reqwest.workspace = true
 url.workspace = true
+chrono.workspace = true

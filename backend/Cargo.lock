@@ -33,11 +33,13 @@ dependencies = [
  "axum",
  "cache",
  "cameras",
+ "events",
  "reqwest",
  "serde",
  "serde_json",
  "tracing",
  "traffic",
+ "weather",
 ]
 
 [[package]]
@@ -394,6 +396,16 @@ checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "events"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "reqwest",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1596,7 +1608,9 @@ dependencies = [
  "axum",
  "cache",
  "cameras",
+ "chrono",
  "dotenvy",
+ "events",
  "reqwest",
  "satellites",
  "serde",
@@ -1608,6 +1622,7 @@ dependencies = [
  "tracing-subscriber",
  "traffic",
  "url",
+ "weather",
  "ws",
 ]
 
@@ -1615,6 +1630,7 @@ dependencies = [
 name = "services"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "cache",
  "chrono",
  "futures-util",
@@ -2281,6 +2297,16 @@ dependencies = [
  "hashbrown 0.15.5",
  "indexmap",
  "semver",
+]
+
+[[package]]
+name = "weather"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "reqwest",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
