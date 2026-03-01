@@ -26,17 +26,23 @@ export class ShaderManager {
 
   setMode(mode: ShaderMode): void {
     if (mode === this.currentMode) return;
+    if (this.viewer.isDestroyed()) return;
 
     this.clearStage();
 
     if (mode !== "normal") {
       const factory = STAGE_FACTORIES[mode];
-      const stage = factory(this.viewer);
-      this.viewer.scene.postProcessStages.add(stage);
-      this.currentStage = stage;
+      try {
+        const stage = factory(this.viewer);
+        this.viewer.scene.postProcessStages.add(stage);
+        this.currentStage = stage;
+      } catch (err) {
+        console.error(`[ShaderManager] Failed to activate ${mode}:`, err);
+      }
     }
 
     this.currentMode = mode;
+    this.viewer.scene.requestRender();
   }
 
   getMode(): ShaderMode {

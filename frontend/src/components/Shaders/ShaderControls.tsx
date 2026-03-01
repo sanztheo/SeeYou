@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { SHADER_CONFIGS, type ShaderMode } from "../../shaders/types";
 
 interface ShaderControlsProps {
@@ -10,20 +9,6 @@ export function ShaderControls({
   currentMode,
   onModeChange,
 }: ShaderControlsProps): React.ReactElement {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      )
-        return;
-      const cfg = SHADER_CONFIGS.find((c) => c.shortcut === e.key);
-      if (cfg) onModeChange(cfg.mode);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onModeChange]);
-
   return (
     <div className="fixed bottom-12 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-md border border-zinc-800/60 bg-zinc-950/70 p-1 shadow-lg shadow-black/30 backdrop-blur-xl">
       {SHADER_CONFIGS.map((cfg) => {
