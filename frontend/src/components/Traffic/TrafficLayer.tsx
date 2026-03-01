@@ -1,86 +1,44 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { useCesium } from "resium";
-import {
-  CustomDataSource,
-  Cartesian3,
-  Color,
-  Math as CesiumMath,
-  type Viewer,
-} from "cesium";
+import { CustomDataSource, Cartesian3, Color } from "cesium";
 import type { Road, TrafficFilter, RoadType } from "../../types/traffic";
-import { fetchRoads } from "../../services/trafficService";
 import { ParticleEngine } from "./ParticleEngine";
-
-const MAX_ALT = 50_000;
-const DEBOUNCE_MS = 500;
-
-const ROAD_COLOR: Record<RoadType, Color> = {
-  Motorway: Color.fromCssColorString("#FFEB3B"),
-  Trunk: Color.fromCssColorString("#FF9800"),
-  Primary: Color.WHITE,
-  Secondary: Color.GRAY,
-  Tertiary: Color.DARKGRAY,
-};
-
-const ROAD_WIDTH: Record<RoadType, number> = {
-  Motorway: 4,
-  Trunk: 3,
-  Primary: 2,
-  Secondary: 1,
-  Tertiary: 1,
-};
+import { useTrafficLoader } from "./useTrafficLoader";
+import { typeVisible } from "./trafficUtils";
+import { ROAD_COLOR, ROAD_WIDTH, MAX_ALT } from "./trafficConstants";
 
 interface TrafficLayerProps {
   filter: TrafficFilter;
-  roads: Road[];
-}
-
-function typeVisible(f: TrafficFilter, t: RoadType): boolean {
-  if (t === "Motorway") return f.showMotorway;
-  if (t === "Trunk") return f.showTrunk;
-  if (t === "Primary") return f.showPrimary;
-  if (t === "Secondary") return f.showSecondary;
-  return false;
-}
-
-function getBbox(v: Viewer) {
-  const r = v.camera.computeViewRectangle();
-  if (!r) return null;
-  return {
-    south: CesiumMath.toDegrees(r.south),
-    west: CesiumMath.toDegrees(r.west),
-    north: CesiumMath.toDegrees(r.north),
-    east: CesiumMath.toDegrees(r.east),
-  };
-}
-
-function bboxKey(b: {
-  south: number;
-  west: number;
-  north: number;
-  east: number;
-}): string {
-  return `${b.south.toFixed(2)},${b.west.toFixed(2)},${b.north.toFixed(2)},${b.east.toFixed(2)}`;
+  onLoadingChange?: (loading: boolean, count: number) => void;
 }
 
 export function TrafficLayer({
   filter,
-  roads: propRoads,
+  onLoadingChange,
 }: TrafficLayerProps): null {
   const { viewer } = useCesium();
+  const { roads, loading, roadCount, aboveMaxAlt } = useTrafficLoader(
+    viewer,
+    filter,
+  );
+
   const roadsDsRef = useRef<CustomDataSource | null>(null);
   const particleDsRef = useRef<CustomDataSource | null>(null);
   const engineRef = useRef<ParticleEngine | null>(null);
   const animRef = useRef(0);
-  const filterRef = useRef(filter);
-  const loadedRef = useRef<Road[]>([]);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
-  const lastBboxKeyRef = useRef("");
-  const visibleRef = useRef(true);
+  const renderedKeyRef = useRef("");
 
   useEffect(() => {
-    filterRef.current = filter;
-  }, [filter]);
+    onLoadingChange?.(loading, roadCount);
+  }, [loading, roadCount, onLoadingChange]);
+
+  const filteredRoads = useMemo(
+    () =>
+      filter.enabled
+        ? roads.filter((r) => typeVisible(filter, r.road_type))
+        : [],
+    [roads, filter],
+  );
 
   useEffect(() => {
     if (!viewer) return;
@@ -99,56 +57,13 @@ export function TrafficLayer({
     const animate = (now: number): void => {
       const dt = Math.min((now - prev) / 1000, 0.1);
       prev = now;
-      if (visibleRef.current) engine.tick(dt);
+      engine.tick(dt);
       animRef.current = requestAnimationFrame(animate);
     };
     animRef.current = requestAnimationFrame(animate);
 
-    const setAllVisible = (show: boolean): void => {
-      const vals = rds.entities.values;
-      for (let i = 0; i < vals.length; i++) vals[i].show = show;
-      const pvals = pds.entities.values;
-      for (let i = 0; i < pvals.length; i++) pvals[i].show = show;
-      visibleRef.current = show;
-    };
-
-    const onCamera = (): void => {
-      if (viewer.isDestroyed()) return;
-
-      const alt = viewer.camera.positionCartographic.height;
-
-      if (alt > MAX_ALT) {
-        if (visibleRef.current) setAllVisible(false);
-        return;
-      }
-
-      if (!visibleRef.current) setAllVisible(true);
-
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(async () => {
-        if (viewer.isDestroyed()) return;
-
-        const bbox = getBbox(viewer);
-        if (!bbox) return;
-
-        const key = bboxKey(bbox);
-        if (key === lastBboxKeyRef.current) return;
-        lastBboxKeyRef.current = key;
-
-        const roads = await fetchRoads(bbox);
-        loadedRef.current = roads;
-        rebuildRoads(roads, filterRef.current, rds, engine);
-      }, DEBOUNCE_MS);
-    };
-
-    viewer.camera.percentageChanged = 0.05;
-    viewer.camera.changed.addEventListener(onCamera);
-    onCamera();
-
     return (): void => {
       cancelAnimationFrame(animRef.current);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      viewer.camera.changed.removeEventListener(onCamera);
       engine.clear();
       if (!viewer.isDestroyed()) {
         viewer.dataSources.remove(rds, true);
@@ -165,27 +80,41 @@ export function TrafficLayer({
     const engine = engineRef.current;
     if (!rds || !engine) return;
 
-    const roads = propRoads.length > 0 ? propRoads : loadedRef.current;
-    rebuildRoads(roads, filter, rds, engine);
-  }, [filter, propRoads]);
+    if (aboveMaxAlt || !filter.enabled) {
+      setAllShow(rds, false);
+      setAllShow(particleDsRef.current, false);
+      return;
+    }
+
+    const key = filteredRoads.map((r) => r.id).join(",");
+    if (key === renderedKeyRef.current) {
+      setAllShow(rds, true);
+      setAllShow(particleDsRef.current, true);
+      return;
+    }
+    renderedKeyRef.current = key;
+
+    renderRoads(filteredRoads, rds, engine);
+  }, [filteredRoads, filter.enabled, aboveMaxAlt]);
 
   return null;
 }
 
-function rebuildRoads(
+function setAllShow(ds: CustomDataSource | null, show: boolean): void {
+  if (!ds) return;
+  const vals = ds.entities.values;
+  for (let i = 0; i < vals.length; i++) vals[i].show = show;
+}
+
+function renderRoads(
   roads: Road[],
-  filter: TrafficFilter,
   ds: CustomDataSource,
   engine: ParticleEngine,
 ): void {
   ds.entities.removeAll();
   engine.clear();
 
-  if (!filter.enabled) return;
-
-  const visible = roads.filter((r) => typeVisible(filter, r.road_type));
-
-  for (const road of visible) {
+  for (const road of roads) {
     if (road.nodes.length < 2) continue;
     ds.entities.add({
       id: `road_${road.id}`,
@@ -193,12 +122,12 @@ function rebuildRoads(
         positions: Cartesian3.fromDegreesArray(
           road.nodes.flatMap((n) => [n.lon, n.lat]),
         ),
-        width: ROAD_WIDTH[road.road_type] ?? 1,
-        material: ROAD_COLOR[road.road_type] ?? Color.GRAY,
+        width: ROAD_WIDTH[road.road_type as RoadType] ?? 1,
+        material: ROAD_COLOR[road.road_type as RoadType] ?? Color.GRAY,
         clampToGround: true,
       },
     });
   }
 
-  engine.updateRoads(visible, new Date().getHours());
+  engine.updateRoads(roads, new Date().getHours());
 }
