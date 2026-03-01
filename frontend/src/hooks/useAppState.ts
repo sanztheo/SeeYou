@@ -15,13 +15,18 @@ import type { SatellitePosition, SatelliteFilter } from "../types/satellite";
 import { DEFAULT_SATELLITE_FILTER } from "../types/satellite";
 import type { TrafficFilter } from "../types/traffic";
 import type { Camera, CameraFilter } from "../types/camera";
-import type { WeatherFilter, WeatherPoint } from "../types/weather";
+import type {
+  WeatherFilter,
+  WeatherPoint,
+  RainViewerData,
+} from "../types/weather";
 import type { MetarFilter, MetarStation } from "../types/metar";
 import type { NaturalEvent, EventFilter } from "../types/events";
 import type { ShaderMode } from "../shaders/types";
 import type { WsMessage } from "../types/ws";
 import type { ConnectionStatus } from "../types/ws";
 import { fetchWeather } from "../services/weatherService";
+import { fetchRainViewerFrames } from "../services/weatherTileService";
 import { fetchEvents } from "../services/eventService";
 
 export interface AppState {
@@ -71,6 +76,7 @@ export interface AppState {
   setWeatherFilter: (f: WeatherFilter) => void;
   weatherPoints: WeatherPoint[];
   weatherLoading: boolean;
+  rainViewerData: RainViewerData | null;
 
   metarFilter: MetarFilter;
   setMetarFilter: (f: MetarFilter) => void;
@@ -167,12 +173,17 @@ export function useAppState(): AppState {
 
   const [weatherFilter, setWeatherFilter] = useState<WeatherFilter>({
     enabled: false,
+    showRadar: true,
     showWind: true,
-    showTemperature: true,
-    showClouds: true,
+    radarOpacity: 0.7,
+    windOpacity: 0.6,
+    animationSpeed: 500,
   });
   const [weatherPoints, setWeatherPoints] = useState<WeatherPoint[]>([]);
   const [weatherLoading, setWeatherLoading] = useState(false);
+  const [rainViewerData, setRainViewerData] = useState<RainViewerData | null>(
+    null,
+  );
 
   const [metarFilter, setMetarFilter] = useState<MetarFilter>({
     enabled: false,
@@ -297,34 +308,40 @@ export function useAppState(): AppState {
   useEffect(() => {
     if (!weatherFilter.enabled) {
       setWeatherPoints([]);
+      setRainViewerData(null);
       return;
     }
+    let cancelled = false;
     const ac = new AbortController();
     setWeatherLoading(true);
-    fetchWeather(ac.signal)
-      .then((grid) => {
-        if (!ac.signal.aborted) setWeatherPoints(grid.points);
-      })
-      .catch((e) => {
-        if (e instanceof DOMException && e.name === "AbortError") return;
-        console.error("[Weather] fetch error:", e);
+
+    Promise.all([
+      fetchWeather(ac.signal).catch(() => null),
+      fetchRainViewerFrames(ac.signal).catch(() => null),
+    ])
+      .then(([grid, rvData]) => {
+        if (cancelled || ac.signal.aborted) return;
+        if (grid) setWeatherPoints(grid.points);
+        if (rvData) setRainViewerData(rvData);
       })
       .finally(() => {
-        if (!ac.signal.aborted) setWeatherLoading(false);
+        if (!cancelled && !ac.signal.aborted) setWeatherLoading(false);
       });
 
     const interval = setInterval(() => {
-      fetchWeather(ac.signal)
-        .then((grid) => {
-          if (!ac.signal.aborted) setWeatherPoints(grid.points);
-        })
-        .catch((e) => {
-          if (e instanceof DOMException && e.name === "AbortError") return;
-          console.error("[Weather] refetch error:", e);
-        });
+      if (cancelled) return;
+      Promise.all([
+        fetchWeather(ac.signal).catch(() => null),
+        fetchRainViewerFrames(ac.signal).catch(() => null),
+      ]).then(([grid, rvData]) => {
+        if (cancelled || ac.signal.aborted) return;
+        if (grid) setWeatherPoints(grid.points);
+        if (rvData) setRainViewerData(rvData);
+      });
     }, 600_000);
 
     return () => {
+      cancelled = true;
       ac.abort();
       clearInterval(interval);
     };
@@ -412,6 +429,7 @@ export function useAppState(): AppState {
     setWeatherFilter,
     weatherPoints,
     weatherLoading,
+    rainViewerData,
 
     metarFilter,
     setMetarFilter,

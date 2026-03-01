@@ -143,6 +143,7 @@ export function App(): React.ReactElement {
         onSelectCamera={state.setSelectedCamera}
         weatherPoints={state.weatherPoints}
         weatherFilter={state.weatherFilter}
+        rainViewerData={state.rainViewerData}
         events={state.events}
         eventFilter={state.eventFilter}
         onSelectEvent={state.setSelectedEvent}
@@ -194,7 +195,6 @@ export function App(): React.ReactElement {
           <WeatherControls
             filter={state.weatherFilter}
             onFilterChange={state.setWeatherFilter}
-            pointCount={state.weatherPoints.length}
             loading={state.weatherLoading}
           />
           <MetarFilters

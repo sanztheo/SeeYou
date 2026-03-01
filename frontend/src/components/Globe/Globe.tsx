@@ -15,6 +15,7 @@ import { TrafficLayer } from "../Traffic/TrafficLayer";
 import { CameraLayer } from "../Camera/CameraLayer";
 import { CityLabelsLayer } from "../City/CityLabelsLayer";
 import { WeatherLayer } from "../Weather/WeatherLayer";
+import { WindParticleLayer } from "../Weather/WindParticleLayer";
 import { EventLayer } from "../Events/EventLayer";
 import { MetarLayer } from "../Aviation/MetarLayer";
 import { ShaderManager } from "../../shaders/ShaderManager";
@@ -30,7 +31,11 @@ import type { SatellitePosition, SatelliteFilter } from "../../types/satellite";
 import { DEFAULT_SATELLITE_FILTER } from "../../types/satellite";
 import type { TrafficFilter } from "../../types/traffic";
 import type { Camera, CameraFilter } from "../../types/camera";
-import type { WeatherPoint, WeatherFilter } from "../../types/weather";
+import type {
+  WeatherPoint,
+  WeatherFilter,
+  RainViewerData,
+} from "../../types/weather";
 import type { NaturalEvent, EventFilter } from "../../types/events";
 import type { MetarStation, MetarFilter } from "../../types/metar";
 import type { ShaderMode } from "../../shaders/types";
@@ -71,6 +76,7 @@ interface GlobeProps {
 
   weatherPoints?: WeatherPoint[];
   weatherFilter?: WeatherFilter;
+  rainViewerData?: RainViewerData | null;
 
   events?: NaturalEvent[];
   eventFilter?: EventFilter;
@@ -114,6 +120,7 @@ export function Globe({
   onSelectCamera,
   weatherPoints,
   weatherFilter,
+  rainViewerData,
   events,
   eventFilter,
   onSelectEvent,
@@ -286,8 +293,23 @@ export function Globe({
         />
       )}
 
-      {weatherFilter?.enabled && weatherPoints && weatherPoints.length > 0 && (
-        <WeatherLayer points={weatherPoints} filter={weatherFilter} />
+      {weatherFilter?.enabled && (
+        <>
+          {weatherFilter.showRadar && (
+            <WeatherLayer
+              rainViewerData={rainViewerData ?? null}
+              filter={weatherFilter}
+            />
+          )}
+          {weatherFilter.showWind &&
+            weatherPoints &&
+            weatherPoints.length > 0 && (
+              <WindParticleLayer
+                points={weatherPoints}
+                opacity={weatherFilter.windOpacity}
+              />
+            )}
+        </>
       )}
 
       {eventFilter?.enabled && events && events.length > 0 && (
