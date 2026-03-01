@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AircraftPosition } from "../../types/aircraft";
 import type { SatellitePosition } from "../../types/satellite";
 import type { Camera } from "../../types/camera";
+import {
+  geocodeSearch,
+  type GeocodeResult,
+} from "../../services/geocodeService";
 
 interface SearchBarProps {
   aircraft: Map<string, AircraftPosition>;
@@ -10,6 +14,7 @@ interface SearchBarProps {
   onSelectAircraft?: (ac: AircraftPosition) => void;
   onSelectSatellite?: (sat: SatellitePosition) => void;
   onSelectCamera?: (cam: Camera) => void;
+  onFlyToCity?: (lat: number, lon: number, alt: number) => void;
   sidebarOpen?: boolean;
 }
 
@@ -27,16 +32,21 @@ export function SearchBar({
   onSelectAircraft,
   onSelectSatellite,
   onSelectCamera,
+  onFlyToCity,
   sidebarOpen,
 }: SearchBarProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [geoResults, setGeoResults] = useState<GeocodeResult[]>([]);
+  const [geoLoading, setGeoLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const geoAbortRef = useRef<AbortController | null>(null);
+  const geoTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const q = query.toLowerCase().trim();
 
-  const results = useMemo(() => {
-    if (!q) return { ac: [], sat: [], cam: [], cities: [] };
+  const localResults = useMemo(() => {
+    if (!q) return { ac: [], sat: [], cam: [] };
 
     const ac: AircraftPosition[] = [];
     for (const a of aircraft.values()) {
@@ -61,20 +71,55 @@ export function SearchBar({
     }
 
     const cam: Camera[] = [];
-    const citySet = new Set<string>();
     for (const c of cameras) {
-      if (matches(c.name, q) || matches(c.city, q) || matches(c.id, q)) {
-        if (cam.length < MAX_PER_GROUP) cam.push(c);
-        citySet.add(c.city);
-      }
+      if (cam.length >= MAX_PER_GROUP) break;
+      if (matches(c.name, q) || matches(c.city, q) || matches(c.id, q))
+        cam.push(c);
     }
 
-    const cities = Array.from(citySet).slice(0, 4);
-    return { ac, sat, cam, cities };
+    return { ac, sat, cam };
   }, [q, aircraft, satellites, cameras]);
 
+  useEffect(() => {
+    if (!q || q.length < 2) {
+      setGeoResults([]);
+      setGeoLoading(false);
+      return;
+    }
+
+    setGeoLoading(true);
+    if (geoTimerRef.current) clearTimeout(geoTimerRef.current);
+    if (geoAbortRef.current) geoAbortRef.current.abort();
+
+    geoTimerRef.current = setTimeout(() => {
+      const ac = new AbortController();
+      geoAbortRef.current = ac;
+
+      geocodeSearch(q, ac.signal)
+        .then((results) => {
+          if (!ac.signal.aborted) {
+            setGeoResults(results);
+            setGeoLoading(false);
+          }
+        })
+        .catch((err) => {
+          if (err instanceof DOMException && err.name === "AbortError") return;
+          setGeoLoading(false);
+        });
+    }, 300);
+
+    return () => {
+      if (geoTimerRef.current) clearTimeout(geoTimerRef.current);
+      if (geoAbortRef.current) geoAbortRef.current.abort();
+    };
+  }, [q]);
+
   const hasResults =
-    results.ac.length + results.sat.length + results.cam.length > 0;
+    localResults.ac.length +
+      localResults.sat.length +
+      localResults.cam.length +
+      geoResults.length >
+    0;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -124,6 +169,15 @@ export function SearchBar({
     [onSelectAircraft, onSelectSatellite, onSelectCamera],
   );
 
+  const selectCity = useCallback(
+    (result: GeocodeResult) => {
+      setOpen(false);
+      setQuery("");
+      onFlyToCity?.(result.lat, result.lon, 50000);
+    },
+    [onFlyToCity],
+  );
+
   const leftOffset = sidebarOpen
     ? "left-[calc(280px+50%-(280px/2))]"
     : "left-1/2";
@@ -160,11 +214,33 @@ export function SearchBar({
         </kbd>
       </div>
 
-      {open && q && hasResults && (
+      {open && q && (hasResults || geoLoading) && (
         <div className="mt-1 max-h-72 overflow-y-auto rounded-md border border-zinc-700/60 bg-zinc-900/95 shadow-2xl shadow-black/40 backdrop-blur-xl">
-          {results.ac.length > 0 && (
-            <Group label="AIRCRAFT" count={results.ac.length}>
-              {results.ac.map((a) => (
+          {geoResults.length > 0 && (
+            <Group label="CITIES" count={geoResults.length}>
+              {geoResults.map((r, i) => (
+                <Row
+                  key={`${r.lat}-${r.lon}-${i}`}
+                  onClick={() => selectCity(r)}
+                >
+                  <span className="text-violet-400 font-medium">{r.name}</span>
+                  <span className="ml-auto text-zinc-600 text-[9px] truncate max-w-[160px]">
+                    {r.display_name.split(",").slice(1, 3).join(",").trim()}
+                  </span>
+                </Row>
+              ))}
+            </Group>
+          )}
+          {geoLoading && geoResults.length === 0 && (
+            <div className="px-3 py-2">
+              <span className="font-mono text-[9px] text-zinc-600 animate-pulse">
+                Searching cities...
+              </span>
+            </div>
+          )}
+          {localResults.ac.length > 0 && (
+            <Group label="AIRCRAFT" count={localResults.ac.length}>
+              {localResults.ac.map((a) => (
                 <Row key={a.icao} onClick={() => select("ac", a)}>
                   <span className="text-emerald-400 font-medium">
                     {a.callsign || "---"}
@@ -179,9 +255,9 @@ export function SearchBar({
               ))}
             </Group>
           )}
-          {results.sat.length > 0 && (
-            <Group label="SATELLITES" count={results.sat.length}>
-              {results.sat.map((s) => (
+          {localResults.sat.length > 0 && (
+            <Group label="SATELLITES" count={localResults.sat.length}>
+              {localResults.sat.map((s) => (
                 <Row key={s.norad_id} onClick={() => select("sat", s)}>
                   <span className="text-cyan-400 font-medium">{s.name}</span>
                   <span className="text-zinc-600 text-[9px] ml-1.5">
@@ -194,9 +270,9 @@ export function SearchBar({
               ))}
             </Group>
           )}
-          {results.cam.length > 0 && (
-            <Group label="CAMERAS" count={results.cam.length}>
-              {results.cam.map((c) => (
+          {localResults.cam.length > 0 && (
+            <Group label="CAMERAS" count={localResults.cam.length}>
+              {localResults.cam.map((c) => (
                 <Row key={c.id} onClick={() => select("cam", c)}>
                   <span className="text-amber-400 font-medium">{c.name}</span>
                   <span className="ml-auto text-zinc-600 text-[9px]">
@@ -209,7 +285,7 @@ export function SearchBar({
         </div>
       )}
 
-      {open && q && !hasResults && (
+      {open && q && !hasResults && !geoLoading && (
         <div className="mt-1 rounded-md border border-zinc-700/60 bg-zinc-900/95 p-3 text-center shadow-2xl backdrop-blur-xl">
           <span className="font-mono text-[10px] text-zinc-600">
             NO RESULTS FOR "{query}"
