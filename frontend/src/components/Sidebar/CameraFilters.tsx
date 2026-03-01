@@ -15,7 +15,15 @@ export function CameraFilters({
   onFilterChange,
 }: CameraFiltersProps): React.ReactElement {
   const onlineCount = cameras.filter((c) => c.is_online).length;
+  const sources = Array.from(new Set(cameras.map((c) => c.source))).sort();
   const cities = Array.from(new Set(cameras.map((c) => c.city))).sort();
+
+  const toggleSource = (source: string): void => {
+    const next = new Set(filter.sources);
+    if (next.has(source)) next.delete(source);
+    else next.add(source);
+    onFilterChange({ ...filter, sources: next });
+  };
 
   const toggleCity = (city: string): void => {
     const next = new Set(filter.cities);
@@ -23,6 +31,9 @@ export function CameraFilters({
     else next.add(city);
     onFilterChange({ ...filter, cities: next });
   };
+
+  const sourceCount = (source: string): number =>
+    cameras.filter((c) => c.source === source).length;
 
   const loading = filter.enabled && !progress.done;
   const pct =
@@ -85,18 +96,55 @@ export function CameraFilters({
       )}
 
       {filter.enabled && progress.done && cameras.length === 0 && (
-        <div className="mb-2">
+        <div className="mb-2 flex items-center gap-2">
           <span className="font-mono text-[9px] text-zinc-600">
-            No cameras in this area
+            Failed to load cameras
           </span>
+          <button
+            onClick={() => {
+              onFilterChange({ ...filter, enabled: false });
+              setTimeout(
+                () => onFilterChange({ ...filter, enabled: true }),
+                50,
+              );
+            }}
+            className="font-mono text-[9px] text-emerald-500 hover:text-emerald-400 underline"
+          >
+            Retry
+          </button>
         </div>
       )}
 
       {filter.enabled && cameras.length > 0 && (
         <div className="flex items-center gap-2 mb-2">
           <span className="font-mono text-[9px] text-zinc-500">
-            {onlineCount} online
+            {onlineCount} online / {cameras.length.toLocaleString()} total
           </span>
+        </div>
+      )}
+
+      {filter.enabled && sources.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {sources.map((source) => {
+            const active =
+              filter.sources.size === 0 || filter.sources.has(source);
+            return (
+              <button
+                key={source}
+                onClick={() => toggleSource(source)}
+                className={`rounded-full px-2 py-0.5 font-mono text-[9px] border transition-colors ${
+                  active
+                    ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-400"
+                    : "border-zinc-700 bg-zinc-800/50 text-zinc-600 hover:text-zinc-400"
+                }`}
+              >
+                {source}
+                <span className="ml-1 opacity-60">
+                  {sourceCount(source).toLocaleString()}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
 
