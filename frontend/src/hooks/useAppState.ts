@@ -279,7 +279,7 @@ export function useAppState(): AppState {
     setCameraProgress({ loaded: 0, total: 0, done: false });
 
     let retries = 0;
-    const MAX_RETRIES = 3;
+    const MAX_RETRIES = 8;
 
     const doFetch = (): void => {
       fetchCamerasChunked(
@@ -294,7 +294,8 @@ export function useAppState(): AppState {
         console.error("[Cameras] fetch error:", err);
         retries++;
         if (retries <= MAX_RETRIES && !ac.signal.aborted) {
-          setTimeout(doFetch, retries * 2000);
+          const delay = Math.min(retries * 3000, 15000);
+          setTimeout(doFetch, delay);
         } else {
           setCameraProgress({ loaded: 0, total: 0, done: true });
         }

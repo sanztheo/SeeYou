@@ -3,9 +3,9 @@ use deadpool_redis::redis::AsyncCommands;
 use crate::pool::{CacheError, RedisPool};
 
 const CAMERAS_KEY: &str = "cameras:all";
-const CAMERAS_TTL_SECS: u64 = 300;
+const CAMERAS_TTL_SECS: u64 = 900;
 
-/// Cache a list of cameras as JSON with a 5-minute TTL.
+/// Cache a list of cameras as JSON with a 15-minute TTL.
 pub async fn set_cameras<T: serde::Serialize>(
     pool: &RedisPool,
     cameras: &[T],

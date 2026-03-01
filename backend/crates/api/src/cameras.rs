@@ -27,10 +27,18 @@ pub async fn list_cameras(
     State(pool): State<RedisPool>,
     Query(q): Query<CameraQuery>,
 ) -> Result<Json<CamerasResponse>, (StatusCode, String)> {
-    let cameras: Vec<Camera> = cache::cameras::get_cameras(&pool)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .unwrap_or_default();
+    let cameras: Vec<Camera> = match cache::cameras::get_cameras(&pool).await {
+        Ok(Some(cams)) => cams,
+        Ok(None) => {
+            return Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                "cameras not yet available".into(),
+            ));
+        }
+        Err(e) => {
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        }
+    };
 
     let filtered: Vec<Camera> = match (q.south, q.west, q.north, q.east) {
         (Some(s), Some(w), Some(n), Some(e)) => cameras

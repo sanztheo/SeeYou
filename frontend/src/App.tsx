@@ -260,25 +260,27 @@ export function App(): React.ReactElement {
             satellites={state.satellites}
           />
         </div>
-        <div className="pointer-events-auto">
-          <AircraftPopup
-            aircraft={state.selectedAircraft}
-            onClose={handleCloseAircraft}
-            flightRoute={state.flightRoute}
-            routeLoading={state.routeLoading}
-            prediction={
-              state.selectedAircraft
-                ? (state.predictions.get(state.selectedAircraft.icao) ?? null)
-                : null
-            }
-          />
-        </div>
-        <div className="pointer-events-auto">
-          <SatellitePopup
-            satellite={state.selectedSatellite}
-            onClose={handleCloseSatellite}
-          />
-        </div>
+        {state.selectedAircraft && (
+          <div className="pointer-events-auto">
+            <AircraftPopup
+              aircraft={state.selectedAircraft}
+              onClose={handleCloseAircraft}
+              flightRoute={state.flightRoute}
+              routeLoading={state.routeLoading}
+              prediction={
+                state.predictions.get(state.selectedAircraft.icao) ?? null
+              }
+            />
+          </div>
+        )}
+        {state.selectedSatellite && (
+          <div className="pointer-events-auto">
+            <SatellitePopup
+              satellite={state.selectedSatellite}
+              onClose={handleCloseSatellite}
+            />
+          </div>
+        )}
       </div>
 
       {/* Shader HUDs (fullscreen overlays) */}
