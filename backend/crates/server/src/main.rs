@@ -19,7 +19,6 @@ const BROADCAST_CAPACITY: usize = 256;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // .env is optional -- CI and production supply vars directly.
     let _ = dotenvy::dotenv();
 
     fmt()
@@ -97,7 +96,7 @@ async fn main() -> anyhow::Result<()> {
     let weather_poll_interval = Duration::from_secs(config.weather_poll_interval_secs);
 
     tokio::spawn({
-        let client = http_client;
+        let client = http_client.clone();
         let pool = redis_pool.clone();
         async move {
             loop {
@@ -115,6 +114,219 @@ async fn main() -> anyhow::Result<()> {
                     Err(e) => tracing::warn!(error = %e, "weather fetch failed"),
                 }
                 tokio::time::sleep(weather_poll_interval).await;
+            }
+        }
+    });
+
+    // --- New intelligence trackers ---
+
+    let cables_poll_interval = Duration::from_secs(config.cables_poll_interval_secs);
+    tokio::spawn({
+        let client = http_client.clone();
+        let pool = redis_pool.clone();
+        async move {
+            loop {
+                let cables_result = cables::telegeography::fetch_cables(&client).await;
+                let lp_result = cables::telegeography::fetch_landing_points(&client).await;
+                match (cables_result, lp_result) {
+                    (Ok(c), Ok(lp)) => {
+                        let resp = cables::CablesResponse {
+                            cables: c,
+                            landing_points: lp,
+                            fetched_at: chrono::Utc::now().to_rfc3339(),
+                        };
+                        if let Err(e) = cache::cables::set_cables(&pool, &resp).await {
+                            tracing::warn!(error = %e, "failed to cache cables");
+                        }
+                        tracing::info!(cables = resp.cables.len(), points = resp.landing_points.len(), "submarine cables updated");
+                    }
+                    (Err(e), _) | (_, Err(e)) => tracing::warn!(error = %e, "cables fetch failed"),
+                }
+                tokio::time::sleep(cables_poll_interval).await;
+            }
+        }
+    });
+
+    let seismic_poll_interval = Duration::from_secs(config.seismic_poll_interval_secs);
+    tokio::spawn({
+        let client = http_client.clone();
+        let pool = redis_pool.clone();
+        let broadcaster = ws_broadcast.clone();
+        async move {
+            loop {
+                match seismic::usgs::fetch_earthquakes(&client).await {
+                    Ok(quakes) => {
+                        let resp = seismic::SeismicResponse {
+                            earthquakes: quakes.clone(),
+                            fetched_at: chrono::Utc::now().to_rfc3339(),
+                        };
+                        if let Err(e) = cache::seismic::set_seismic(&pool, &resp).await {
+                            tracing::warn!(error = %e, "failed to cache seismic");
+                        }
+                        let ws_quakes: Vec<ws::messages::Earthquake> = quakes.into_iter().map(|q| ws::messages::Earthquake {
+                            id: q.id, title: q.title, magnitude: q.magnitude, lat: q.lat, lon: q.lon, depth_km: q.depth_km, time: q.time, tsunami: q.tsunami,
+                        }).collect();
+                        broadcaster.send(ws::WsMessage::SeismicUpdate { earthquakes: ws_quakes });
+                        tracing::info!(count = resp.earthquakes.len(), "seismic data updated");
+                    }
+                    Err(e) => tracing::warn!(error = %e, "seismic fetch failed"),
+                }
+                tokio::time::sleep(seismic_poll_interval).await;
+            }
+        }
+    });
+
+    let fires_poll_interval = Duration::from_secs(config.fires_poll_interval_secs);
+    tokio::spawn({
+        let client = http_client.clone();
+        let pool = redis_pool.clone();
+        let broadcaster = ws_broadcast.clone();
+        async move {
+            loop {
+                match fires::firms::fetch_fires(&client).await {
+                    Ok(hotspots) => {
+                        let resp = fires::FiresResponse {
+                            fires: hotspots.clone(),
+                            fetched_at: chrono::Utc::now().to_rfc3339(),
+                        };
+                        if let Err(e) = cache::fires::set_fires(&pool, &resp).await {
+                            tracing::warn!(error = %e, "failed to cache fires");
+                        }
+                        let ws_fires: Vec<ws::messages::FireHotspot> = hotspots.into_iter().map(|f| ws::messages::FireHotspot {
+                            lat: f.lat, lon: f.lon, brightness: f.brightness, frp: f.frp, confidence: f.confidence,
+                        }).collect();
+                        broadcaster.send(ws::WsMessage::FireUpdate { fires: ws_fires });
+                        tracing::info!(count = resp.fires.len(), "fire data updated");
+                    }
+                    Err(e) => tracing::warn!(error = %e, "fires fetch failed"),
+                }
+                tokio::time::sleep(fires_poll_interval).await;
+            }
+        }
+    });
+
+    let gdelt_poll_interval = Duration::from_secs(config.gdelt_poll_interval_secs);
+    tokio::spawn({
+        let client = http_client.clone();
+        let pool = redis_pool.clone();
+        let broadcaster = ws_broadcast.clone();
+        async move {
+            loop {
+                match gdelt::api::fetch_events(&client).await {
+                    Ok(events) => {
+                        let resp = gdelt::GdeltResponse {
+                            events: events.clone(),
+                            fetched_at: chrono::Utc::now().to_rfc3339(),
+                        };
+                        if let Err(e) = cache::gdelt::set_gdelt(&pool, &resp).await {
+                            tracing::warn!(error = %e, "failed to cache gdelt");
+                        }
+                        let ws_events: Vec<ws::messages::GdeltEvent> = events.into_iter().map(|e| ws::messages::GdeltEvent {
+                            title: e.title, lat: e.lat, lon: e.lon, tone: e.tone, domain: e.domain, source_country: e.source_country,
+                        }).collect();
+                        broadcaster.send(ws::WsMessage::GdeltUpdate { events: ws_events });
+                        tracing::info!(count = resp.events.len(), "GDELT events updated");
+                    }
+                    Err(e) => tracing::warn!(error = %e, "GDELT fetch failed"),
+                }
+                tokio::time::sleep(gdelt_poll_interval).await;
+            }
+        }
+    });
+
+    let maritime_poll_interval = Duration::from_secs(config.maritime_poll_interval_secs);
+    tokio::spawn({
+        let client = http_client.clone();
+        let pool = redis_pool.clone();
+        let broadcaster = ws_broadcast.clone();
+        async move {
+            loop {
+                match maritime::ais::fetch_vessels(&client).await {
+                    Ok(vessels) => {
+                        let resp = maritime::MaritimeResponse {
+                            vessels: vessels.clone(),
+                            fetched_at: chrono::Utc::now().to_rfc3339(),
+                        };
+                        if let Err(e) = cache::maritime::set_maritime(&pool, &resp).await {
+                            tracing::warn!(error = %e, "failed to cache maritime");
+                        }
+                        let ws_vessels: Vec<ws::messages::Vessel> = vessels.into_iter().map(|v| ws::messages::Vessel {
+                            mmsi: v.mmsi, name: v.name, vessel_type: v.vessel_type, lat: v.lat, lon: v.lon, heading: v.heading, is_sanctioned: v.is_sanctioned,
+                        }).collect();
+                        broadcaster.send(ws::WsMessage::MaritimeUpdate { vessels: ws_vessels });
+                        tracing::info!(count = resp.vessels.len(), "maritime data updated");
+                    }
+                    Err(e) => tracing::warn!(error = %e, "maritime fetch failed"),
+                }
+                tokio::time::sleep(maritime_poll_interval).await;
+            }
+        }
+    });
+
+    let cyber_poll_interval = Duration::from_secs(config.cyber_poll_interval_secs);
+    tokio::spawn({
+        let client = http_client.clone();
+        let pool = redis_pool.clone();
+        let broadcaster = ws_broadcast.clone();
+        async move {
+            loop {
+                match cyber::threatfox::fetch_threats(&client).await {
+                    Ok(threats) => {
+                        let resp = cyber::CyberResponse {
+                            threats: threats.clone(),
+                            fetched_at: chrono::Utc::now().to_rfc3339(),
+                        };
+                        if let Err(e) = cache::cyber::set_cyber(&pool, &resp).await {
+                            tracing::warn!(error = %e, "failed to cache cyber");
+                        }
+                        let ws_threats: Vec<ws::messages::CyberThreat> = threats.into_iter().map(|t| ws::messages::CyberThreat {
+                            id: t.id, threat_type: t.threat_type, src_lat: t.src_lat, src_lon: t.src_lon, src_country: t.src_country,
+                            dst_lat: t.dst_lat, dst_lon: t.dst_lon, confidence: t.confidence,
+                        }).collect();
+                        broadcaster.send(ws::WsMessage::CyberThreatUpdate { threats: ws_threats });
+                        tracing::info!(count = resp.threats.len(), "cyber threats updated");
+                    }
+                    Err(e) => tracing::warn!(error = %e, "cyber fetch failed"),
+                }
+                tokio::time::sleep(cyber_poll_interval).await;
+            }
+        }
+    });
+
+    let space_weather_poll_interval = Duration::from_secs(config.space_weather_poll_interval_secs);
+    tokio::spawn({
+        let client = http_client;
+        let pool = redis_pool.clone();
+        let broadcaster = ws_broadcast.clone();
+        async move {
+            loop {
+                let aurora_res = space_weather::noaa::fetch_aurora(&client).await;
+                let kp_res = space_weather::noaa::fetch_kp_index(&client).await;
+                let alerts_res = space_weather::noaa::fetch_alerts(&client).await;
+
+                let aurora = aurora_res.unwrap_or_default();
+                let kp = kp_res.unwrap_or(0.0);
+                let alerts = alerts_res.unwrap_or_default();
+
+                let resp = space_weather::SpaceWeatherResponse {
+                    aurora: aurora.clone(),
+                    kp_index: kp,
+                    alerts: alerts.clone(),
+                    fetched_at: chrono::Utc::now().to_rfc3339(),
+                };
+                if let Err(e) = cache::space_weather::set_space_weather(&pool, &resp).await {
+                    tracing::warn!(error = %e, "failed to cache space weather");
+                }
+                let ws_aurora: Vec<ws::messages::AuroraPoint> = aurora.into_iter().map(|a| ws::messages::AuroraPoint {
+                    lat: a.lat, lon: a.lon, probability: a.probability,
+                }).collect();
+                let ws_alerts: Vec<ws::messages::SpaceWeatherAlert> = alerts.into_iter().map(|a| ws::messages::SpaceWeatherAlert {
+                    product_id: a.product_id, issue_time: a.issue_time, message: a.message,
+                }).collect();
+                broadcaster.send(ws::WsMessage::SpaceWeatherUpdate { aurora: ws_aurora, kp_index: kp, alerts: ws_alerts });
+                tracing::info!(aurora_points = resp.aurora.len(), kp_index = kp, "space weather updated");
+
+                tokio::time::sleep(space_weather_poll_interval).await;
             }
         }
     });
@@ -147,8 +359,6 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Mask credentials in a URL so it is safe to log.
-/// `redis://:secret@host:6379` → `redis://***@host:6379`
 fn redact_url(raw: &str) -> String {
     match url::Url::parse(raw) {
         Ok(mut u) => {
@@ -162,7 +372,6 @@ fn redact_url(raw: &str) -> String {
     }
 }
 
-/// Wait for Ctrl-C to enable graceful shutdown.
 async fn shutdown_signal() {
     tokio::signal::ctrl_c()
         .await
