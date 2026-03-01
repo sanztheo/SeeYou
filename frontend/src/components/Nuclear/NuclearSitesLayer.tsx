@@ -1,0 +1,85 @@
+import { useEffect, useRef } from "react";
+import { useCesium } from "resium";
+import {
+  BillboardCollection,
+  Cartesian3,
+  Color,
+  NearFarScalar,
+  DistanceDisplayCondition,
+  VerticalOrigin,
+} from "cesium";
+import type { NuclearSite, NuclearFilter } from "../../types/nuclear";
+
+interface Props {
+  sites: NuclearSite[];
+  filter: NuclearFilter;
+}
+
+const TYPE_COLORS: Record<string, Color> = {
+  power: Color.fromCssColorString("#FBBF24"),
+  weapons: Color.RED,
+  enrichment: Color.fromCssColorString("#F97316"),
+  reprocessing: Color.fromCssColorString("#A855F7"),
+};
+
+function createRadiationCanvas(color: string): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  const s = 32;
+  canvas.width = s;
+  canvas.height = s;
+  const ctx = canvas.getContext("2d")!;
+  const r = s / 2;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(r, r, r - 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.beginPath();
+  ctx.arc(r, r, 5, 0, Math.PI * 2);
+  ctx.fill();
+  return canvas;
+}
+
+const canvasCache = new Map<string, HTMLCanvasElement>();
+function getNuclearCanvas(type: string): HTMLCanvasElement {
+  const color = (TYPE_COLORS[type] ?? Color.YELLOW).toCssColorString();
+  if (!canvasCache.has(color)) {
+    canvasCache.set(color, createRadiationCanvas(color));
+  }
+  return canvasCache.get(color)!;
+}
+
+export function NuclearSitesLayer({ sites, filter }: Props): null {
+  const { scene } = useCesium();
+  const bbRef = useRef<BillboardCollection | null>(null);
+
+  useEffect(() => {
+    if (!scene || scene.isDestroyed()) return;
+
+    const bbs = new BillboardCollection({ scene });
+
+    if (filter.enabled) {
+      for (const site of sites) {
+        if (filter.types.size > 0 && !filter.types.has(site.type)) continue;
+        bbs.add({
+          position: Cartesian3.fromDegrees(site.lon, site.lat),
+          image: getNuclearCanvas(site.type),
+          width: 18,
+          height: 18,
+          verticalOrigin: VerticalOrigin.CENTER,
+          scaleByDistance: new NearFarScalar(1e5, 1.5, 1e7, 0.4),
+          distanceDisplayCondition: new DistanceDisplayCondition(0, 3e7),
+        });
+      }
+    }
+
+    scene.primitives.add(bbs);
+    bbRef.current = bbs;
+
+    return () => {
+      if (!scene.isDestroyed()) scene.primitives.remove(bbs);
+    };
+  }, [scene, sites, filter.enabled, filter.types]);
+
+  return null;
+}
