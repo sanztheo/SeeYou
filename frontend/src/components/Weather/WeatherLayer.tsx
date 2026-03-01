@@ -110,13 +110,13 @@ export function WeatherLayer({
   }, [viewer, rainViewerData, filter.showRadar, clearLayers, stopAnimation]);
 
   useEffect(() => {
-    const layers = layersRef.current;
-    if (layers.length === 0) return;
+    if (layersRef.current.length === 0) return;
 
     stopAnimation();
 
     timerRef.current = setInterval(() => {
-      if (!viewer || viewer.isDestroyed()) return;
+      const layers = layersRef.current;
+      if (!viewer || viewer.isDestroyed() || layers.length === 0) return;
 
       const current = frameIndexRef.current;
       if (layers[current] && viewer.imageryLayers.contains(layers[current])) {
@@ -132,7 +132,13 @@ export function WeatherLayer({
     }, filter.animationSpeed);
 
     return stopAnimation;
-  }, [viewer, filter.animationSpeed, stopAnimation]);
+  }, [
+    viewer,
+    filter.animationSpeed,
+    stopAnimation,
+    rainViewerData,
+    filter.showRadar,
+  ]);
 
   useEffect(() => {
     const layers = layersRef.current;

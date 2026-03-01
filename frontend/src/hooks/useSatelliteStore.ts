@@ -31,7 +31,6 @@ export function useSatelliteStore(): SatelliteStore {
     () => new Map(),
   );
 
-  const batchBufferRef = useRef<Map<number, SatellitePosition>>(new Map());
   const receivedChunksRef = useRef<Set<number>>(new Set());
   const expectedChunksRef = useRef<number>(0);
 
@@ -40,7 +39,6 @@ export function useSatelliteStore(): SatelliteStore {
     for (const sat of positions) {
       next.set(sat.norad_id, sat);
     }
-    console.log(`[SatelliteStore] full update: ${next.size} satellites`);
     setSatellites(next);
   }, []);
 
@@ -54,27 +52,24 @@ export function useSatelliteStore(): SatelliteStore {
         totalChunks !== expectedChunksRef.current ||
         (chunkIndex === 0 && receivedChunksRef.current.size > 0)
       ) {
-        batchBufferRef.current = new Map();
         receivedChunksRef.current = new Set();
         expectedChunksRef.current = totalChunks;
       }
 
-      for (const sat of positions) {
-        batchBufferRef.current.set(sat.norad_id, sat);
-      }
       receivedChunksRef.current.add(chunkIndex);
+      const freshBatch = chunkIndex === 0;
 
-      console.log(
-        `[SatelliteStore] chunk ${chunkIndex + 1}/${totalChunks} (${positions.length} sats, buffer: ${batchBufferRef.current.size})`,
-      );
+      setSatellites((prev) => {
+        const next = freshBatch
+          ? new Map<number, SatellitePosition>()
+          : new Map(prev);
+        for (const sat of positions) {
+          next.set(sat.norad_id, sat);
+        }
+        return next;
+      });
 
       if (receivedChunksRef.current.size >= totalChunks) {
-        const complete = batchBufferRef.current;
-        console.log(
-          `[SatelliteStore] batch complete — ${complete.size} satellites`,
-        );
-        setSatellites(new Map(complete));
-        batchBufferRef.current = new Map();
         receivedChunksRef.current = new Set();
       }
     },
