@@ -19,7 +19,7 @@ export interface CameraProgress {
   done: boolean;
 }
 
-const CHUNK_SIZE = 500;
+const CHUNK_SIZE = 100;
 
 export async function fetchCamerasChunked(
   bbox: BBox | undefined,
@@ -29,7 +29,6 @@ export async function fetchCamerasChunked(
   let offset = 0;
   const accumulated: Camera[] = [];
 
-   
   while (true) {
     if (signal?.aborted) return;
 
