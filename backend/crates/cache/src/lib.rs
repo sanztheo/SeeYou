@@ -1,12 +1,19 @@
 pub mod aircraft;
+pub mod cables;
 pub mod cameras;
+pub mod cyber;
 pub mod events;
+pub mod fires;
+pub mod gdelt;
 pub mod geocode;
 mod health;
+pub mod maritime;
+pub mod metar;
 pub mod pool;
 pub mod roads;
-pub mod metar;
 pub mod satellites;
+pub mod seismic;
+pub mod space_weather;
 pub mod weather;
 
 pub use health::ping_redis;
