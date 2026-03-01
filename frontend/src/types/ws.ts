@@ -1,6 +1,10 @@
 import type { AircraftPosition, PredictedTrajectory } from "./aircraft";
 import type { MetarStation } from "./metar";
 import type { SatellitePosition } from "./satellite";
+import type { Earthquake } from "./seismic";
+import type { GdeltEvent } from "./gdelt";
+import type { Vessel } from "./maritime";
+import type { AuroraPoint, SpaceWeatherAlert } from "./spaceWeather";
 
 export type WsMessageType =
   | "Connected"
@@ -11,7 +15,14 @@ export type WsMessageType =
   | "AircraftBatch"
   | "Predictions"
   | "SatelliteBatch"
-  | "MetarUpdate";
+  | "MetarUpdate"
+  | "SeismicUpdate"
+  | "FireUpdate"
+  | "GdeltUpdate"
+  | "MaritimeUpdate"
+  | "CyberThreatUpdate"
+  | "SpaceWeatherUpdate"
+  | "ConvergenceAlert";
 
 export interface WsConnected {
   type: "Connected";
@@ -64,6 +75,83 @@ export interface WsMetarUpdate {
   payload: { stations: MetarStation[] };
 }
 
+export interface WsSeismicUpdate {
+  type: "SeismicUpdate";
+  payload: { earthquakes: Earthquake[] };
+}
+
+export interface WsFireUpdate {
+  type: "FireUpdate";
+  payload: {
+    fires: {
+      lat: number;
+      lon: number;
+      brightness: number;
+      frp: number;
+      confidence: string;
+    }[];
+  };
+}
+
+export interface WsGdeltUpdate {
+  type: "GdeltUpdate";
+  payload: { events: GdeltEvent[] };
+}
+
+export interface WsMaritimeUpdate {
+  type: "MaritimeUpdate";
+  payload: {
+    vessels: {
+      mmsi: string;
+      name: string | null;
+      vessel_type: string;
+      lat: number;
+      lon: number;
+      heading: number | null;
+      is_sanctioned: boolean;
+    }[];
+  };
+}
+
+export interface WsCyberThreatUpdate {
+  type: "CyberThreatUpdate";
+  payload: {
+    threats: {
+      id: string;
+      threat_type: string;
+      src_lat: number;
+      src_lon: number;
+      src_country: string | null;
+      dst_lat: number | null;
+      dst_lon: number | null;
+      confidence: number;
+    }[];
+  };
+}
+
+export interface WsSpaceWeatherUpdate {
+  type: "SpaceWeatherUpdate";
+  payload: {
+    aurora: AuroraPoint[];
+    kp_index: number;
+    alerts: SpaceWeatherAlert[];
+  };
+}
+
+export interface WsConvergenceAlert {
+  type: "ConvergenceAlert";
+  payload: {
+    zones: {
+      lat: number;
+      lon: number;
+      radius_km: number;
+      layers: string[];
+      severity: string;
+      description: string;
+    }[];
+  };
+}
+
 export type WsMessage =
   | WsConnected
   | WsPing
@@ -73,6 +161,13 @@ export type WsMessage =
   | WsAircraftBatch
   | WsPredictions
   | WsSatelliteBatch
-  | WsMetarUpdate;
+  | WsMetarUpdate
+  | WsSeismicUpdate
+  | WsFireUpdate
+  | WsGdeltUpdate
+  | WsMaritimeUpdate
+  | WsCyberThreatUpdate
+  | WsSpaceWeatherUpdate
+  | WsConvergenceAlert;
 
 export type ConnectionStatus = "connected" | "connecting" | "disconnected";

@@ -2,6 +2,84 @@ use prediction::PredictedTrajectory;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Earthquake {
+    pub id: String,
+    pub title: String,
+    pub magnitude: f64,
+    pub lat: f64,
+    pub lon: f64,
+    pub depth_km: f64,
+    pub time: String,
+    pub tsunami: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FireHotspot {
+    pub lat: f64,
+    pub lon: f64,
+    pub brightness: f64,
+    pub frp: f64,
+    pub confidence: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GdeltEvent {
+    pub title: String,
+    pub lat: f64,
+    pub lon: f64,
+    pub tone: f64,
+    pub domain: String,
+    pub source_country: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Vessel {
+    pub mmsi: String,
+    pub name: Option<String>,
+    pub vessel_type: String,
+    pub lat: f64,
+    pub lon: f64,
+    pub heading: Option<f64>,
+    pub is_sanctioned: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CyberThreat {
+    pub id: String,
+    pub threat_type: String,
+    pub src_lat: f64,
+    pub src_lon: f64,
+    pub src_country: Option<String>,
+    pub dst_lat: Option<f64>,
+    pub dst_lon: Option<f64>,
+    pub confidence: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuroraPoint {
+    pub lat: f64,
+    pub lon: f64,
+    pub probability: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpaceWeatherAlert {
+    pub product_id: String,
+    pub issue_time: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConvergenceZone {
+    pub lat: f64,
+    pub lon: f64,
+    pub radius_km: f64,
+    pub layers: Vec<String>,
+    pub severity: String,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AircraftPosition {
     pub icao: String,
     pub callsign: Option<String>,
@@ -73,6 +151,29 @@ pub enum WsMessage {
     /// METAR weather observations from aviationweather.gov.
     MetarUpdate {
         stations: Vec<MetarStation>,
+    },
+    SeismicUpdate {
+        earthquakes: Vec<Earthquake>,
+    },
+    FireUpdate {
+        fires: Vec<FireHotspot>,
+    },
+    GdeltUpdate {
+        events: Vec<GdeltEvent>,
+    },
+    MaritimeUpdate {
+        vessels: Vec<Vessel>,
+    },
+    CyberThreatUpdate {
+        threats: Vec<CyberThreat>,
+    },
+    SpaceWeatherUpdate {
+        aurora: Vec<AuroraPoint>,
+        kp_index: f64,
+        alerts: Vec<SpaceWeatherAlert>,
+    },
+    ConvergenceAlert {
+        zones: Vec<ConvergenceZone>,
     },
 }
 
