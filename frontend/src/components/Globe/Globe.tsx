@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { Viewer as ResiumViewer } from "resium";
 import {
   Viewer,
@@ -13,7 +13,13 @@ import { AircraftLayer } from "../Aircraft/AircraftLayer";
 import { SatelliteLayer } from "../Satellite/SatelliteLayer";
 import { TrafficLayer } from "../Traffic/TrafficLayer";
 import { CameraLayer } from "../Camera/CameraLayer";
+import { CityLabelsLayer } from "../City/CityLabelsLayer";
+import { WeatherLayer } from "../Weather/WeatherLayer";
+import { EventLayer } from "../Events/EventLayer";
+import { MetarLayer } from "../Aviation/MetarLayer";
 import { ShaderManager } from "../../shaders/ShaderManager";
+import { useViewerCallbacks } from "../../hooks/useViewerCallbacks";
+import type { CameraState, CursorState } from "../../hooks/useViewerCallbacks";
 import type {
   AircraftPosition,
   AircraftFilter,
@@ -24,8 +30,16 @@ import type { SatellitePosition, SatelliteFilter } from "../../types/satellite";
 import { DEFAULT_SATELLITE_FILTER } from "../../types/satellite";
 import type { TrafficFilter } from "../../types/traffic";
 import type { Camera, CameraFilter } from "../../types/camera";
+import type { WeatherPoint, WeatherFilter } from "../../types/weather";
+import type { NaturalEvent, EventFilter } from "../../types/events";
+import type { MetarStation, MetarFilter } from "../../types/metar";
 import type { ShaderMode } from "../../shaders/types";
 import type { BBox } from "../../services/cameraService";
+
+const RAD2DEG = 180 / Math.PI;
+const EMPTY_PREDICTIONS = new Map<string, PredictedTrajectory>();
+const NOOP_SELECT_CAMERA = () => {};
+const VIEWPORT_THROTTLE_MS = 120;
 
 interface ViewerRef {
   cesiumElement?: Viewer;
@@ -55,7 +69,24 @@ interface GlobeProps {
   cameraFilter?: CameraFilter;
   onSelectCamera?: (cam: Camera) => void;
 
+  weatherPoints?: WeatherPoint[];
+  weatherFilter?: WeatherFilter;
+
+  events?: NaturalEvent[];
+  eventFilter?: EventFilter;
+  onSelectEvent?: (event: NaturalEvent) => void;
+
+  metarStations?: MetarStation[];
+  metarFilter?: MetarFilter;
+  onSelectMetar?: (station: MetarStation) => void;
+
   onViewportChange?: (bbox: BBox) => void;
+
+  onCameraChange?: (state: CameraState) => void;
+  onCursorMove?: (state: CursorState) => void;
+
+  flyToTarget?: { lat: number; lon: number; alt: number } | null;
+  onFlyComplete?: () => void;
 
   shaderMode?: ShaderMode;
 }
@@ -81,20 +112,36 @@ export function Globe({
   cameras,
   cameraFilter,
   onSelectCamera,
+  weatherPoints,
+  weatherFilter,
+  events,
+  eventFilter,
+  onSelectEvent,
+  metarStations,
+  metarFilter,
+  onSelectMetar,
   onViewportChange,
+  onCameraChange,
+  onCursorMove,
+  flyToTarget,
+  onFlyComplete,
   shaderMode,
 }: GlobeProps): React.ReactElement {
   const viewerRef = useRef<ViewerRef>(null);
   const shaderManagerRef = useRef<ShaderManager | null>(null);
   const onViewportChangeRef = useRef(onViewportChange);
+  const [viewerReady, setViewerReady] = useState<Viewer | null>(null);
+  const lastViewportEmit = useRef(0);
 
   useEffect(() => {
     onViewportChangeRef.current = onViewportChange;
   }, [onViewportChange]);
 
-  const RAD2DEG = 180 / Math.PI;
-
   const emitViewport = useCallback((viewer: Viewer): void => {
+    const now = performance.now();
+    if (now - lastViewportEmit.current < VIEWPORT_THROTTLE_MS) return;
+    lastViewportEmit.current = now;
+
     const rect = viewer.camera.computeViewRectangle();
     if (!rect) return;
     onViewportChangeRef.current?.({
@@ -112,12 +159,14 @@ export function Globe({
     viewer.clock.clockStep = ClockStep.SYSTEM_CLOCK;
     viewer.clock.shouldAnimate = true;
 
-    viewer.imageryLayers.removeAll();
-    viewer.imageryLayers.addImageryProvider(
-      new OpenStreetMapImageryProvider({
-        url: "https://tile.openstreetmap.org/",
-      }),
-    );
+    if (!hasValidToken()) {
+      viewer.imageryLayers.removeAll();
+      viewer.imageryLayers.addImageryProvider(
+        new OpenStreetMapImageryProvider({
+          url: "https://tile.openstreetmap.org/",
+        }),
+      );
+    }
 
     viewer.camera.flyTo({
       destination: Cartesian3.fromDegrees(2.3522, 48.8566, 2500),
@@ -142,8 +191,9 @@ export function Globe({
     }
 
     shaderManagerRef.current = new ShaderManager(viewer);
+    setViewerReady(viewer);
 
-    viewer.camera.percentageChanged = 0.1;
+    viewer.camera.percentageChanged = 0.05;
     const onChanged = () => {
       if (!viewer.isDestroyed()) emitViewport(viewer);
     };
@@ -160,7 +210,31 @@ export function Globe({
 
   useEffect(() => {
     shaderManagerRef.current?.setMode(shaderMode ?? "normal");
-  }, [shaderMode]);
+  }, [shaderMode, viewerReady]);
+
+  useEffect(() => {
+    if (!flyToTarget) return;
+    const viewer = viewerRef.current?.cesiumElement;
+    if (!viewer || viewer.isDestroyed()) return;
+    const flyCompleteRef = onFlyComplete;
+    viewer.camera.flyTo({
+      destination: Cartesian3.fromDegrees(
+        flyToTarget.lon,
+        flyToTarget.lat,
+        flyToTarget.alt,
+      ),
+      orientation: {
+        heading: CesiumMath.toRadians(0),
+        pitch: CesiumMath.toRadians(-45),
+        roll: 0,
+      },
+      duration: 1.5,
+      complete: () => flyCompleteRef?.(),
+      cancel: () => flyCompleteRef?.(),
+    });
+  }, [flyToTarget, onFlyComplete]);
+
+  useViewerCallbacks(viewerReady, onCameraChange, onCursorMove);
 
   return (
     <ResiumViewer
@@ -185,7 +259,7 @@ export function Globe({
           onSelect={onSelectAircraft}
           onHover={onHoverAircraft}
           flightRoute={flightRoute ?? null}
-          predictions={predictions ?? new Map()}
+          predictions={predictions ?? EMPTY_PREDICTIONS}
         />
       )}
 
@@ -208,9 +282,31 @@ export function Globe({
         <CameraLayer
           cameras={cameras}
           filter={cameraFilter}
-          onSelect={onSelectCamera ?? (() => {})}
+          onSelect={onSelectCamera ?? NOOP_SELECT_CAMERA}
         />
       )}
+
+      {weatherFilter?.enabled && weatherPoints && weatherPoints.length > 0 && (
+        <WeatherLayer points={weatherPoints} filter={weatherFilter} />
+      )}
+
+      {eventFilter?.enabled && events && events.length > 0 && (
+        <EventLayer
+          events={events}
+          filter={eventFilter}
+          onSelect={onSelectEvent}
+        />
+      )}
+
+      {metarFilter?.enabled && metarStations && metarStations.length > 0 && (
+        <MetarLayer
+          stations={metarStations}
+          filter={metarFilter}
+          onSelect={onSelectMetar}
+        />
+      )}
+
+      <CityLabelsLayer />
     </ResiumViewer>
   );
 }
