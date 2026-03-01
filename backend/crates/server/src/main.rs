@@ -36,11 +36,28 @@ async fn main() -> anyhow::Result<()> {
     let http_client = reqwest::Client::new();
     let poll_interval = Duration::from_secs(config.poll_interval_secs);
 
+    let camera_poll_interval = Duration::from_secs(config.camera_poll_interval_secs);
+
     tokio::spawn(services::aircraft_tracker::run_aircraft_tracker(
-        http_client,
+        http_client.clone(),
         redis_pool.clone(),
         ws_broadcast.clone(),
         poll_interval,
+    ));
+
+    tokio::spawn(cameras::tracker::run_camera_tracker(
+        http_client.clone(),
+        redis_pool.clone(),
+        camera_poll_interval,
+    ));
+
+    let satellite_poll_interval = Duration::from_secs(config.satellite_poll_interval_secs);
+
+    tokio::spawn(satellites::run_satellite_tracker(
+        http_client,
+        redis_pool.clone(),
+        ws_broadcast.clone(),
+        satellite_poll_interval,
     ));
 
     let state = AppState {

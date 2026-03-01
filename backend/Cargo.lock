@@ -32,8 +32,12 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "cache",
+ "cameras",
+ "reqwest",
  "serde",
  "serde_json",
+ "tracing",
+ "traffic",
 ]
 
 [[package]]
@@ -189,6 +193,22 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
+name = "cameras"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "cache",
+ "chrono",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
  "tracing",
 ]
 
@@ -1442,6 +1462,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "satellites"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cache",
+ "chrono",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sgp4",
+ "tokio",
+ "tracing",
+ "ws",
+]
+
+[[package]]
 name = "schannel"
 version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1559,8 +1595,10 @@ dependencies = [
  "api",
  "axum",
  "cache",
+ "cameras",
  "dotenvy",
  "reqwest",
+ "satellites",
  "serde",
  "services",
  "thiserror 2.0.18",
@@ -1568,6 +1606,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "traffic",
  "url",
  "ws",
 ]
@@ -1587,6 +1626,17 @@ dependencies = [
  "tokio",
  "tracing",
  "ws",
+]
+
+[[package]]
+name = "sgp4"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9467b9a7be8485ed8be0f336d399c8f32c0fcd60686e7dd2ed3dab75c9a73eb3"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1992,6 +2042,18 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "traffic"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

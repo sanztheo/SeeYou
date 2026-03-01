@@ -17,5 +17,8 @@ api = { path = "../api" }
 ws = { path = "../ws" }
 cache = { path = "../cache" }
 services = { path = "../services" }
+traffic = { path = "../traffic" }
+cameras = { path = "../cameras" }
+satellites = { path = "../satellites" }
 reqwest.workspace = true
 url.workspace = true

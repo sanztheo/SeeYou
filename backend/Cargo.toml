@@ -6,6 +6,9 @@ members = [
     "crates/cache",
     "crates/services",
     "crates/prediction",
+    "crates/traffic",
+    "crates/cameras",
+    "crates/satellites",
 ]
 resolver = "2"
 
@@ -27,3 +30,4 @@ uuid = { version = "1", features = ["v4"] }
 url = "2"
 reqwest = { version = "0.12", features = ["json"] }
 chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
