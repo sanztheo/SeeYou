@@ -49,7 +49,7 @@ interface GlobeProps {
   onSelectSatellite?: (sat: SatellitePosition) => void;
 
   trafficFilter?: TrafficFilter;
-  onTrafficLoading?: (loading: boolean, count: number) => void;
+  onTrafficLoading?: (loading: boolean, count: number, total: number) => void;
 
   cameras?: Camera[];
   cameraFilter?: CameraFilter;

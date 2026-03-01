@@ -114,6 +114,7 @@ export function App(): React.ReactElement {
             onFilterChange={state.setTrafficFilter}
             loading={state.trafficLoading}
             roadCount={state.trafficRoadCount}
+            totalRoads={state.trafficTotalRoads}
           />
           <CameraFilters
             filter={state.cameraFilter}
