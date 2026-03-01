@@ -3,24 +3,49 @@ import type { TrafficFilter } from "../../types/traffic";
 interface TrafficControlsProps {
   filter: TrafficFilter;
   onFilterChange: (filter: TrafficFilter) => void;
+  loading?: boolean;
+  roadCount?: number;
 }
 
 export function TrafficControls({
   filter,
   onFilterChange,
+  loading = false,
+  roadCount = 0,
 }: TrafficControlsProps): React.ReactElement {
   return (
     <div className="px-4 py-3 border-b border-zinc-800/60">
       <div className="flex items-center justify-between mb-2">
-        <span className="font-mono text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-          Traffic
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] font-medium uppercase tracking-widest text-zinc-500">
+            Traffic
+          </span>
+          {filter.enabled && roadCount > 0 && (
+            <span className="font-mono text-[9px] tabular-nums text-emerald-400">
+              {roadCount.toLocaleString()} roads
+            </span>
+          )}
+          {filter.enabled && loading && (
+            <span className="font-mono text-[9px] text-amber-400 animate-pulse">
+              loading…
+            </span>
+          )}
+        </div>
         <Toggle
           checked={filter.enabled}
           color="bg-emerald-500"
           onChange={(v) => onFilterChange({ ...filter, enabled: v })}
         />
       </div>
+
+      {filter.enabled && loading && (
+        <div className="mb-2">
+          <div className="h-1 w-full rounded-full bg-zinc-800 overflow-hidden">
+            <div className="h-full w-1/2 rounded-full bg-amber-500/70 animate-[pulse_1s_ease-in-out_infinite]" />
+          </div>
+        </div>
+      )}
+
       {filter.enabled && (
         <div className="grid grid-cols-2 gap-x-2 gap-y-1">
           <RoadToggle
