@@ -1,8 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useCesium } from "resium";
 import {
-  CustomDataSource,
-  Entity,
+  BillboardCollection,
   Cartesian3,
   NearFarScalar,
   DistanceDisplayCondition,
@@ -20,6 +19,8 @@ import { FLIGHT_CATEGORY_COLORS } from "../../types/metar";
 
 const MAX_VISIBLE = 600;
 const CAMERA_THROTTLE_MS = 250;
+const METAR_BB_SCALE = new NearFarScalar(100_000, 1.0, 10_000_000, 0.15);
+const METAR_BB_DIST = new DistanceDisplayCondition(0, 8_000_000);
 
 function makeCategorySvg(category: FlightCategory): string {
   const fill = FLIGHT_CATEGORY_COLORS[category];
@@ -110,8 +111,11 @@ export function MetarLayer({
   onSelect,
 }: MetarLayerProps): null {
   const { viewer } = useCesium();
-  const dsRef = useRef<CustomDataSource | null>(null);
-  const stationMapRef = useRef<Map<string, MetarStation>>(new Map());
+  const bbCollRef = useRef<BillboardCollection | null>(null);
+  const entryMapRef = useRef(
+    new Map<string, ReturnType<BillboardCollection["add"]>>(),
+  );
+  const stationMapRef = useRef(new Map<string, MetarStation>());
   const onSelectRef = useRef(onSelect);
   const stationsRef = useRef(stations);
   const filterRef = useRef(filter);
@@ -121,9 +125,9 @@ export function MetarLayer({
     onSelectRef.current = onSelect;
   }, [onSelect]);
 
-  const syncEntities = useCallback(() => {
-    const ds = dsRef.current;
-    if (!ds || !viewer || viewer.isDestroyed()) return;
+  const syncBillboards = useCallback(() => {
+    const bbColl = bbCollRef.current;
+    if (!bbColl || !viewer || viewer.isDestroyed()) return;
 
     const now = performance.now();
     if (now - lastSyncRef.current < CAMERA_THROTTLE_MS) return;
@@ -153,86 +157,80 @@ export function MetarLayer({
     }
 
     const visibleIds = new Set(visible.map((s) => s.station_id));
+    const entries = entryMapRef.current;
 
-    ds.entities.suspendEvents();
-
-    const toRemove: string[] = [];
-    for (let i = 0; i < ds.entities.values.length; i++) {
-      const id = ds.entities.values[i].id;
-      if (!visibleIds.has(id)) toRemove.push(id);
+    const toDelete: string[] = [];
+    for (const id of entries.keys()) {
+      if (!visibleIds.has(id)) toDelete.push(id);
     }
-    for (const id of toRemove) {
-      ds.entities.removeById(id);
+    for (const id of toDelete) {
+      const bb = entries.get(id)!;
+      bbColl.remove(bb);
+      entries.delete(id);
     }
 
     const nextMap = new Map<string, MetarStation>();
     for (const s of visible) {
       nextMap.set(s.station_id, s);
-      const existing = ds.entities.getById(s.station_id);
+      const existing = entries.get(s.station_id);
       if (existing) {
-        if (existing.billboard) {
-          existing.billboard.image = getCategoryIcon(
-            s.flight_category,
-          ) as never;
-        }
+        existing.image = getCategoryIcon(s.flight_category);
       } else {
-        ds.entities.add({
-          id: s.station_id,
+        const bb = bbColl.add({
           position: Cartesian3.fromDegrees(s.lon, s.lat),
-          billboard: {
-            image: getCategoryIcon(s.flight_category),
-            width: 24,
-            height: 24,
-            scaleByDistance: new NearFarScalar(100_000, 1.0, 10_000_000, 0.15),
-            distanceDisplayCondition: new DistanceDisplayCondition(
-              0,
-              8_000_000,
-            ),
-          },
+          image: getCategoryIcon(s.flight_category),
+          width: 24,
+          height: 24,
+          scaleByDistance: METAR_BB_SCALE,
+          distanceDisplayCondition: METAR_BB_DIST,
+          id: s.station_id,
         });
+        entries.set(s.station_id, bb);
       }
     }
 
-    ds.entities.resumeEvents();
     stationMapRef.current = nextMap;
   }, [viewer]);
 
   useEffect(() => {
     if (!viewer) return;
 
-    const ds = new CustomDataSource("metar");
-    viewer.dataSources.add(ds);
-    dsRef.current = ds;
+    const bbColl = viewer.scene.primitives.add(
+      new BillboardCollection({ scene: viewer.scene }),
+    ) as BillboardCollection;
+    bbCollRef.current = bbColl;
 
     const handler = new ScreenSpaceEventHandler(
       viewer.scene.canvas as HTMLCanvasElement,
     );
     handler.setInputAction((click: ScreenSpaceEventHandler.PositionedEvent) => {
       const picked = viewer.scene.pick(click.position);
-      if (defined(picked) && picked.id instanceof Entity) {
-        const station = stationMapRef.current.get(picked.id.id);
+      if (defined(picked) && typeof picked.id === "string") {
+        const station = stationMapRef.current.get(picked.id);
         if (station) onSelectRef.current?.(station);
       }
     }, ScreenSpaceEventType.LEFT_CLICK);
 
-    viewer.camera.changed.addEventListener(syncEntities);
+    viewer.camera.changed.addEventListener(syncBillboards);
 
     return () => {
       if (!viewer.isDestroyed()) {
-        viewer.camera.changed.removeEventListener(syncEntities);
-        viewer.dataSources.remove(ds, true);
+        viewer.camera.changed.removeEventListener(syncBillboards);
+        viewer.scene.primitives.remove(bbColl);
       }
       handler.destroy();
-      dsRef.current = null;
+      entryMapRef.current.clear();
+      stationMapRef.current.clear();
+      bbCollRef.current = null;
     };
-  }, [viewer, syncEntities]);
+  }, [viewer, syncBillboards]);
 
   useEffect(() => {
     stationsRef.current = stations;
     filterRef.current = filter;
     lastSyncRef.current = 0;
-    syncEntities();
-  }, [stations, filter, syncEntities]);
+    syncBillboards();
+  }, [stations, filter, syncBillboards]);
 
   return null;
 }
