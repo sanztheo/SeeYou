@@ -5,14 +5,14 @@ import {
 } from "../../types/satellite";
 
 const CATEGORY_COLOR: Record<SatelliteCategory, string> = {
-  Station: "bg-yellow-500",
+  Station: "bg-amber-500",
   Starlink: "bg-cyan-500",
-  Communication: "bg-purple-500",
-  Military: "bg-red-500",
-  Weather: "bg-green-500",
+  Communication: "bg-violet-500",
+  Military: "bg-rose-500",
+  Weather: "bg-emerald-500",
   Navigation: "bg-blue-500",
   Science: "bg-orange-500",
-  Other: "bg-gray-500",
+  Other: "bg-zinc-500",
 };
 
 interface SatelliteFiltersProps {
@@ -25,24 +25,21 @@ export function SatelliteFilters({
   onFilterChange,
 }: SatelliteFiltersProps): React.ReactElement {
   return (
-    <div className="space-y-2">
-      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-        Satellite Filters
-      </h3>
-      {SATELLITE_CATEGORIES.map((cat) => {
-        const key = CATEGORY_FILTER_KEY[cat];
-        return (
-          <Toggle
-            key={cat}
-            label={cat}
-            color={CATEGORY_COLOR[cat]}
-            checked={filter[key]}
-            onChange={(checked) =>
-              onFilterChange({ ...filter, [key]: checked })
-            }
-          />
-        );
-      })}
+    <div className="px-4 py-2.5 border-b border-zinc-800/60">
+      <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+        {SATELLITE_CATEGORIES.map((cat) => {
+          const key = CATEGORY_FILTER_KEY[cat];
+          return (
+            <Toggle
+              key={cat}
+              label={cat}
+              color={CATEGORY_COLOR[cat]}
+              checked={filter[key]}
+              onChange={(v) => onFilterChange({ ...filter, [key]: v })}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -56,25 +53,21 @@ function Toggle({
   label: string;
   color: string;
   checked: boolean;
-  onChange: (checked: boolean) => void;
-}): React.ReactElement {
+  onChange: (v: boolean) => void;
+}) {
   return (
     <button
       onClick={() => onChange(!checked)}
-      className="flex items-center gap-2 w-full text-left text-sm text-gray-200 hover:text-gray-100 transition-colors"
+      className="flex items-center gap-1.5 py-0.5 text-zinc-300 hover:text-zinc-100 transition-colors"
     >
       <div
-        className={`w-8 h-4 rounded-full transition-colors ${
-          checked ? color : "bg-gray-600"
-        } relative`}
+        className={`h-3 w-6 rounded-full transition-colors ${checked ? color : "bg-zinc-700"} relative`}
       >
         <div
-          className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
-            checked ? "translate-x-4" : "translate-x-0.5"
-          }`}
+          className={`absolute top-[2px] h-2 w-2 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-[12px]" : "translate-x-[2px]"}`}
         />
       </div>
-      <span>{label}</span>
+      <span className="font-mono text-[10px]">{label}</span>
     </button>
   );
 }

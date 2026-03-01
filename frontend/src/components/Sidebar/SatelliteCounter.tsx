@@ -12,25 +12,25 @@ export function SatelliteCounter({
   categoryCounts,
 }: SatelliteCounterProps): React.ReactElement {
   return (
-    <div className="space-y-2">
-      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+    <div className="px-4 py-3 border-b border-zinc-800/60">
+      <div className="mb-2 font-mono text-[10px] font-medium uppercase tracking-widest text-zinc-500">
         Satellites
-      </h3>
-      <div className="grid grid-cols-4 gap-2">
-        <CountBox label="Total" count={total} color="text-gray-100" />
-        <CountBox
+      </div>
+      <div className="grid grid-cols-4 gap-1">
+        <Stat value={total} label="Total" color="text-zinc-100" />
+        <Stat
+          value={categoryCounts.Station}
           label="Station"
-          count={categoryCounts.Station}
-          color="text-yellow-400"
+          color="text-amber-400"
         />
-        <CountBox
-          label="Military"
-          count={categoryCounts.Military}
-          color="text-red-400"
+        <Stat
+          value={categoryCounts.Military}
+          label="Mil"
+          color="text-rose-400"
         />
-        <CountBox
+        <Stat
+          value={categoryCounts.Starlink}
           label="Starlink"
-          count={categoryCounts.Starlink}
           color="text-cyan-400"
         />
       </div>
@@ -38,19 +38,23 @@ export function SatelliteCounter({
   );
 }
 
-function CountBox({
+function Stat({
+  value,
   label,
-  count,
   color,
 }: {
+  value: number;
   label: string;
-  count: number;
   color: string;
-}): React.ReactElement {
+}) {
   return (
     <div className="text-center">
-      <div className={`text-lg font-bold font-mono ${color}`}>{count}</div>
-      <div className="text-[10px] text-gray-500 uppercase">{label}</div>
+      <div className={`font-mono text-sm font-bold tabular-nums ${color}`}>
+        {value}
+      </div>
+      <div className="font-mono text-[8px] uppercase tracking-wider text-zinc-600">
+        {label}
+      </div>
     </div>
   );
 }
