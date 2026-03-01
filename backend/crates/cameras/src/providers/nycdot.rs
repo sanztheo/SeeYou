@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -12,9 +14,13 @@ pub struct NycdotProvider;
 
 #[derive(Debug, Deserialize)]
 struct NycCamera {
+    #[serde(default)]
     id: String,
+    #[serde(default)]
     name: String,
+    #[serde(default)]
     latitude: f64,
+    #[serde(default)]
     longitude: f64,
     #[serde(rename = "imageUrl", alias = "url", default)]
     image_url: String,
@@ -56,13 +62,18 @@ fn parse_nyc_cameras(raw: Vec<NycCamera>) -> Vec<Camera> {
 #[async_trait]
 impl CameraProvider for NycdotProvider {
     async fn fetch_cameras(&self, client: &reqwest::Client) -> Result<Vec<Camera>> {
-        let cams: Vec<NycCamera> = client
+        let resp = client
             .get(NYCDOT_CAMERAS_URL)
+            .header("User-Agent", "Mozilla/5.0 SeeYou/1.0")
+            .header("Accept", "application/json")
+            .timeout(Duration::from_secs(10))
             .send()
             .await
             .context("NYC DOT request failed")?
             .error_for_status()
-            .context("NYC DOT returned error status")?
+            .context("NYC DOT returned error status")?;
+
+        let cams: Vec<NycCamera> = resp
             .json()
             .await
             .context("NYC DOT JSON parse failed")?;
