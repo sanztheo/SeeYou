@@ -5,21 +5,17 @@ interface MinimapProps {
   viewAltitude: number;
 }
 
-const W = 180;
-const H = 180;
-const PAD = 8;
+const W = 160;
+const H = 160;
+const PAD = 6;
 const MAP_W = W - PAD * 2;
 const MAP_H = H - PAD * 2;
 
 function toSvg(lon: number, lat: number): [number, number] {
-  const x = PAD + ((lon + 180) / 360) * MAP_W;
-  const y = PAD + ((90 - lat) / 180) * MAP_H;
-  return [x, y];
+  return [PAD + ((lon + 180) / 360) * MAP_W, PAD + ((90 - lat) / 180) * MAP_H];
 }
 
-// Highly simplified continent outlines (equirectangular coords)
 const CONTINENTS: [number, number][][] = [
-  // North America
   [
     [-130, 55],
     [-120, 60],
@@ -31,7 +27,6 @@ const CONTINENTS: [number, number][][] = [
     [-120, 35],
     [-130, 55],
   ],
-  // South America
   [
     [-80, 10],
     [-60, 5],
@@ -42,7 +37,6 @@ const CONTINENTS: [number, number][][] = [
     [-75, -20],
     [-80, 10],
   ],
-  // Europe
   [
     [-10, 36],
     [0, 43],
@@ -55,7 +49,6 @@ const CONTINENTS: [number, number][][] = [
     [10, 36],
     [-10, 36],
   ],
-  // Africa
   [
     [-15, 15],
     [-5, 35],
@@ -69,7 +62,6 @@ const CONTINENTS: [number, number][][] = [
     [12, -5],
     [-15, 15],
   ],
-  // Asia
   [
     [40, 55],
     [60, 55],
@@ -85,7 +77,6 @@ const CONTINENTS: [number, number][][] = [
     [40, 35],
     [40, 55],
   ],
-  // Australia
   [
     [115, -15],
     [130, -12],
@@ -96,91 +87,62 @@ const CONTINENTS: [number, number][][] = [
     [115, -22],
     [115, -15],
   ],
-  // Antarctica
-  [
-    [-180, -70],
-    [-120, -75],
-    [-60, -70],
-    [0, -70],
-    [60, -68],
-    [120, -67],
-    [180, -70],
-    [180, -85],
-    [-180, -85],
-    [-180, -70],
-  ],
 ];
 
-function altitudeToViewExtent(alt: number): { dLon: number; dLat: number } {
-  const clampedAlt = Math.max(1000, Math.min(alt, 40_000_000));
-  const fovDeg = (clampedAlt / 40_000_000) * 160;
-  return { dLon: fovDeg, dLat: fovDeg * 0.6 };
+function altitudeToExtent(alt: number) {
+  const clamped = Math.max(1000, Math.min(alt, 40_000_000));
+  const fov = (clamped / 40_000_000) * 160;
+  return { dLon: fov, dLat: fov * 0.6 };
 }
 
 export function Minimap({ viewCenter, viewAltitude }: MinimapProps) {
   const coastPaths = useMemo(
     () =>
-      CONTINENTS.map((continent) =>
-        continent.map(([lon, lat]) => toSvg(lon, lat).join(",")).join(" "),
+      CONTINENTS.map((c) =>
+        c.map(([lon, lat]) => toSvg(lon, lat).join(",")).join(" "),
       ),
     [],
   );
 
   const center = viewCenter ? toSvg(viewCenter.lon, viewCenter.lat) : null;
-  const extent = altitudeToViewExtent(viewAltitude);
+  const extent = altitudeToExtent(viewAltitude);
 
   const viewRect = useMemo(() => {
     if (!viewCenter) return null;
     const [cx, cy] = toSvg(viewCenter.lon, viewCenter.lat);
     const hw = (extent.dLon / 360) * MAP_W;
     const hh = (extent.dLat / 180) * MAP_H;
-    const rw = Math.max(4, Math.min(hw, MAP_W));
-    const rh = Math.max(3, Math.min(hh, MAP_H));
     return {
-      x: cx - rw / 2,
-      y: cy - rh / 2,
-      w: rw,
-      h: rh,
+      x: cx - Math.max(4, Math.min(hw, MAP_W)) / 2,
+      y: cy - Math.max(3, Math.min(hh, MAP_H)) / 2,
+      w: Math.max(4, Math.min(hw, MAP_W)),
+      h: Math.max(3, Math.min(hh, MAP_H)),
     };
   }, [viewCenter, extent.dLon, extent.dLat]);
 
-  const scalePx = 40;
-  const scaleKm = useMemo(() => {
-    const degreesPerPx = 360 / MAP_W;
-    const kmPerDeg = 111;
-    const raw = degreesPerPx * scalePx * kmPerDeg;
-    const order = Math.pow(10, Math.floor(Math.log10(raw)));
-    return Math.round(raw / order) * order;
-  }, []);
-
   return (
     <div
-      className="fixed bottom-16 right-4 z-40 pointer-events-none select-none"
-      style={{ width: W, height: W }}
+      className="fixed bottom-12 right-3 z-20 pointer-events-none select-none"
+      style={{ width: W, height: H }}
     >
-      <div className="relative w-full h-full bg-gray-900/90 border border-gray-700/50 rounded backdrop-blur-sm overflow-hidden">
-        <span className="absolute top-1 left-2 text-[8px] font-mono text-gray-500 tracking-widest">
-          MINIMAP
-        </span>
-
+      <div className="relative w-full h-full rounded-md border border-zinc-800/60 bg-zinc-950/80 backdrop-blur-md overflow-hidden">
         <svg
           width={W}
           height={H}
           viewBox={`0 0 ${W} ${H}`}
           className="absolute inset-0"
         >
-          {/* grid lines */}
           {[-60, -30, 0, 30, 60].map((lat) => {
             const [, y] = toSvg(0, lat);
             return (
               <line
-                key={`lat-${lat}`}
+                key={`lat${lat}`}
                 x1={PAD}
                 y1={y}
                 x2={W - PAD}
                 y2={y}
-                stroke="#1f2937"
-                strokeWidth={0.5}
+                stroke="#1c1c1c"
+                strokeWidth={0.4}
               />
             );
           })}
@@ -188,30 +150,26 @@ export function Minimap({ viewCenter, viewAltitude }: MinimapProps) {
             const [x] = toSvg(lon, 0);
             return (
               <line
-                key={`lon-${lon}`}
+                key={`lon${lon}`}
                 x1={x}
                 y1={PAD}
                 x2={x}
                 y2={H - PAD}
-                stroke="#1f2937"
-                strokeWidth={0.5}
+                stroke="#1c1c1c"
+                strokeWidth={0.4}
               />
             );
           })}
-
-          {/* continents */}
           {coastPaths.map((pts, i) => (
             <polygon
               key={i}
               points={pts}
-              fill="#1a2e1a"
+              fill="#0d1f0d"
               stroke="#22c55e"
-              strokeWidth={0.6}
-              opacity={0.7}
+              strokeWidth={0.5}
+              opacity={0.6}
             />
           ))}
-
-          {/* viewport rectangle */}
           {viewRect && (
             <rect
               x={viewRect.x}
@@ -220,47 +178,23 @@ export function Minimap({ viewCenter, viewAltitude }: MinimapProps) {
               height={viewRect.h}
               fill="none"
               stroke="#22c55e"
-              strokeWidth={1}
+              strokeWidth={0.8}
               strokeDasharray="3,2"
-              opacity={0.8}
+              opacity={0.7}
             />
           )}
-
-          {/* center dot */}
           {center && (
             <>
               <circle
                 cx={center[0]}
                 cy={center[1]}
-                r={3}
+                r={2.5}
                 fill="#22c55e"
-                opacity={0.4}
+                opacity={0.3}
               />
-              <circle cx={center[0]} cy={center[1]} r={1.5} fill="#4ade80" />
+              <circle cx={center[0]} cy={center[1]} r={1.2} fill="#4ade80" />
             </>
           )}
-
-          {/* scale bar */}
-          <line
-            x1={PAD}
-            y1={H - PAD - 2}
-            x2={PAD + scalePx}
-            y2={H - PAD - 2}
-            stroke="#9ca3af"
-            strokeWidth={1}
-          />
-          <text
-            x={PAD + scalePx / 2}
-            y={H - PAD - 5}
-            textAnchor="middle"
-            fill="#9ca3af"
-            fontSize={7}
-            fontFamily="monospace"
-          >
-            {scaleKm >= 1000
-              ? `${(scaleKm / 1000).toFixed(0)}k km`
-              : `${scaleKm} km`}
-          </text>
         </svg>
       </div>
     </div>
