@@ -10,9 +10,10 @@ interface SearchBarProps {
   onSelectAircraft?: (ac: AircraftPosition) => void;
   onSelectSatellite?: (sat: SatellitePosition) => void;
   onSelectCamera?: (cam: Camera) => void;
+  sidebarOpen?: boolean;
 }
 
-const MAX_PER_GROUP = 5;
+const MAX_PER_GROUP = 6;
 
 function matches(haystack: string | null | undefined, query: string): boolean {
   if (!haystack) return false;
@@ -26,16 +27,16 @@ export function SearchBar({
   onSelectAircraft,
   onSelectSatellite,
   onSelectCamera,
+  sidebarOpen,
 }: SearchBarProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
   const q = query.toLowerCase().trim();
 
   const results = useMemo(() => {
-    if (!q) return { ac: [], sat: [], cam: [] };
+    if (!q) return { ac: [], sat: [], cam: [], cities: [] };
 
     const ac: AircraftPosition[] = [];
     for (const a of aircraft.values()) {
@@ -60,13 +61,16 @@ export function SearchBar({
     }
 
     const cam: Camera[] = [];
+    const citySet = new Set<string>();
     for (const c of cameras) {
-      if (cam.length >= MAX_PER_GROUP) break;
-      if (matches(c.name, q) || matches(c.city, q) || matches(c.id, q))
-        cam.push(c);
+      if (matches(c.name, q) || matches(c.city, q) || matches(c.id, q)) {
+        if (cam.length < MAX_PER_GROUP) cam.push(c);
+        citySet.add(c.city);
+      }
     }
 
-    return { ac, sat, cam };
+    const cities = Array.from(citySet).slice(0, 4);
+    return { ac, sat, cam, cities };
   }, [q, aircraft, satellites, cameras]);
 
   const hasResults =
@@ -99,9 +103,8 @@ export function SearchBar({
       if (
         containerRef.current &&
         !containerRef.current.contains(e.target as Node)
-      ) {
+      )
         setOpen(false);
-      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -121,15 +124,18 @@ export function SearchBar({
     [onSelectAircraft, onSelectSatellite, onSelectCamera],
   );
 
+  const leftOffset = sidebarOpen
+    ? "left-[calc(280px+50%-(280px/2))]"
+    : "left-1/2";
+
   return (
     <div
       ref={containerRef}
-      className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[380px]"
+      className={`fixed top-3 ${leftOffset} z-40 w-[340px] -translate-x-1/2`}
     >
-      {/* Input */}
       <div className="relative">
         <svg
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -146,66 +152,67 @@ export function SearchBar({
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Search targets..."
-          className="w-full bg-gray-800/90 backdrop-blur-sm border border-gray-700/50 rounded-lg pl-10 pr-16 py-2 text-sm font-mono text-gray-200 placeholder-gray-600 outline-none focus:border-green-500/50 focus:ring-1 focus:ring-green-500/20 transition-colors"
+          placeholder="Search aircraft, satellites, cities, cameras..."
+          className="w-full rounded-md border border-zinc-700/60 bg-zinc-900/80 py-1.5 pl-9 pr-14 font-mono text-[11px] text-zinc-200 placeholder-zinc-600 shadow-lg shadow-black/30 backdrop-blur-xl outline-none transition-colors focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
         />
-        <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-gray-600 bg-gray-700/50 px-1.5 py-0.5 rounded border border-gray-600/40">
-          ⌘K
+        <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-zinc-700/50 bg-zinc-800/60 px-1.5 py-0.5 font-mono text-[9px] text-zinc-600">
+          /
         </kbd>
       </div>
 
-      {/* Dropdown */}
       {open && q && hasResults && (
-        <div className="mt-1 bg-gray-800/95 backdrop-blur-sm border border-gray-700/50 rounded-lg overflow-hidden shadow-2xl max-h-80 overflow-y-auto">
+        <div className="mt-1 max-h-72 overflow-y-auto rounded-md border border-zinc-700/60 bg-zinc-900/95 shadow-2xl shadow-black/40 backdrop-blur-xl">
           {results.ac.length > 0 && (
-            <ResultGroup label="AIRCRAFT">
+            <Group label="AIRCRAFT" count={results.ac.length}>
               {results.ac.map((a) => (
-                <ResultRow key={a.icao} onClick={() => select("ac", a)}>
-                  <span className="text-green-400">{a.callsign || "—"}</span>
-                  <span className="text-gray-500 text-[10px] ml-2">
-                    {a.aircraft_type || "?"}
+                <Row key={a.icao} onClick={() => select("ac", a)}>
+                  <span className="text-emerald-400 font-medium">
+                    {a.callsign || "---"}
                   </span>
-                  <span className="text-gray-600 text-[10px] ml-auto">
+                  <span className="text-zinc-600 text-[9px] ml-1.5">
+                    {a.aircraft_type || ""}
+                  </span>
+                  <span className="ml-auto text-zinc-700 text-[9px]">
                     {a.icao}
                   </span>
-                </ResultRow>
+                </Row>
               ))}
-            </ResultGroup>
+            </Group>
           )}
           {results.sat.length > 0 && (
-            <ResultGroup label="SATELLITES">
+            <Group label="SATELLITES" count={results.sat.length}>
               {results.sat.map((s) => (
-                <ResultRow key={s.norad_id} onClick={() => select("sat", s)}>
-                  <span className="text-green-400">{s.name}</span>
-                  <span className="text-gray-500 text-[10px] ml-2">
+                <Row key={s.norad_id} onClick={() => select("sat", s)}>
+                  <span className="text-cyan-400 font-medium">{s.name}</span>
+                  <span className="text-zinc-600 text-[9px] ml-1.5">
                     {s.category}
                   </span>
-                  <span className="text-gray-600 text-[10px] ml-auto">
+                  <span className="ml-auto text-zinc-700 text-[9px]">
                     #{s.norad_id}
                   </span>
-                </ResultRow>
+                </Row>
               ))}
-            </ResultGroup>
+            </Group>
           )}
           {results.cam.length > 0 && (
-            <ResultGroup label="CAMERAS">
+            <Group label="CAMERAS" count={results.cam.length}>
               {results.cam.map((c) => (
-                <ResultRow key={c.id} onClick={() => select("cam", c)}>
-                  <span className="text-green-400">{c.name}</span>
-                  <span className="text-gray-600 text-[10px] ml-auto">
+                <Row key={c.id} onClick={() => select("cam", c)}>
+                  <span className="text-amber-400 font-medium">{c.name}</span>
+                  <span className="ml-auto text-zinc-600 text-[9px]">
                     {c.city}
                   </span>
-                </ResultRow>
+                </Row>
               ))}
-            </ResultGroup>
+            </Group>
           )}
         </div>
       )}
 
       {open && q && !hasResults && (
-        <div className="mt-1 bg-gray-800/95 backdrop-blur-sm border border-gray-700/50 rounded-lg p-4 text-center">
-          <span className="font-mono text-xs text-gray-600">
-            NO TARGETS FOUND
+        <div className="mt-1 rounded-md border border-zinc-700/60 bg-zinc-900/95 p-3 text-center shadow-2xl backdrop-blur-xl">
+          <span className="font-mono text-[10px] text-zinc-600">
+            NO RESULTS FOR "{query}"
           </span>
         </div>
       )}
@@ -213,24 +220,29 @@ export function SearchBar({
   );
 }
 
-function ResultGroup({
+function Group({
   label,
+  count,
   children,
 }: {
   label: string;
+  count: number;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <div className="px-3 py-1.5 text-[9px] font-mono text-gray-500 tracking-widest border-b border-gray-700/30 bg-gray-900/40">
-        {label}
+      <div className="flex items-center justify-between border-b border-zinc-800/60 bg-zinc-950/50 px-3 py-1">
+        <span className="font-mono text-[9px] tracking-widest text-zinc-500">
+          {label}
+        </span>
+        <span className="font-mono text-[9px] text-zinc-700">{count}</span>
       </div>
       {children}
     </div>
   );
 }
 
-function ResultRow({
+function Row({
   children,
   onClick,
 }: {
@@ -240,7 +252,7 @@ function ResultRow({
   return (
     <button
       onClick={onClick}
-      className="w-full px-3 py-1.5 flex items-center text-xs font-mono hover:bg-green-500/10 transition-colors text-left"
+      className="flex w-full items-center gap-1 px-3 py-1.5 font-mono text-[11px] text-left transition-colors hover:bg-emerald-500/8"
     >
       {children}
     </button>
