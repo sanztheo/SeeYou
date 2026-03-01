@@ -9,7 +9,7 @@ import { ROAD_COLOR, ROAD_WIDTH, MAX_ALT } from "./trafficConstants";
 
 interface TrafficLayerProps {
   filter: TrafficFilter;
-  onLoadingChange?: (loading: boolean, count: number) => void;
+  onLoadingChange?: (loading: boolean, count: number, total: number) => void;
 }
 
 export function TrafficLayer({
@@ -17,7 +17,7 @@ export function TrafficLayer({
   onLoadingChange,
 }: TrafficLayerProps): null {
   const { viewer } = useCesium();
-  const { roads, loading, roadCount, aboveMaxAlt } = useTrafficLoader(
+  const { roads, loading, roadCount, aboveMaxAlt, progress } = useTrafficLoader(
     viewer,
     filter,
   );
@@ -29,8 +29,8 @@ export function TrafficLayer({
   const renderedKeyRef = useRef("");
 
   useEffect(() => {
-    onLoadingChange?.(loading, roadCount);
-  }, [loading, roadCount, onLoadingChange]);
+    onLoadingChange?.(loading, roadCount, progress.total);
+  }, [loading, roadCount, progress.total, onLoadingChange]);
 
   const filteredRoads = useMemo(
     () =>

@@ -5,6 +5,7 @@ interface TrafficControlsProps {
   onFilterChange: (filter: TrafficFilter) => void;
   loading?: boolean;
   roadCount?: number;
+  totalRoads?: number;
 }
 
 export function TrafficControls({
@@ -12,7 +13,10 @@ export function TrafficControls({
   onFilterChange,
   loading = false,
   roadCount = 0,
+  totalRoads = 0,
 }: TrafficControlsProps): React.ReactElement {
+  const pct = totalRoads > 0 ? Math.round((roadCount / totalRoads) * 100) : 0;
+
   return (
     <div className="px-4 py-3 border-b border-zinc-800/60">
       <div className="flex items-center justify-between mb-2">
@@ -22,7 +26,11 @@ export function TrafficControls({
           </span>
           {filter.enabled && roadCount > 0 && (
             <span className="font-mono text-[9px] tabular-nums text-emerald-400">
-              {roadCount.toLocaleString()} roads
+              {roadCount.toLocaleString()}
+              {loading && totalRoads > 0
+                ? `/${totalRoads.toLocaleString()}`
+                : ""}{" "}
+              roads
             </span>
           )}
           {filter.enabled && loading && (
@@ -41,7 +49,10 @@ export function TrafficControls({
       {filter.enabled && loading && (
         <div className="mb-2">
           <div className="h-1 w-full rounded-full bg-zinc-800 overflow-hidden">
-            <div className="h-full w-1/2 rounded-full bg-amber-500/70 animate-[pulse_1s_ease-in-out_infinite]" />
+            <div
+              className="h-full rounded-full bg-amber-500/70 transition-all duration-300"
+              style={{ width: totalRoads > 0 ? `${pct}%` : "50%" }}
+            />
           </div>
         </div>
       )}
@@ -68,7 +79,7 @@ export function TrafficControls({
           />
           <RoadToggle
             label="Secondary"
-            color="bg-zinc-500"
+            color="bg-lime-400"
             checked={filter.showSecondary}
             onChange={(v) => onFilterChange({ ...filter, showSecondary: v })}
           />
