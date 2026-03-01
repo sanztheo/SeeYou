@@ -10,7 +10,14 @@ serde_json.workspace = true
 tracing.workspace = true
 reqwest.workspace = true
 cache = { path = "../cache" }
+cables = { path = "../cables" }
 cameras = { path = "../cameras" }
+cyber = { path = "../cyber" }
 events = { path = "../events" }
+fires = { path = "../fires" }
+gdelt = { path = "../gdelt" }
+maritime = { path = "../maritime" }
+seismic = { path = "../seismic" }
+space_weather = { path = "../space_weather" }
 traffic = { path = "../traffic" }
 weather = { path = "../weather" }
