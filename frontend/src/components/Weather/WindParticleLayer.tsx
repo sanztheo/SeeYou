@@ -23,12 +23,39 @@ const SPEED_FACTOR = 0.00015;
 const TRAIL_FADE = 0.92;
 const MIN_AGE = 40;
 const MAX_AGE = 120;
+const GRID_RES = 1;
 
-function idw(
-  points: WeatherPoint[],
+interface WindCell {
+  u: number;
+  v: number;
+}
+
+function buildWindGrid(points: WeatherPoint[]): Map<number, WindCell> {
+  const grid = new Map<number, WindCell>();
+  for (let lat = -85; lat <= 85; lat += GRID_RES) {
+    for (let lon = -180; lon <= 180; lon += GRID_RES) {
+      grid.set(gridKey(lat, lon), idw(points, lon, lat));
+    }
+  }
+  return grid;
+}
+
+function gridKey(lat: number, lon: number): number {
+  const gLat = Math.round(lat / GRID_RES) * GRID_RES + 90;
+  const gLon = Math.round(lon / GRID_RES) * GRID_RES + 180;
+  return gLat * 361 + gLon;
+}
+
+function gridLookup(
+  grid: Map<number, WindCell>,
   lon: number,
   lat: number,
-): { u: number; v: number } {
+): WindCell {
+  const cell = grid.get(gridKey(lat, lon));
+  return cell ?? { u: 0, v: 0 };
+}
+
+function idw(points: WeatherPoint[], lon: number, lat: number): WindCell {
   let sumU = 0;
   let sumV = 0;
   let sumW = 0;
@@ -76,11 +103,13 @@ export function WindParticleLayer({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const particlesRef = useRef<Particle[]>([]);
   const animFrameRef = useRef(0);
-  const pointsRef = useRef(points);
+  const gridRef = useRef<Map<number, WindCell>>(new Map());
   const opacityRef = useRef(opacity);
 
   useEffect(() => {
-    pointsRef.current = points;
+    if (points.length > 0) {
+      gridRef.current = buildWindGrid(points);
+    }
   }, [points]);
 
   useEffect(() => {
@@ -135,7 +164,7 @@ export function WindParticleLayer({
     );
 
     function animate() {
-      if (!viewer || viewer.isDestroyed() || !canvas) return;
+      if (!viewer || viewer.isDestroyed() || !canvas || !ctx) return;
 
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
@@ -152,8 +181,8 @@ export function WindParticleLayer({
       ctx.fillRect(0, 0, w, h);
       ctx.globalCompositeOperation = "source-over";
 
-      const pts = pointsRef.current;
-      if (pts.length === 0) {
+      const grid = gridRef.current;
+      if (grid.size === 0) {
         animFrameRef.current = requestAnimationFrame(animate);
         return;
       }
@@ -161,7 +190,7 @@ export function WindParticleLayer({
       const occluder = new Occluder(globeSphere, viewer.camera.positionWC);
 
       for (const p of particlesRef.current) {
-        const wind = idw(pts, p.lon, p.lat);
+        const wind = gridLookup(grid, p.lon, p.lat);
         const speed = Math.sqrt(wind.u * wind.u + wind.v * wind.v);
 
         p.lon += wind.u * SPEED_FACTOR;
