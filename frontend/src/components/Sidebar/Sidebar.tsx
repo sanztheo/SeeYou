@@ -1,33 +1,26 @@
-import { useState } from "react";
-
 interface SidebarProps {
   children?: React.ReactNode;
+  onCollapse?: () => void;
 }
 
-export function Sidebar({ children }: SidebarProps): React.ReactElement {
-  const [collapsed, setCollapsed] = useState(false);
-
+export function Sidebar({
+  children,
+  onCollapse,
+}: SidebarProps): React.ReactElement {
   return (
-    <div
-      className={`fixed top-0 left-0 h-full z-10 transition-all duration-300 ${
-        collapsed ? "w-12" : "w-72"
-      } bg-gray-900/95 backdrop-blur-sm border-r border-gray-700/50 flex flex-col`}
-    >
+    <div className="fixed inset-y-0 left-0 z-20 flex w-[280px] flex-col border-r border-zinc-800/80 bg-zinc-950/90 backdrop-blur-xl">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-gray-700/50">
-        {!collapsed && (
-          <h1 className="text-sm font-bold tracking-[0.3em] text-gray-100 uppercase">
-            SeeYou
-          </h1>
-        )}
+      <div className="flex h-11 shrink-0 items-center justify-between border-b border-zinc-800/80 px-4">
+        <h1 className="font-mono text-[11px] font-bold uppercase tracking-[0.35em] text-zinc-200">
+          SeeYou
+        </h1>
         <button
-          onClick={() => setCollapsed((prev) => !prev)}
-          className="p-1.5 rounded hover:bg-gray-700/50 text-gray-400 hover:text-gray-200 transition-colors"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={onCollapse}
+          className="flex h-6 w-6 items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
+          aria-label="Collapse sidebar"
         >
           <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className={`w-4 h-4 transition-transform ${collapsed ? "rotate-180" : ""}`}
+            className="h-3.5 w-3.5"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -42,10 +35,10 @@ export function Sidebar({ children }: SidebarProps): React.ReactElement {
         </button>
       </div>
 
-      {/* Content */}
-      {!collapsed && (
-        <div className="flex-1 overflow-y-auto p-3">{children}</div>
-      )}
+      {/* Scrollable content — stops above the timeline bar (h-10 = 40px) */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-12 scrollbar-thin">
+        <div className="flex flex-col gap-px">{children}</div>
+      </div>
     </div>
   );
 }
