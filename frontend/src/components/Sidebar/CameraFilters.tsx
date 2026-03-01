@@ -65,13 +65,30 @@ export function CameraFilters({
       </div>
 
       {loading && (
-        <div className="mb-2">
+        <div className="mb-2 space-y-1.5">
           <div className="h-1 w-full rounded-full bg-zinc-800 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-emerald-500 transition-all duration-300"
-              style={{ width: `${pct}%` }}
-            />
+            {progress.total > 0 ? (
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                style={{ width: `${pct}%` }}
+              />
+            ) : (
+              <div className="h-full w-full rounded-full bg-emerald-500/50 animate-pulse" />
+            )}
           </div>
+          <span className="font-mono text-[9px] text-zinc-500">
+            {progress.total > 0
+              ? `Loading cameras ${progress.loaded}/${progress.total}…`
+              : "Connecting to camera server…"}
+          </span>
+        </div>
+      )}
+
+      {filter.enabled && progress.done && cameras.length === 0 && (
+        <div className="mb-2">
+          <span className="font-mono text-[9px] text-zinc-600">
+            No cameras in this area
+          </span>
         </div>
       )}
 
