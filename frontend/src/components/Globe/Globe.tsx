@@ -10,12 +10,21 @@ import {
 } from "cesium";
 import { hasValidToken } from "../../lib/cesium-config";
 import { AircraftLayer } from "../Aircraft/AircraftLayer";
+import { SatelliteLayer } from "../Satellite/SatelliteLayer";
+import { TrafficLayer } from "../Traffic/TrafficLayer";
+import { CameraLayer } from "../Camera/CameraLayer";
+import { ShaderManager } from "../../shaders/ShaderManager";
 import type {
   AircraftPosition,
   AircraftFilter,
   FlightRoute,
   PredictedTrajectory,
 } from "../../types/aircraft";
+import type { SatellitePosition, SatelliteFilter } from "../../types/satellite";
+import { DEFAULT_SATELLITE_FILTER } from "../../types/satellite";
+import type { TrafficFilter, Road } from "../../types/traffic";
+import type { Camera, CameraFilter } from "../../types/camera";
+import type { ShaderMode } from "../../shaders/types";
 
 interface ViewerRef {
   cesiumElement?: Viewer;
@@ -26,11 +35,29 @@ interface GlobeProps {
   filter?: AircraftFilter;
   trackedIcao?: string | null;
   onSelectAircraft?: (aircraft: AircraftPosition) => void;
+  onHoverAircraft?: (
+    aircraft: AircraftPosition | null,
+    screenX: number,
+    screenY: number,
+  ) => void;
   flightRoute?: FlightRoute | null;
   predictions?: Map<string, PredictedTrajectory>;
+
+  satellites?: Map<number, SatellitePosition>;
+  satelliteFilter?: SatelliteFilter;
+  onSelectSatellite?: (sat: SatellitePosition) => void;
+
+  trafficFilter?: TrafficFilter;
+  roads?: Road[];
+
+  cameras?: Camera[];
+  cameraFilter?: CameraFilter;
+  onSelectCamera?: (cam: Camera) => void;
+
+  shaderMode?: ShaderMode;
 }
 
-const DEFAULT_FILTER: AircraftFilter = {
+const DEFAULT_AIRCRAFT_FILTER: AircraftFilter = {
   showCivilian: true,
   showMilitary: true,
 };
@@ -40,20 +67,29 @@ export function Globe({
   filter,
   trackedIcao,
   onSelectAircraft,
+  onHoverAircraft,
   flightRoute,
   predictions,
+  satellites,
+  satelliteFilter,
+  onSelectSatellite,
+  trafficFilter,
+  roads,
+  cameras,
+  cameraFilter,
+  onSelectCamera,
+  shaderMode,
 }: GlobeProps): React.ReactElement {
   const viewerRef = useRef<ViewerRef>(null);
+  const shaderManagerRef = useRef<ShaderManager | null>(null);
 
   useEffect(() => {
     const viewer = viewerRef.current?.cesiumElement;
     if (!viewer) return;
 
-    // Real-time clock for SampledPositionProperty interpolation
     viewer.clock.clockStep = ClockStep.SYSTEM_CLOCK;
     viewer.clock.shouldAnimate = true;
 
-    // Replace default imagery with OSM tiles
     viewer.imageryLayers.removeAll();
     viewer.imageryLayers.addImageryProvider(
       new OpenStreetMapImageryProvider({
@@ -61,7 +97,6 @@ export function Globe({
       }),
     );
 
-    // Fly to Paris on mount
     viewer.camera.flyTo({
       destination: Cartesian3.fromDegrees(2.3522, 48.8566, 2500),
       orientation: {
@@ -72,7 +107,6 @@ export function Globe({
       duration: 0,
     });
 
-    // Load OSM 3D Buildings if Ion token available
     if (hasValidToken()) {
       createOsmBuildingsAsync()
         .then((tileset) => {
@@ -84,7 +118,14 @@ export function Globe({
           console.warn("OSM Buildings unavailable:", err);
         });
     }
+
+    shaderManagerRef.current = new ShaderManager(viewer);
+    return () => shaderManagerRef.current?.destroy();
   }, []);
+
+  useEffect(() => {
+    shaderManagerRef.current?.setMode(shaderMode ?? "normal");
+  }, [shaderMode]);
 
   return (
     <ResiumViewer
@@ -104,11 +145,32 @@ export function Globe({
       {aircraft && (
         <AircraftLayer
           aircraft={aircraft}
-          filter={filter ?? DEFAULT_FILTER}
+          filter={filter ?? DEFAULT_AIRCRAFT_FILTER}
           trackedIcao={trackedIcao ?? null}
           onSelect={onSelectAircraft}
+          onHover={onHoverAircraft}
           flightRoute={flightRoute ?? null}
           predictions={predictions ?? new Map()}
+        />
+      )}
+
+      {satellites && satellites.size > 0 && (
+        <SatelliteLayer
+          satellites={satellites}
+          filter={satelliteFilter ?? DEFAULT_SATELLITE_FILTER}
+          onSelect={onSelectSatellite}
+        />
+      )}
+
+      {trafficFilter?.enabled && (
+        <TrafficLayer filter={trafficFilter} roads={roads ?? []} />
+      )}
+
+      {cameraFilter?.enabled && cameras && (
+        <CameraLayer
+          cameras={cameras}
+          filter={cameraFilter}
+          onSelect={onSelectCamera ?? (() => {})}
         />
       )}
     </ResiumViewer>
