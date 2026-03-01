@@ -1,187 +1,28 @@
 import { useEffect, useRef } from "react";
 import { useCesium } from "resium";
-import {
-  CustomDataSource,
-  Color,
-  Cartesian3,
-  VerticalOrigin,
-  HorizontalOrigin,
-  NearFarScalar,
-  ScreenSpaceEventHandler,
-  ScreenSpaceEventType,
-  Math as CesiumMath,
-  defined,
-  SampledPositionProperty,
-  JulianDate,
-  LinearApproximation,
-  ExtrapolationType,
-  ArcType,
-  PolylineDashMaterialProperty,
-  CallbackProperty,
-  Occluder,
-  BoundingSphere,
-  Rectangle,
-  Cartographic,
-  Ellipsoid,
-  type Viewer,
-} from "cesium";
+import { CustomDataSource, type Viewer } from "cesium";
 import type {
   AircraftPosition,
   AircraftFilter,
   FlightRoute,
   PredictedTrajectory,
 } from "../../types/aircraft";
-
-const CIVILIAN_COLOR = Color.fromCssColorString("#3B82F6");
-const MILITARY_COLOR = Color.fromCssColorString("#EF4444");
-const LABEL_FONT = "12px monospace";
-
-/** Predict this many seconds ahead — slightly > poll interval for smooth overlap. */
-const PREDICTION_SECS = 3;
-
-function buildAircraftSvg(hex: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M16 2L13.5 13L4 18.5V21L13.5 18L13.5 26L10 28.5V30.5L16 28.5L22 30.5V28.5L18.5 26L18.5 18L28 21V18.5L18.5 13Z" fill="${hex}" stroke="#000" stroke-width="0.8"/></svg>`;
-  return `data:image/svg+xml;base64,${btoa(svg)}`;
-}
-
-const CIVIL_ICON = buildAircraftSvg("#3B82F6");
-const MIL_ICON = buildAircraftSvg("#EF4444");
-
-/**
- * Dead-reckoning: predict where an aircraft will be in `dt` seconds
- * using its current heading, speed, and vertical rate.
- */
-function predictPosition(ac: AircraftPosition, dt: number): Cartesian3 {
-  const headingRad = ac.heading * CesiumMath.RADIANS_PER_DEGREE;
-  const distanceM = ac.speed_ms * dt;
-  const latRad = ac.lat * CesiumMath.RADIANS_PER_DEGREE;
-
-  const dLat = (distanceM * Math.cos(headingRad)) / 111_320;
-  const cosLat = Math.cos(latRad);
-  const dLon =
-    cosLat > 0.001
-      ? (distanceM * Math.sin(headingRad)) / (111_320 * cosLat)
-      : 0;
-  const dAlt = ac.vertical_rate_ms * dt;
-
-  return Cartesian3.fromDegrees(
-    ac.lon + dLon,
-    ac.lat + dLat,
-    Math.max(0, ac.altitude_m + dAlt),
-  );
-}
-
-function makePositionProperty(
-  ac: AircraftPosition,
-  now: JulianDate,
-): SampledPositionProperty {
-  const prop = new SampledPositionProperty();
-  prop.setInterpolationOptions({
-    interpolationDegree: 1,
-    interpolationAlgorithm: LinearApproximation,
-  });
-  prop.forwardExtrapolationType = ExtrapolationType.EXTRAPOLATE;
-  prop.backwardExtrapolationType = ExtrapolationType.HOLD;
-
-  const current = Cartesian3.fromDegrees(ac.lon, ac.lat, ac.altitude_m);
-  const future = JulianDate.addSeconds(now, PREDICTION_SECS, new JulianDate());
-  const predicted = predictPosition(ac, PREDICTION_SECS);
-
-  prop.addSample(now, current);
-  prop.addSample(future, predicted);
-
-  return prop;
-}
-
-const ROUTE_DEP_COLOR = Color.fromCssColorString("#22C55E");
-const ROUTE_ARR_COLOR = Color.WHITE;
-const AIRPORT_COLOR = Color.fromCssColorString("#FACC15");
-const PREDICTION_COLOR = Color.fromCssColorString("#FF6B35");
-const UNCERTAINTY_COLOR = Color.fromCssColorString("#FF6B35").withAlpha(0.15);
-const PATTERN_LABEL_FONT = "bold 11px monospace";
-
-// ── Viewport culling (pre-allocated to avoid GC pressure) ────────
-const scratchViewRect = new Rectangle();
-const scratchPaddedRect = new Rectangle();
-const GLOBE_SPHERE = new BoundingSphere(
-  Cartesian3.ZERO,
-  Ellipsoid.WGS84.minimumRadius,
-);
-const RECT_PAD_RAD = CesiumMath.toRadians(2);
-
-/**
- * Toggle entity.show for every aircraft entity based on whether it falls
- * inside the camera's current view rectangle AND is not occluded by the globe.
- */
-function cullEntities(
-  viewer: Viewer,
-  ds: CustomDataSource,
-  trackedIcao: string | null,
-): void {
-  const viewRect = viewer.camera.computeViewRectangle(
-    viewer.scene.globe.ellipsoid,
-    scratchViewRect,
-  );
-
-  if (!viewRect) {
-    for (const entity of ds.entities.values) entity.show = true;
-    return;
-  }
-
-  scratchPaddedRect.west = viewRect.west - RECT_PAD_RAD;
-  scratchPaddedRect.south = Math.max(
-    viewRect.south - RECT_PAD_RAD,
-    -CesiumMath.PI_OVER_TWO,
-  );
-  scratchPaddedRect.east = viewRect.east + RECT_PAD_RAD;
-  scratchPaddedRect.north = Math.min(
-    viewRect.north + RECT_PAD_RAD,
-    CesiumMath.PI_OVER_TWO,
-  );
-
-  const occluder = new Occluder(GLOBE_SPHERE, viewer.camera.position);
-  const now = JulianDate.now();
-  const entities = ds.entities.values;
-
-  for (let i = 0; i < entities.length; i++) {
-    const entity = entities[i];
-
-    if (entity.id === trackedIcao) {
-      entity.show = true;
-      continue;
-    }
-
-    const pos = entity.position?.getValue(now);
-    if (!pos) {
-      entity.show = false;
-      continue;
-    }
-
-    const carto = Cartographic.fromCartesian(pos);
-    if (!Rectangle.contains(scratchPaddedRect, carto)) {
-      entity.show = false;
-      continue;
-    }
-
-    entity.show = occluder.isPointVisible(pos);
-  }
-}
-
-/** Extract a human-readable label from a MilitaryPattern. */
-function patternLabel(pat: PredictedTrajectory["pattern"]): string | null {
-  if (!pat) return null;
-  if ("Orbit" in pat) return "ORBIT";
-  if ("Cap" in pat) return "CAP";
-  if ("Transit" in pat) return "TRANSIT";
-  if ("Holding" in pat) return "HOLDING";
-  return null;
-}
+import { cullEntities } from "./aircraftUtils";
+import { setupInteractions } from "./AircraftInteractions";
+import { useAircraftBillboards } from "./AircraftBillboards";
+import { useFlightRoute } from "./AircraftRouteOverlay";
+import { usePredictions } from "./AircraftPredictions";
 
 interface AircraftLayerProps {
   aircraft: Map<string, AircraftPosition>;
   filter: AircraftFilter;
   trackedIcao: string | null;
   onSelect?: (aircraft: AircraftPosition) => void;
+  onHover?: (
+    aircraft: AircraftPosition | null,
+    screenX: number,
+    screenY: number,
+  ) => void;
   flightRoute: FlightRoute | null;
   predictions: Map<string, PredictedTrajectory>;
 }
@@ -191,6 +32,7 @@ export function AircraftLayer({
   filter,
   trackedIcao,
   onSelect,
+  onHover,
   flightRoute,
   predictions,
 }: AircraftLayerProps): null {
@@ -200,27 +42,27 @@ export function AircraftLayer({
   const routeDsRef = useRef<CustomDataSource | null>(null);
   const predDsRef = useRef<CustomDataSource | null>(null);
   const onSelectRef = useRef(onSelect);
+  const onHoverRef = useRef(onHover);
   const aircraftRef = useRef(aircraft);
   const trackedIcaoRef = useRef(trackedIcao);
 
   useEffect(() => {
     onSelectRef.current = onSelect;
   }, [onSelect]);
-
+  useEffect(() => {
+    onHoverRef.current = onHover;
+  }, [onHover]);
   useEffect(() => {
     aircraftRef.current = aircraft;
   }, [aircraft]);
-
   useEffect(() => {
     trackedIcaoRef.current = trackedIcao;
   }, [trackedIcao]);
-
-  // Store raw viewer in a mutable ref
   useEffect(() => {
     viewerRef.current = viewer ?? null;
   }, [viewer]);
 
-  // Mount datasource, click handler, and ensure real-time clock
+  // Mount datasources, interaction handlers, and camera-change listener
   useEffect(() => {
     if (!viewer) return;
 
@@ -236,16 +78,14 @@ export function AircraftLayer({
     viewer.dataSources.add(predDs);
     predDsRef.current = predDs;
 
-    const handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
-    handler.setInputAction((event: { position: { x: number; y: number } }) => {
-      const picked = viewer.scene.pick(event.position);
-      if (defined(picked) && picked.id?.id) {
-        const ac = aircraftRef.current.get(picked.id.id as string);
-        if (ac) {
-          onSelectRef.current?.(ac);
-        }
-      }
-    }, ScreenSpaceEventType.LEFT_CLICK);
+    const canvas = viewer.scene.canvas as HTMLCanvasElement;
+    const cleanupInteractions = setupInteractions(
+      viewer,
+      canvas,
+      aircraftRef,
+      onSelectRef,
+      onHoverRef,
+    );
 
     viewer.camera.percentageChanged = 0.1;
     const onCameraChanged = (): void => {
@@ -255,7 +95,7 @@ export function AircraftLayer({
     viewer.camera.changed.addEventListener(onCameraChanged);
 
     return (): void => {
-      handler.destroy();
+      cleanupInteractions();
       viewer.camera.changed.removeEventListener(onCameraChanged);
       if (!viewer.isDestroyed()) {
         viewer.dataSources.remove(ds, true);
@@ -285,337 +125,15 @@ export function AircraftLayer({
     }
   }, [trackedIcao, aircraft]);
 
-  // Sync entities with aircraft data and filter — chunked via rAF
-  useEffect(() => {
-    const ds = dataSourceRef.current;
-    if (!ds) return;
-
-    const now = JulianDate.now();
-
-    // Build visible aircraft list
-    const visible: AircraftPosition[] = [];
-    for (const ac of aircraft.values()) {
-      if (ac.is_military && !filter.showMilitary) continue;
-      if (!ac.is_military && !filter.showCivilian) continue;
-      visible.push(ac);
-    }
-    const visibleIcaos = new Set(visible.map((ac) => ac.icao));
-
-    // Remove stale entities first (synchronous — usually a small set)
-    const toRemove: string[] = [];
-    for (const entity of ds.entities.values) {
-      if (entity.id && !visibleIcaos.has(entity.id)) {
-        toRemove.push(entity.id);
-      }
-    }
-    if (toRemove.length > 0) {
-      ds.entities.suspendEvents();
-      for (const id of toRemove) {
-        const entity = ds.entities.getById(id);
-        if (entity) ds.entities.remove(entity);
-      }
-      ds.entities.resumeEvents();
-      console.log(`[AircraftLayer] removed ${toRemove.length} stale entities`);
-    }
-
-    // Chunked add/update via requestAnimationFrame
-    const CHUNK_SIZE = 500;
-    let cursor = 0;
-    let rafId = 0;
-    let cancelled = false;
-
-    const processChunk = (): void => {
-      if (cancelled) return;
-      const end = Math.min(cursor + CHUNK_SIZE, visible.length);
-
-      ds.entities.suspendEvents();
-      for (let i = cursor; i < end; i++) {
-        const ac = visible[i];
-        const color = ac.is_military ? MILITARY_COLOR : CIVILIAN_COLOR;
-        const icon = ac.is_military ? MIL_ICON : CIVIL_ICON;
-        const label = ac.callsign ?? ac.icao;
-        const rotation = -CesiumMath.toRadians(ac.heading);
-
-        const posProp = makePositionProperty(ac, now);
-
-        const entity = ds.entities.getById(ac.icao);
-        if (entity) {
-          entity.position = posProp as never;
-          if (entity.billboard) {
-            entity.billboard.image = icon as never;
-            entity.billboard.color = color as never;
-            entity.billboard.rotation = rotation as never;
-          }
-          if (entity.label) {
-            entity.label.text = label as never;
-          }
-        } else {
-          ds.entities.add({
-            id: ac.icao,
-            position: posProp as never,
-            billboard: {
-              image: icon,
-              width: 24,
-              height: 24,
-              color,
-              rotation,
-              alignedAxis: Cartesian3.UNIT_Z,
-              verticalOrigin: VerticalOrigin.CENTER,
-              horizontalOrigin: HorizontalOrigin.CENTER,
-              scaleByDistance: new NearFarScalar(5_000, 1.2, 2_000_000, 0.3),
-            },
-            label: {
-              text: label,
-              font: LABEL_FONT,
-              fillColor: Color.WHITE,
-              outlineColor: Color.BLACK,
-              outlineWidth: 2,
-              style: 2, // FILL_AND_OUTLINE
-              verticalOrigin: VerticalOrigin.TOP,
-              horizontalOrigin: HorizontalOrigin.LEFT,
-              pixelOffset: { x: 14, y: 4 } as never,
-              scaleByDistance: new NearFarScalar(1_000, 1.0, 500_000, 0.0),
-            },
-          });
-        }
-      }
-      ds.entities.resumeEvents();
-
-      console.log(
-        `[AircraftLayer] rendered chunk ${Math.ceil(end / CHUNK_SIZE)}/${Math.ceil(visible.length / CHUNK_SIZE)} (${end}/${visible.length} entities)`,
-      );
-
-      cursor = end;
-      if (cursor < visible.length) {
-        rafId = requestAnimationFrame(processChunk);
-      } else {
-        console.log(
-          `[AircraftLayer] render complete — ${visible.length} entities`,
-        );
-        const v = viewerRef.current;
-        if (v && !v.isDestroyed()) {
-          cullEntities(v, ds, trackedIcaoRef.current);
-        }
-      }
-    };
-
-    if (visible.length > 0) {
-      rafId = requestAnimationFrame(processChunk);
-    }
-
-    return (): void => {
-      cancelled = true;
-      cancelAnimationFrame(rafId);
-    };
-  }, [aircraft, filter]);
-
-  // Draw flight route polylines + airport markers.
-  // Uses CallbackProperty so polyline endpoints track the aircraft's
-  // interpolated position every frame instead of a stale snapshot.
-  useEffect(() => {
-    const routeDs = routeDsRef.current;
-    if (!routeDs) return;
-
-    routeDs.entities.removeAll();
-
-    if (!flightRoute || !trackedIcao) return;
-
-    const { departure, arrival } = flightRoute;
-    const depPos = Cartesian3.fromDegrees(departure.lon, departure.lat, 0);
-    const arrPos = Cartesian3.fromDegrees(arrival.lon, arrival.lat, 0);
-
-    const liveAc = aircraft.get(trackedIcao);
-    const fallbackPos = liveAc
-      ? Cartesian3.fromDegrees(liveAc.lon, liveAc.lat, liveAc.altitude_m)
-      : depPos;
-
-    const getAcPosition = (): Cartesian3 => {
-      const acDs = dataSourceRef.current;
-      if (acDs) {
-        const entity = acDs.entities.getById(trackedIcao);
-        if (entity?.position) {
-          const p = entity.position.getValue(JulianDate.now());
-          if (p) return p;
-        }
-      }
-      return fallbackPos;
-    };
-
-    routeDs.entities.suspendEvents();
-
-    // Departure → aircraft (green dashed)
-    routeDs.entities.add({
-      id: "route-dep-to-ac",
-      polyline: {
-        positions: new CallbackProperty(
-          () => [depPos, getAcPosition()],
-          false,
-        ) as never,
-        width: 2,
-        material: new PolylineDashMaterialProperty({
-          color: ROUTE_DEP_COLOR,
-          dashLength: 16,
-        }),
-        arcType: ArcType.GEODESIC,
-        clampToGround: false,
-      },
-    });
-
-    // Aircraft → arrival (white dashed)
-    routeDs.entities.add({
-      id: "route-ac-to-arr",
-      polyline: {
-        positions: new CallbackProperty(
-          () => [getAcPosition(), arrPos],
-          false,
-        ) as never,
-        width: 2,
-        material: new PolylineDashMaterialProperty({
-          color: ROUTE_ARR_COLOR,
-          dashLength: 16,
-        }),
-        arcType: ArcType.GEODESIC,
-        clampToGround: false,
-      },
-    });
-
-    // Departure airport marker
-    routeDs.entities.add({
-      id: "airport-dep",
-      position: depPos,
-      point: {
-        pixelSize: 8,
-        color: AIRPORT_COLOR,
-        outlineColor: Color.BLACK,
-        outlineWidth: 1,
-      },
-      label: {
-        text: departure.iata,
-        font: "bold 13px monospace",
-        fillColor: AIRPORT_COLOR,
-        outlineColor: Color.BLACK,
-        outlineWidth: 2,
-        style: 2,
-        verticalOrigin: VerticalOrigin.BOTTOM,
-        horizontalOrigin: HorizontalOrigin.CENTER,
-        pixelOffset: { x: 0, y: -10 } as never,
-      },
-    });
-
-    // Arrival airport marker
-    routeDs.entities.add({
-      id: "airport-arr",
-      position: arrPos,
-      point: {
-        pixelSize: 8,
-        color: AIRPORT_COLOR,
-        outlineColor: Color.BLACK,
-        outlineWidth: 1,
-      },
-      label: {
-        text: arrival.iata,
-        font: "bold 13px monospace",
-        fillColor: AIRPORT_COLOR,
-        outlineColor: Color.BLACK,
-        outlineWidth: 2,
-        style: 2,
-        verticalOrigin: VerticalOrigin.BOTTOM,
-        horizontalOrigin: HorizontalOrigin.CENTER,
-        pixelOffset: { x: 0, y: -10 } as never,
-      },
-    });
-
-    routeDs.entities.resumeEvents();
-  }, [flightRoute, trackedIcao, aircraft]);
-
-  // ── Render IMM-EKF predicted trajectories ───────────────────
-  useEffect(() => {
-    const predDs = predDsRef.current;
-    if (!predDs) return;
-
-    predDs.entities.removeAll();
-
-    if (predictions.size === 0) return;
-
-    predDs.entities.suspendEvents();
-
-    for (const [icao, pred] of predictions) {
-      if (pred.points.length < 2) continue;
-
-      // Only show predictions for military aircraft currently visible
-      const ac = aircraft.get(icao);
-      if (!ac || !ac.is_military || !filter.showMilitary) continue;
-
-      // Build the predicted trajectory polyline
-      const positions = pred.points.map((p) =>
-        Cartesian3.fromDegrees(p.lon, p.lat, p.alt_m),
-      );
-
-      // Prepend current aircraft position for continuity
-      const acPos = Cartesian3.fromDegrees(ac.lon, ac.lat, ac.altitude_m);
-      positions.unshift(acPos);
-
-      // Predicted path: orange dashed, fading with distance
-      predDs.entities.add({
-        id: `pred-path-${icao}`,
-        polyline: {
-          positions,
-          width: 2,
-          material: new PolylineDashMaterialProperty({
-            color: PREDICTION_COLOR,
-            dashLength: 12,
-          }),
-          arcType: ArcType.GEODESIC,
-          clampToGround: false,
-        },
-      });
-
-      // Uncertainty corridor: semi-transparent wider polyline
-      // Use only every 4th point for the corridor to avoid too many entities
-      for (let i = 0; i < pred.points.length; i += 4) {
-        const p = pred.points[i];
-        if (p.sigma_xy_m < 500) continue; // Skip tiny uncertainties
-
-        const corridorCenter = Cartesian3.fromDegrees(p.lon, p.lat, p.alt_m);
-        const alpha = Math.max(0.03, 0.15 - (i / pred.points.length) * 0.12);
-
-        predDs.entities.add({
-          id: `pred-unc-${icao}-${i}`,
-          position: corridorCenter,
-          ellipse: {
-            semiMajorAxis: p.sigma_xy_m,
-            semiMinorAxis: p.sigma_xy_m,
-            height: p.alt_m,
-            material: PREDICTION_COLOR.withAlpha(alpha),
-            outline: false,
-          } as never,
-        });
-      }
-
-      // Pattern label near the aircraft
-      const label = patternLabel(pred.pattern);
-      if (label) {
-        predDs.entities.add({
-          id: `pred-label-${icao}`,
-          position: acPos,
-          label: {
-            text: label,
-            font: PATTERN_LABEL_FONT,
-            fillColor: PREDICTION_COLOR,
-            outlineColor: Color.BLACK,
-            outlineWidth: 2,
-            style: 2,
-            verticalOrigin: VerticalOrigin.BOTTOM,
-            horizontalOrigin: HorizontalOrigin.CENTER,
-            pixelOffset: { x: 0, y: -18 } as never,
-            scaleByDistance: new NearFarScalar(5_000, 1.0, 500_000, 0.0),
-          },
-        });
-      }
-    }
-
-    predDs.entities.resumeEvents();
-  }, [predictions, aircraft, filter]);
+  useAircraftBillboards(
+    dataSourceRef,
+    aircraft,
+    filter,
+    viewerRef,
+    trackedIcaoRef,
+  );
+  useFlightRoute(routeDsRef, dataSourceRef, flightRoute, trackedIcao, aircraft);
+  usePredictions(predDsRef, predictions, aircraft, filter);
 
   return null;
 }
