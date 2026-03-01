@@ -25,28 +25,11 @@ import { CameraInfo } from "./components/HUD/CameraInfo";
 import { useAppState } from "./hooks/useAppState";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 
-function DebugSection({
-  n,
-  children,
-}: {
-  n: number;
-  children: React.ReactNode;
-}): React.ReactElement {
-  return (
-    <div className="relative">
-      <span className="absolute -left-1 -top-1 z-50 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-bold text-white shadow">
-        {n}
-      </span>
-      {children}
-    </div>
-  );
-}
-
 export function App(): React.ReactElement {
   const state = useAppState();
 
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentTime] = useState(() => new Date());
 
   useKeyboardShortcuts({
@@ -58,7 +41,7 @@ export function App(): React.ReactElement {
         document.documentElement.requestFullscreen();
       }
     }, []),
-    onToggleSidebar: useCallback(() => setSidebarHidden((h) => !h), []),
+    onToggleSidebar: useCallback(() => setSidebarOpen((h) => !h), []),
   });
 
   useEffect(() => {
@@ -80,8 +63,11 @@ export function App(): React.ReactElement {
     [state.setSelectedCamera],
   );
 
+  const showSidebar = !isFullscreen && sidebarOpen;
+
   return (
-    <div className="relative w-full h-full">
+    <div className="relative w-screen h-screen overflow-hidden bg-black">
+      {/* Globe fills everything */}
       <Globe
         aircraft={state.aircraft}
         filter={state.aircraftFilter}
@@ -98,106 +84,107 @@ export function App(): React.ReactElement {
         cameras={state.cameras}
         cameraFilter={state.cameraFilter}
         onSelectCamera={state.setSelectedCamera}
+        onViewportChange={state.setViewportBbox}
         shaderMode={state.shaderMode}
       />
 
-      {!isFullscreen && !sidebarHidden && (
-        <Sidebar>
-          <div className="space-y-4">
-            <DebugSection n={1}>
-              <ConnectionStatus status={state.status} />
-            </DebugSection>
-            <DebugSection n={2}>
-              <AircraftCounter
-                total={state.totalCount}
-                military={state.militaryCount}
-                civilian={state.civilianCount}
-              />
-            </DebugSection>
-            <DebugSection n={3}>
-              <AircraftFilters
-                filter={state.aircraftFilter}
-                onFilterChange={state.setAircraftFilter}
-              />
-            </DebugSection>
-            <DebugSection n={4}>
-              <SatelliteCounter
-                total={state.satelliteTotalCount}
-                categoryCounts={state.satelliteCategoryCounts}
-              />
-            </DebugSection>
-            <DebugSection n={5}>
-              <SatelliteFilters
-                filter={state.satelliteFilter}
-                onFilterChange={state.setSatelliteFilter}
-              />
-            </DebugSection>
-            <DebugSection n={6}>
-              <TrafficControls
-                filter={state.trafficFilter}
-                onFilterChange={state.setTrafficFilter}
-              />
-            </DebugSection>
-            <DebugSection n={7}>
-              <CameraFilters
-                filter={state.cameraFilter}
-                cameras={state.cameras}
-                onFilterChange={state.setCameraFilter}
-              />
-            </DebugSection>
-          </div>
+      {/* Sidebar */}
+      {showSidebar && (
+        <Sidebar onCollapse={() => setSidebarOpen(false)}>
+          <ConnectionStatus status={state.status} />
+          <AircraftCounter
+            total={state.totalCount}
+            military={state.militaryCount}
+            civilian={state.civilianCount}
+          />
+          <AircraftFilters
+            filter={state.aircraftFilter}
+            onFilterChange={state.setAircraftFilter}
+          />
+          <SatelliteCounter
+            total={state.satelliteTotalCount}
+            categoryCounts={state.satelliteCategoryCounts}
+          />
+          <SatelliteFilters
+            filter={state.satelliteFilter}
+            onFilterChange={state.setSatelliteFilter}
+          />
+          <TrafficControls
+            filter={state.trafficFilter}
+            onFilterChange={state.setTrafficFilter}
+          />
+          <CameraFilters
+            filter={state.cameraFilter}
+            cameras={state.cameras}
+            onFilterChange={state.setCameraFilter}
+          />
         </Sidebar>
       )}
 
-      <DebugSection n={8}>
-        <ShaderControls
-          currentMode={state.shaderMode}
-          onModeChange={state.setShaderMode}
-        />
-      </DebugSection>
-      {state.shaderMode === "nightVision" && (
-        <DebugSection n={9}>
-          <NvgHud />
-        </DebugSection>
-      )}
-      {state.shaderMode === "flir" && (
-        <DebugSection n={9}>
-          <FlirHud />
-        </DebugSection>
-      )}
-      {state.shaderMode === "crt" && (
-        <DebugSection n={9}>
-          <CrtHud />
-        </DebugSection>
+      {/* Expand sidebar tab when collapsed */}
+      {!isFullscreen && !sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="fixed top-3 left-3 z-30 flex h-8 w-8 items-center justify-center rounded-md bg-black/60 text-zinc-400 backdrop-blur-md border border-zinc-700/40 hover:text-zinc-100 hover:border-zinc-500/60 transition-all"
+          aria-label="Open sidebar"
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 5l7 7-7 7"
+            />
+          </svg>
+        </button>
       )}
 
-      <DebugSection n={10}>
-        <Minimap viewCenter={null} viewAltitude={0} />
-      </DebugSection>
-      <DebugSection n={11}>
-        <Timeline currentTime={currentTime} isLive={true} />
-      </DebugSection>
-      <DebugSection n={12}>
-        <CursorCoords lat={null} lon={null} altitude={null} />
-      </DebugSection>
-      <DebugSection n={13}>
-        <CameraInfo altitude={0} heading={0} pitch={0} />
-      </DebugSection>
-      <DebugSection n={14}>
-        <AlertSystem aircraft={state.aircraft} satellites={state.satellites} />
-      </DebugSection>
+      {/* Top bar: Search + Camera info */}
+      <SearchBar
+        aircraft={state.aircraft}
+        satellites={state.satellites}
+        cameras={state.cameras}
+        onSelectAircraft={state.setSelectedAircraft}
+        onSelectSatellite={state.setSelectedSatellite}
+        onSelectCamera={state.setSelectedCamera}
+        sidebarOpen={showSidebar}
+      />
+      <CameraInfo altitude={0} heading={0} pitch={0} />
 
-      <DebugSection n={15}>
-        <SearchBar
-          aircraft={state.aircraft}
-          satellites={state.satellites}
-          cameras={state.cameras}
-          onSelectAircraft={state.setSelectedAircraft}
-          onSelectSatellite={state.setSelectedSatellite}
-          onSelectCamera={state.setSelectedCamera}
-        />
-      </DebugSection>
+      {/* Right side: Alerts */}
+      <AlertSystem aircraft={state.aircraft} satellites={state.satellites} />
 
+      {/* Shader HUDs (fullscreen overlays) */}
+      {state.shaderMode === "nightVision" && <NvgHud />}
+      {state.shaderMode === "flir" && <FlirHud />}
+      {state.shaderMode === "crt" && <CrtHud />}
+
+      {/* Bottom zone: above timeline */}
+      <CursorCoords
+        lat={null}
+        lon={null}
+        altitude={null}
+        sidebarOpen={showSidebar}
+      />
+      <Minimap viewCenter={null} viewAltitude={0} />
+      <ShaderControls
+        currentMode={state.shaderMode}
+        onModeChange={state.setShaderMode}
+      />
+
+      {/* Bottom bar: Timeline */}
+      <Timeline
+        currentTime={currentTime}
+        isLive={true}
+        sidebarOpen={showSidebar}
+      />
+
+      {/* Popups & Tooltips (highest z) */}
       <AircraftTooltip
         aircraft={state.hoveredAircraft}
         screenX={state.hoverPos.x}
