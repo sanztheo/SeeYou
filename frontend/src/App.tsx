@@ -116,6 +116,7 @@ export function App(): React.ReactElement {
           <CameraFilters
             filter={state.cameraFilter}
             cameras={state.cameras}
+            progress={state.cameraProgress}
             onFilterChange={state.setCameraFilter}
           />
         </Sidebar>
