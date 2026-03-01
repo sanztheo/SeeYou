@@ -16,7 +16,7 @@ export function SatelliteCounter({
       <div className="mb-2 font-mono text-[10px] font-medium uppercase tracking-widest text-zinc-500">
         Satellites
       </div>
-      <div className="grid grid-cols-4 gap-1">
+      <div className="grid grid-cols-3 gap-x-1 gap-y-1.5">
         <Stat value={total} label="Total" color="text-zinc-100" />
         <Stat
           value={categoryCounts.Station}
@@ -24,14 +24,39 @@ export function SatelliteCounter({
           color="text-amber-400"
         />
         <Stat
+          value={categoryCounts.Starlink}
+          label="Starlink"
+          color="text-cyan-400"
+        />
+        <Stat
+          value={categoryCounts.Communication}
+          label="Comm"
+          color="text-violet-400"
+        />
+        <Stat
           value={categoryCounts.Military}
           label="Mil"
           color="text-rose-400"
         />
         <Stat
-          value={categoryCounts.Starlink}
-          label="Starlink"
-          color="text-cyan-400"
+          value={categoryCounts.Weather}
+          label="Weather"
+          color="text-emerald-400"
+        />
+        <Stat
+          value={categoryCounts.Navigation}
+          label="Nav"
+          color="text-blue-400"
+        />
+        <Stat
+          value={categoryCounts.Science}
+          label="Science"
+          color="text-orange-400"
+        />
+        <Stat
+          value={categoryCounts.Other}
+          label="Other"
+          color="text-zinc-400"
         />
       </div>
     </div>
