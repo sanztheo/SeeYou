@@ -18,6 +18,16 @@ import { WeatherLayer } from "../Weather/WeatherLayer";
 import { WindParticleLayer } from "../Weather/WindParticleLayer";
 import { EventLayer } from "../Events/EventLayer";
 import { MetarLayer } from "../Aviation/MetarLayer";
+import { SubmarineCableLayer } from "../Cables/SubmarineCableLayer";
+import { SeismicLayer } from "../Seismic/SeismicLayer";
+import { FireLayer } from "../Fires/FireLayer";
+import { GdeltLayer } from "../Gdelt/GdeltLayer";
+import { MilitaryBasesLayer } from "../Military/MilitaryBasesLayer";
+import { NuclearSitesLayer } from "../Nuclear/NuclearSitesLayer";
+import { MaritimeLayer } from "../Maritime/MaritimeLayer";
+import { CyberThreatLayer } from "../Cyber/CyberThreatLayer";
+import { SpaceWeatherLayer } from "../SpaceWeather/SpaceWeatherLayer";
+import { ConvergenceAlertLayer } from "../Convergence/ConvergenceAlertLayer";
 import { useViewerCallbacks } from "../../hooks/useViewerCallbacks";
 import type { CameraState, CursorState } from "../../hooks/useViewerCallbacks";
 import type {
@@ -38,6 +48,20 @@ import type {
 import type { NaturalEvent, EventFilter } from "../../types/events";
 import type { MetarStation, MetarFilter } from "../../types/metar";
 import type { BBox } from "../../services/cameraService";
+import type {
+  SubmarineCable,
+  LandingPoint,
+  CablesFilter,
+} from "../../types/cables";
+import type { Earthquake, SeismicFilter } from "../../types/seismic";
+import type { FireHotspot, FiresFilter } from "../../types/fires";
+import type { GdeltEvent, GdeltFilter } from "../../types/gdelt";
+import type { MilitaryBase, MilitaryFilter } from "../../types/military";
+import type { NuclearSite, NuclearFilter } from "../../types/nuclear";
+import type { Vessel, MaritimeFilter } from "../../types/maritime";
+import type { CyberThreat, CyberFilter } from "../../types/cyber";
+import type { AuroraPoint, SpaceWeatherFilter } from "../../types/spaceWeather";
+import type { ConvergenceZone } from "../Convergence/ConvergenceAlertLayer";
 
 const RAD2DEG = 180 / Math.PI;
 const EMPTY_PREDICTIONS = new Map<string, PredictedTrajectory>();
@@ -84,6 +108,38 @@ interface GlobeProps {
   metarFilter?: MetarFilter;
   onSelectMetar?: (station: MetarStation) => void;
 
+  // Intelligence layers
+  cables?: SubmarineCable[];
+  landingPoints?: LandingPoint[];
+  cablesFilter?: CablesFilter;
+
+  earthquakes?: Earthquake[];
+  seismicFilter?: SeismicFilter;
+
+  fires?: FireHotspot[];
+  firesFilter?: FiresFilter;
+
+  gdeltEvents?: GdeltEvent[];
+  gdeltFilter?: GdeltFilter;
+
+  militaryBases?: MilitaryBase[];
+  militaryFilter?: MilitaryFilter;
+
+  nuclearSites?: NuclearSite[];
+  nuclearFilter?: NuclearFilter;
+
+  vessels?: Vessel[];
+  maritimeFilter?: MaritimeFilter;
+
+  cyberThreats?: CyberThreat[];
+  cyberFilter?: CyberFilter;
+
+  aurora?: AuroraPoint[];
+  kpIndex?: number;
+  spaceWeatherFilter?: SpaceWeatherFilter;
+
+  convergenceZones?: ConvergenceZone[];
+
   onViewportChange?: (bbox: BBox) => void;
 
   onCameraChange?: (state: CameraState) => void;
@@ -123,6 +179,27 @@ export function Globe({
   metarStations,
   metarFilter,
   onSelectMetar,
+  cables,
+  landingPoints,
+  cablesFilter,
+  earthquakes,
+  seismicFilter,
+  fires,
+  firesFilter,
+  gdeltEvents,
+  gdeltFilter,
+  militaryBases,
+  militaryFilter,
+  nuclearSites,
+  nuclearFilter,
+  vessels,
+  maritimeFilter,
+  cyberThreats,
+  cyberFilter,
+  aurora,
+  kpIndex,
+  spaceWeatherFilter,
+  convergenceZones,
   onViewportChange,
   onCameraChange,
   onCursorMove,
@@ -314,6 +391,54 @@ export function Globe({
           filter={metarFilter}
           onSelect={onSelectMetar}
         />
+      )}
+
+      {cablesFilter?.enabled && cables && cables.length > 0 && (
+        <SubmarineCableLayer
+          cables={cables}
+          landingPoints={landingPoints ?? []}
+          filter={cablesFilter}
+        />
+      )}
+
+      {seismicFilter?.enabled && earthquakes && earthquakes.length > 0 && (
+        <SeismicLayer earthquakes={earthquakes} filter={seismicFilter} />
+      )}
+
+      {firesFilter?.enabled && fires && fires.length > 0 && (
+        <FireLayer fires={fires} filter={firesFilter} />
+      )}
+
+      {gdeltFilter?.enabled && gdeltEvents && gdeltEvents.length > 0 && (
+        <GdeltLayer events={gdeltEvents} filter={gdeltFilter} />
+      )}
+
+      {militaryFilter?.enabled && militaryBases && militaryBases.length > 0 && (
+        <MilitaryBasesLayer bases={militaryBases} filter={militaryFilter} />
+      )}
+
+      {nuclearFilter?.enabled && nuclearSites && nuclearSites.length > 0 && (
+        <NuclearSitesLayer sites={nuclearSites} filter={nuclearFilter} />
+      )}
+
+      {maritimeFilter?.enabled && vessels && vessels.length > 0 && (
+        <MaritimeLayer vessels={vessels} filter={maritimeFilter} />
+      )}
+
+      {cyberFilter?.enabled && cyberThreats && cyberThreats.length > 0 && (
+        <CyberThreatLayer threats={cyberThreats} filter={cyberFilter} />
+      )}
+
+      {spaceWeatherFilter?.enabled && aurora && aurora.length > 0 && (
+        <SpaceWeatherLayer
+          aurora={aurora}
+          kpIndex={kpIndex ?? 0}
+          filter={spaceWeatherFilter}
+        />
+      )}
+
+      {convergenceZones && convergenceZones.length > 0 && (
+        <ConvergenceAlertLayer zones={convergenceZones} enabled={true} />
       )}
 
       <CityLabelsLayer />

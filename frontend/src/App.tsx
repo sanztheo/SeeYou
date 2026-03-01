@@ -16,6 +16,7 @@ import { MetarFilters } from "./components/Sidebar/MetarFilters";
 import { MetarPopup } from "./components/Aviation/MetarPopup";
 import { EventFilters } from "./components/Sidebar/EventFilters";
 import { EventPopup } from "./components/Events/EventPopup";
+import { IntelligenceFilters } from "./components/Sidebar/IntelligenceFilters";
 import { CameraPlayer } from "./components/Camera/CameraPlayer";
 import { Minimap } from "./components/Minimap/Minimap";
 import { Timeline } from "./components/Timeline/Timeline";
@@ -145,6 +146,27 @@ export function App(): React.ReactElement {
         metarStations={state.metarStations}
         metarFilter={state.metarFilter}
         onSelectMetar={state.setSelectedMetar}
+        cables={state.cables}
+        landingPoints={state.landingPoints}
+        cablesFilter={state.cablesFilter}
+        earthquakes={state.earthquakes}
+        seismicFilter={state.seismicFilter}
+        fires={state.fires}
+        firesFilter={state.firesFilter}
+        gdeltEvents={state.gdeltEvents}
+        gdeltFilter={state.gdeltFilter}
+        militaryBases={state.militaryBases}
+        militaryFilter={state.militaryFilter}
+        nuclearSites={state.nuclearSites}
+        nuclearFilter={state.nuclearFilter}
+        vessels={state.vessels}
+        maritimeFilter={state.maritimeFilter}
+        cyberThreats={state.cyberThreats}
+        cyberFilter={state.cyberFilter}
+        aurora={state.aurora}
+        kpIndex={state.kpIndex}
+        spaceWeatherFilter={state.spaceWeatherFilter}
+        convergenceZones={state.convergenceZones}
         onViewportChange={state.setViewportBbox}
         onCameraChange={setCameraState}
         onCursorMove={setCursorState}
@@ -200,6 +222,31 @@ export function App(): React.ReactElement {
             filter={state.eventFilter}
             events={state.events}
             onFilterChange={state.setEventFilter}
+          />
+          <IntelligenceFilters
+            cablesFilter={state.cablesFilter}
+            onCablesFilterChange={state.setCablesFilter}
+            seismicFilter={state.seismicFilter}
+            onSeismicFilterChange={state.setSeismicFilter}
+            firesFilter={state.firesFilter}
+            onFiresFilterChange={state.setFiresFilter}
+            gdeltFilter={state.gdeltFilter}
+            onGdeltFilterChange={state.setGdeltFilter}
+            militaryFilter={state.militaryFilter}
+            onMilitaryFilterChange={state.setMilitaryFilter}
+            nuclearFilter={state.nuclearFilter}
+            onNuclearFilterChange={state.setNuclearFilter}
+            maritimeFilter={state.maritimeFilter}
+            onMaritimeFilterChange={state.setMaritimeFilter}
+            cyberFilter={state.cyberFilter}
+            onCyberFilterChange={state.setCyberFilter}
+            spaceWeatherFilter={state.spaceWeatherFilter}
+            onSpaceWeatherFilterChange={state.setSpaceWeatherFilter}
+            earthquakeCount={state.earthquakes.length}
+            fireCount={state.fires.length}
+            vesselCount={state.vessels.length}
+            threatCount={state.cyberThreats.length}
+            kpIndex={state.kpIndex}
           />
         </Sidebar>
       )}
