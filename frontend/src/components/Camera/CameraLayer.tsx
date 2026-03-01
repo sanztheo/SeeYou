@@ -68,7 +68,12 @@ export function CameraLayer({
   const getVisibleCameras = useCallback((): Camera[] => {
     if (!filter.enabled) return [];
     const hasCityFilter = filter.cities.size > 0;
-    return cameras.filter((c) => !hasCityFilter || filter.cities.has(c.city));
+    const hasSourceFilter = filter.sources.size > 0;
+    return cameras.filter(
+      (c) =>
+        (!hasCityFilter || filter.cities.has(c.city)) &&
+        (!hasSourceFilter || filter.sources.has(c.source)),
+    );
   }, [cameras, filter]);
 
   useEffect(() => {

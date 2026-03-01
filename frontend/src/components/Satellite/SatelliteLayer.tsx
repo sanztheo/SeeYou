@@ -99,7 +99,6 @@ export function SatelliteLayer({
       }
     }, ScreenSpaceEventType.MOUSE_MOVE);
 
-    viewer.camera.percentageChanged = 0.1;
     const onCameraChange = (): void => {
       if (viewer.isDestroyed() || !ds) return;
       cullEntities(viewer, ds);
