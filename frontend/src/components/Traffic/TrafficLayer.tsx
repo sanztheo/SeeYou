@@ -1,11 +1,16 @@
 import { useEffect, useRef, useMemo } from "react";
 import { useCesium } from "resium";
-import { CustomDataSource, Cartesian3, Color } from "cesium";
+import {
+  CustomDataSource,
+  PointPrimitiveCollection,
+  Cartesian3,
+  Color,
+} from "cesium";
 import type { Road, TrafficFilter, RoadType } from "../../types/traffic";
 import { ParticleEngine } from "./ParticleEngine";
 import { useTrafficLoader } from "./useTrafficLoader";
 import { typeVisible } from "./trafficUtils";
-import { ROAD_COLOR, ROAD_WIDTH, MAX_ALT } from "./trafficConstants";
+import { ROAD_COLOR, ROAD_WIDTH } from "./trafficConstants";
 
 interface TrafficLayerProps {
   filter: TrafficFilter;
@@ -23,7 +28,7 @@ export function TrafficLayer({
   );
 
   const roadsDsRef = useRef<CustomDataSource | null>(null);
-  const particleDsRef = useRef<CustomDataSource | null>(null);
+  const pointCollRef = useRef<PointPrimitiveCollection | null>(null);
   const engineRef = useRef<ParticleEngine | null>(null);
   const animRef = useRef(0);
   const renderedKeyRef = useRef("");
@@ -52,13 +57,15 @@ export function TrafficLayer({
     if (!viewer) return;
 
     const rds = new CustomDataSource("traffic-roads");
-    const pds = new CustomDataSource("traffic-particles");
     viewer.dataSources.add(rds);
-    viewer.dataSources.add(pds);
     roadsDsRef.current = rds;
-    particleDsRef.current = pds;
 
-    const engine = new ParticleEngine(pds);
+    const pointColl = viewer.scene.primitives.add(
+      new PointPrimitiveCollection(),
+    ) as PointPrimitiveCollection;
+    pointCollRef.current = pointColl;
+
+    const engine = new ParticleEngine(pointColl);
     engineRef.current = engine;
 
     let prev = performance.now();
@@ -75,10 +82,10 @@ export function TrafficLayer({
       engine.clear();
       if (!viewer.isDestroyed()) {
         viewer.dataSources.remove(rds, true);
-        viewer.dataSources.remove(pds, true);
+        viewer.scene.primitives.remove(pointColl);
       }
       roadsDsRef.current = null;
-      particleDsRef.current = null;
+      pointCollRef.current = null;
       engineRef.current = null;
     };
   }, [viewer]);
@@ -86,15 +93,18 @@ export function TrafficLayer({
   useEffect(() => {
     const rds = roadsDsRef.current;
     const engine = engineRef.current;
-    if (!rds || !engine) return;
+    const pointColl = pointCollRef.current;
+    if (!rds || !engine || !pointColl) return;
 
     if (aboveMaxAlt || !filter.enabled) {
       pausedRef.current = true;
-      setAllShow(rds, false);
-      setAllShow(particleDsRef.current, false);
+      rds.show = false;
+      pointColl.show = false;
       return;
     }
     pausedRef.current = false;
+    rds.show = true;
+    pointColl.show = true;
 
     const key =
       filteredRoads.length +
@@ -102,23 +112,13 @@ export function TrafficLayer({
       (filteredRoads[0]?.id ?? "") +
       "_" +
       (filteredRoads[filteredRoads.length - 1]?.id ?? "");
-    if (key === renderedKeyRef.current) {
-      setAllShow(rds, true);
-      setAllShow(particleDsRef.current, true);
-      return;
-    }
+    if (key === renderedKeyRef.current) return;
     renderedKeyRef.current = key;
 
     renderRoads(filteredRoads, rds, engine);
   }, [filteredRoads, filter.enabled, aboveMaxAlt]);
 
   return null;
-}
-
-function setAllShow(ds: CustomDataSource | null, show: boolean): void {
-  if (!ds) return;
-  const vals = ds.entities.values;
-  for (let i = 0; i < vals.length; i++) vals[i].show = show;
 }
 
 function renderRoads(

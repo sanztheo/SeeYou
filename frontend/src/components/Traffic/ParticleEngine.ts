@@ -1,14 +1,13 @@
 import {
-  CustomDataSource,
+  PointPrimitiveCollection,
   Cartesian3,
   Color,
   NearFarScalar,
-  ConstantPositionProperty,
 } from "cesium";
 import type { Road, RoadType } from "../../types/traffic";
 
 interface Particle {
-  id: string;
+  point: ReturnType<PointPrimitiveCollection["add"]>;
   progress: number;
   speed: number;
   total: number;
@@ -33,6 +32,7 @@ const SPACING: Record<RoadType, number> = {
 };
 
 const MAX_PARTICLES = 2000;
+const PARTICLE_SCALE = new NearFarScalar(1_000, 1.2, 50_000, 0.3);
 
 function haversine(
   lat1: number,
@@ -90,12 +90,12 @@ function lerp(
 }
 
 export class ParticleEngine {
-  private ds: CustomDataSource;
+  private collection: PointPrimitiveCollection;
   private particles: Particle[] = [];
   private scratch = new Cartesian3();
 
-  constructor(dataSource: CustomDataSource) {
-    this.ds = dataSource;
+  constructor(collection: PointPrimitiveCollection) {
+    this.collection = collection;
   }
 
   updateRoads(roads: Road[], hour: number): void {
@@ -128,22 +128,18 @@ export class ParticleEngine {
       const base = (BASE_SPEED[road.road_type] ?? 10) * sf;
 
       for (let p = 0; p < n && count < MAX_PARTICLES; p++) {
-        const id = `tp_${ri}_${p}`;
         const progress = (total / n) * p;
         const pos = lerp(road.nodes, segs, progress);
 
-        this.ds.entities.add({
-          id,
+        const point = this.collection.add({
           position: Cartesian3.fromDegrees(pos.lon, pos.lat),
-          point: {
-            pixelSize: 3,
-            color,
-            scaleByDistance: new NearFarScalar(1_000, 1.2, 50_000, 0.3),
-          },
+          pixelSize: 3,
+          color,
+          scaleByDistance: PARTICLE_SCALE,
         });
 
         this.particles.push({
-          id,
+          point,
           progress,
           speed: base * (0.8 + Math.random() * 0.4),
           total,
@@ -161,18 +157,13 @@ export class ParticleEngine {
       if (p.progress >= p.total) p.progress -= p.total;
 
       const pos = lerp(p.nodes, p.segments, p.progress);
-      const ent = this.ds.entities.getById(p.id);
-      if (ent) {
-        Cartesian3.fromDegrees(pos.lon, pos.lat, 0, undefined, this.scratch);
-        (ent.position as unknown as ConstantPositionProperty).setValue(
-          this.scratch,
-        );
-      }
+      Cartesian3.fromDegrees(pos.lon, pos.lat, 0, undefined, this.scratch);
+      p.point.position = this.scratch;
     }
   }
 
   clear(): void {
-    this.ds.entities.removeAll();
+    this.collection.removeAll();
     this.particles = [];
   }
 
