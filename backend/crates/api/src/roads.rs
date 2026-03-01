@@ -13,6 +13,16 @@ pub struct RoadsQuery {
     pub west: f64,
     pub north: f64,
     pub east: f64,
+    pub offset: Option<usize>,
+    pub limit: Option<usize>,
+}
+
+fn paginate(roads: Vec<Road>, offset: Option<usize>, limit: Option<usize>) -> (Vec<Road>, usize) {
+    let total = roads.len();
+    let off = offset.unwrap_or(0).min(total);
+    let lim = limit.unwrap_or(total);
+    let page: Vec<Road> = roads.into_iter().skip(off).take(lim).collect();
+    (page, total)
 }
 
 pub async fn get_roads(
@@ -30,8 +40,10 @@ pub async fn get_roads(
         cache::roads::get_roads::<Road>(&pool, bbox.south, bbox.west, bbox.north, bbox.east).await
     {
         debug!(count = cached.len(), "serving roads from cache");
+        let (page, total) = paginate(cached, q.offset, q.limit);
         return Ok(Json(RoadsResponse {
-            roads: cached,
+            roads: page,
+            total,
             bbox,
         }));
     }
@@ -46,7 +58,8 @@ pub async fn get_roads(
                 error!(error = %e, "failed to cache roads");
             }
             debug!(count = roads.len(), "fetched roads from Overpass");
-            Ok(Json(RoadsResponse { roads, bbox }))
+            let (page, total) = paginate(roads, q.offset, q.limit);
+            Ok(Json(RoadsResponse { roads: page, total, bbox }))
         }
         Err(e) => {
             error!(error = %e, "Overpass request failed");

@@ -42,5 +42,6 @@ pub struct BoundingBox {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoadsResponse {
     pub roads: Vec<Road>,
+    pub total: usize,
     pub bbox: BoundingBox,
 }
