@@ -76,7 +76,7 @@ export function CameraPlayer({
     }
 
     setImgError(true);
-  }, [camera, imgError]);
+  }, [camera]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
