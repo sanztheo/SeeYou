@@ -15,14 +15,14 @@ pub enum SatelliteCategory {
 impl SatelliteCategory {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Station => "station",
-            Self::Starlink => "starlink",
-            Self::Communication => "communication",
-            Self::Military => "military",
-            Self::Weather => "weather",
-            Self::Navigation => "navigation",
-            Self::Science => "science",
-            Self::Other => "other",
+            Self::Station => "Station",
+            Self::Starlink => "Starlink",
+            Self::Communication => "Communication",
+            Self::Military => "Military",
+            Self::Weather => "Weather",
+            Self::Navigation => "Navigation",
+            Self::Science => "Science",
+            Self::Other => "Other",
         }
     }
 }

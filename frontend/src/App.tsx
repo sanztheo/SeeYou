@@ -25,6 +25,23 @@ import { CameraInfo } from "./components/HUD/CameraInfo";
 import { useAppState } from "./hooks/useAppState";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 
+function DebugSection({
+  n,
+  children,
+}: {
+  n: number;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <div className="relative">
+      <span className="absolute -left-1 -top-1 z-50 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-bold text-white shadow">
+        {n}
+      </span>
+      {children}
+    </div>
+  );
+}
+
 export function App(): React.ReactElement {
   const state = useAppState();
 
@@ -87,59 +104,99 @@ export function App(): React.ReactElement {
       {!isFullscreen && !sidebarHidden && (
         <Sidebar>
           <div className="space-y-4">
-            <ConnectionStatus status={state.status} />
-            <AircraftCounter
-              total={state.totalCount}
-              military={state.militaryCount}
-              civilian={state.civilianCount}
-            />
-            <AircraftFilters
-              filter={state.aircraftFilter}
-              onFilterChange={state.setAircraftFilter}
-            />
-            <SatelliteCounter
-              total={state.satelliteTotalCount}
-              categoryCounts={state.satelliteCategoryCounts}
-            />
-            <SatelliteFilters
-              filter={state.satelliteFilter}
-              onFilterChange={state.setSatelliteFilter}
-            />
-            <TrafficControls
-              filter={state.trafficFilter}
-              onFilterChange={state.setTrafficFilter}
-            />
-            <CameraFilters
-              filter={state.cameraFilter}
-              cameras={state.cameras}
-              onFilterChange={state.setCameraFilter}
-            />
+            <DebugSection n={1}>
+              <ConnectionStatus status={state.status} />
+            </DebugSection>
+            <DebugSection n={2}>
+              <AircraftCounter
+                total={state.totalCount}
+                military={state.militaryCount}
+                civilian={state.civilianCount}
+              />
+            </DebugSection>
+            <DebugSection n={3}>
+              <AircraftFilters
+                filter={state.aircraftFilter}
+                onFilterChange={state.setAircraftFilter}
+              />
+            </DebugSection>
+            <DebugSection n={4}>
+              <SatelliteCounter
+                total={state.satelliteTotalCount}
+                categoryCounts={state.satelliteCategoryCounts}
+              />
+            </DebugSection>
+            <DebugSection n={5}>
+              <SatelliteFilters
+                filter={state.satelliteFilter}
+                onFilterChange={state.setSatelliteFilter}
+              />
+            </DebugSection>
+            <DebugSection n={6}>
+              <TrafficControls
+                filter={state.trafficFilter}
+                onFilterChange={state.setTrafficFilter}
+              />
+            </DebugSection>
+            <DebugSection n={7}>
+              <CameraFilters
+                filter={state.cameraFilter}
+                cameras={state.cameras}
+                onFilterChange={state.setCameraFilter}
+              />
+            </DebugSection>
           </div>
         </Sidebar>
       )}
 
-      <ShaderControls
-        currentMode={state.shaderMode}
-        onModeChange={state.setShaderMode}
-      />
-      {state.shaderMode === "nightVision" && <NvgHud />}
-      {state.shaderMode === "flir" && <FlirHud />}
-      {state.shaderMode === "crt" && <CrtHud />}
+      <DebugSection n={8}>
+        <ShaderControls
+          currentMode={state.shaderMode}
+          onModeChange={state.setShaderMode}
+        />
+      </DebugSection>
+      {state.shaderMode === "nightVision" && (
+        <DebugSection n={9}>
+          <NvgHud />
+        </DebugSection>
+      )}
+      {state.shaderMode === "flir" && (
+        <DebugSection n={9}>
+          <FlirHud />
+        </DebugSection>
+      )}
+      {state.shaderMode === "crt" && (
+        <DebugSection n={9}>
+          <CrtHud />
+        </DebugSection>
+      )}
 
-      <Minimap viewCenter={null} viewAltitude={0} />
-      <Timeline currentTime={currentTime} isLive={true} />
-      <CursorCoords lat={null} lon={null} altitude={null} />
-      <CameraInfo altitude={0} heading={0} pitch={0} />
-      <AlertSystem aircraft={state.aircraft} satellites={state.satellites} />
+      <DebugSection n={10}>
+        <Minimap viewCenter={null} viewAltitude={0} />
+      </DebugSection>
+      <DebugSection n={11}>
+        <Timeline currentTime={currentTime} isLive={true} />
+      </DebugSection>
+      <DebugSection n={12}>
+        <CursorCoords lat={null} lon={null} altitude={null} />
+      </DebugSection>
+      <DebugSection n={13}>
+        <CameraInfo altitude={0} heading={0} pitch={0} />
+      </DebugSection>
+      <DebugSection n={14}>
+        <AlertSystem aircraft={state.aircraft} satellites={state.satellites} />
+      </DebugSection>
 
-      <SearchBar
-        aircraft={state.aircraft}
-        satellites={state.satellites}
-        cameras={state.cameras}
-        onSelectAircraft={state.setSelectedAircraft}
-        onSelectSatellite={state.setSelectedSatellite}
-        onSelectCamera={state.setSelectedCamera}
-      />
+      <DebugSection n={15}>
+        <SearchBar
+          aircraft={state.aircraft}
+          satellites={state.satellites}
+          cameras={state.cameras}
+          onSelectAircraft={state.setSelectedAircraft}
+          onSelectSatellite={state.setSelectedSatellite}
+          onSelectCamera={state.setSelectedCamera}
+        />
+      </DebugSection>
 
       <AircraftTooltip
         aircraft={state.hoveredAircraft}

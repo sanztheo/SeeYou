@@ -4,7 +4,7 @@ import type { Viewer } from "cesium";
 export const CRT_SHADER = /* glsl */ `
   uniform sampler2D colorTexture;
   uniform float u_time;
-  in vec2 v_textureCoordinates;
+  varying vec2 v_textureCoordinates;
 
   vec2 barrel(vec2 uv) {
     vec2 cc = uv - 0.5;
@@ -15,28 +15,23 @@ export const CRT_SHADER = /* glsl */ `
   void main() {
     vec2 uv = barrel(v_textureCoordinates);
 
-    // Black outside curved screen area
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
-      out_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+      gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
       return;
     }
 
-    // Chromatic aberration — shift R and B channels
     float ab = 0.0025;
-    float r = texture(colorTexture, uv + vec2( ab, 0.0)).r;
-    float g = texture(colorTexture, uv).g;
-    float b = texture(colorTexture, uv + vec2(-ab, 0.0)).b;
+    float r = texture2D(colorTexture, uv + vec2( ab, 0.0)).r;
+    float g = texture2D(colorTexture, uv).g;
+    float b = texture2D(colorTexture, uv + vec2(-ab, 0.0)).b;
     vec3 color = vec3(r, g, b);
 
-    // Horizontal scanlines
     float scan = sin(uv.y * 900.0 * 3.14159) * 0.5 + 0.5;
     color *= mix(0.72, 1.0, scan);
 
-    // Phosphor flicker
     float flicker = 1.0 + 0.025 * sin(u_time * 8.0);
     color *= flicker;
 
-    // Subtle RGB sub-pixel pattern
     float col = mod(gl_FragCoord.x, 3.0);
     vec3 mask = vec3(
       step(0.5, 1.0 - abs(col - 0.0)),
@@ -45,15 +40,13 @@ export const CRT_SHADER = /* glsl */ `
     );
     color *= mix(vec3(1.0), mask, 0.12);
 
-    // Warm CRT tint
     color *= vec3(1.05, 1.0, 0.92);
 
-    // Vignette
     vec2 d = uv - 0.5;
     float vig = 1.0 - dot(d, d) * 2.5;
     color *= clamp(vig, 0.0, 1.0);
 
-    out_FragColor = vec4(color, 1.0);
+    gl_FragColor = vec4(color, 1.0);
   }
 `;
 
