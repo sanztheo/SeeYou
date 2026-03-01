@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import Hls from "hls.js";
 import type { Camera } from "../../types/camera";
 import { getProxyUrl } from "../../services/cameraService";
 
@@ -18,6 +19,7 @@ export function CameraPlayer({
   const [position, setPosition] = useState({ x: 16, y: 16 });
   const dragOffset = useRef({ x: 0, y: 0 });
   const [imgError, setImgError] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const buildSrc = useCallback((cam: Camera): string => {
     const proxy = getProxyUrl(cam.stream_url);
@@ -40,6 +42,41 @@ export function CameraPlayer({
 
     return () => clearInterval(id);
   }, [camera, buildSrc]);
+
+  useEffect(() => {
+    if (!camera || camera.stream_type !== "Hls") return;
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    const src = getProxyUrl(camera.stream_url);
+
+    if (Hls.isSupported()) {
+      const hls = new Hls();
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          hls.destroy();
+          setImgError(true);
+        }
+      });
+      return () => hls.destroy();
+    }
+
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = src;
+      const onError = () => setImgError(true);
+      video.addEventListener("error", onError);
+      return () => {
+        video.removeEventListener("error", onError);
+        video.removeAttribute("src");
+        video.load();
+      };
+    }
+
+    setImgError(true);
+  }, [camera, imgError]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -118,9 +155,21 @@ export function CameraPlayer({
       {/* Stream */}
       <div className="relative w-full aspect-video bg-black flex items-center justify-center">
         {isHls ? (
-          <span className="text-xs text-gray-500 font-mono">
-            HLS not supported yet
-          </span>
+          <>
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              playsInline
+              className="w-full h-full object-contain"
+              style={{ display: imgError ? "none" : undefined }}
+            />
+            {imgError && (
+              <span className="text-xs text-red-400 font-mono">
+                Stream unavailable
+              </span>
+            )}
+          </>
         ) : imgError ? (
           <span className="text-xs text-red-400 font-mono">
             Stream unavailable

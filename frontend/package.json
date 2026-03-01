@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "cesium": "^1.138.0",
+    "hls.js": "^1.6.15",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "resium": "^1.19.4",
