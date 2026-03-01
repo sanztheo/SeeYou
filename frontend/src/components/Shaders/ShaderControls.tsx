@@ -25,7 +25,7 @@ export function ShaderControls({
   }, [onModeChange]);
 
   return (
-    <div className="fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-zinc-700/60 bg-black/75 px-2 py-1.5 shadow-2xl backdrop-blur-md">
+    <div className="fixed bottom-12 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-md border border-zinc-800/60 bg-zinc-950/70 p-1 shadow-lg shadow-black/30 backdrop-blur-xl">
       {SHADER_CONFIGS.map((cfg) => {
         const active = cfg.mode === currentMode;
         return (
@@ -33,32 +33,22 @@ export function ShaderControls({
             key={cfg.mode}
             onClick={() => onModeChange(cfg.mode)}
             title={cfg.description}
-            className={`
-              group relative flex items-center gap-2 rounded-md px-3 py-1.5
-              font-mono text-[11px] uppercase tracking-wider transition-all
-              ${
-                active
-                  ? "bg-emerald-950/60 text-emerald-400 shadow-inner shadow-emerald-900/40"
-                  : "text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300"
-              }
-            `}
+            className={`relative flex items-center gap-1.5 rounded px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider transition-all ${
+              active
+                ? "bg-emerald-500/15 text-emerald-400"
+                : "text-zinc-600 hover:bg-zinc-800/60 hover:text-zinc-400"
+            }`}
           >
             <kbd
-              className={`
-                inline-flex h-5 w-5 items-center justify-center rounded border text-[10px]
-                ${
-                  active
-                    ? "border-emerald-700/50 text-emerald-400"
-                    : "border-zinc-700 text-zinc-600 group-hover:text-zinc-400"
-                }
-              `}
+              className={`inline-flex h-4 w-4 items-center justify-center rounded border text-[9px] ${
+                active
+                  ? "border-emerald-500/30 text-emerald-400"
+                  : "border-zinc-700/50 text-zinc-700"
+              }`}
             >
               {cfg.shortcut}
             </kbd>
-            <span>{cfg.label}</span>
-            {active && (
-              <span className="absolute -top-0.5 right-1 h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
-            )}
+            <span className="hidden sm:inline">{cfg.label}</span>
           </button>
         );
       })}
