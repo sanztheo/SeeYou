@@ -6,6 +6,7 @@ export function typeVisible(f: TrafficFilter, t: RoadType): boolean {
   if (t === "Trunk") return f.showTrunk;
   if (t === "Primary") return f.showPrimary;
   if (t === "Secondary") return f.showSecondary;
+  if (t === "Tertiary") return f.showTertiary ?? false;
   return false;
 }
 

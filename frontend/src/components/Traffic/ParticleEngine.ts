@@ -1,4 +1,10 @@
-import { CustomDataSource, Cartesian3, Color, NearFarScalar } from "cesium";
+import {
+  CustomDataSource,
+  Cartesian3,
+  Color,
+  NearFarScalar,
+  ConstantPositionProperty,
+} from "cesium";
 import type { Road, RoadType } from "../../types/traffic";
 
 interface Particle {
@@ -86,6 +92,7 @@ function lerp(
 export class ParticleEngine {
   private ds: CustomDataSource;
   private particles: Particle[] = [];
+  private scratch = new Cartesian3();
 
   constructor(dataSource: CustomDataSource) {
     this.ds = dataSource;
@@ -156,9 +163,9 @@ export class ParticleEngine {
       const pos = lerp(p.nodes, p.segments, p.progress);
       const ent = this.ds.entities.getById(p.id);
       if (ent) {
-        (ent as Record<string, unknown>).position = Cartesian3.fromDegrees(
-          pos.lon,
-          pos.lat,
+        Cartesian3.fromDegrees(pos.lon, pos.lat, 0, undefined, this.scratch);
+        (ent.position as unknown as ConstantPositionProperty).setValue(
+          this.scratch,
         );
       }
     }

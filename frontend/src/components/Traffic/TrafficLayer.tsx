@@ -27,6 +27,7 @@ export function TrafficLayer({
   const engineRef = useRef<ParticleEngine | null>(null);
   const animRef = useRef(0);
   const renderedKeyRef = useRef("");
+  const pausedRef = useRef(false);
 
   useEffect(() => {
     onLoadingChange?.(loading, roadCount, progress.total);
@@ -37,7 +38,14 @@ export function TrafficLayer({
       filter.enabled
         ? roads.filter((r) => typeVisible(filter, r.road_type))
         : [],
-    [roads, filter],
+    [
+      roads,
+      filter.enabled,
+      filter.showMotorway,
+      filter.showTrunk,
+      filter.showPrimary,
+      filter.showSecondary,
+    ],
   );
 
   useEffect(() => {
@@ -57,7 +65,7 @@ export function TrafficLayer({
     const animate = (now: number): void => {
       const dt = Math.min((now - prev) / 1000, 0.1);
       prev = now;
-      engine.tick(dt);
+      if (!pausedRef.current) engine.tick(dt);
       animRef.current = requestAnimationFrame(animate);
     };
     animRef.current = requestAnimationFrame(animate);
@@ -81,12 +89,19 @@ export function TrafficLayer({
     if (!rds || !engine) return;
 
     if (aboveMaxAlt || !filter.enabled) {
+      pausedRef.current = true;
       setAllShow(rds, false);
       setAllShow(particleDsRef.current, false);
       return;
     }
+    pausedRef.current = false;
 
-    const key = filteredRoads.map((r) => r.id).join(",");
+    const key =
+      filteredRoads.length +
+      "_" +
+      (filteredRoads[0]?.id ?? "") +
+      "_" +
+      (filteredRoads[filteredRoads.length - 1]?.id ?? "");
     if (key === renderedKeyRef.current) {
       setAllShow(rds, true);
       setAllShow(particleDsRef.current, true);

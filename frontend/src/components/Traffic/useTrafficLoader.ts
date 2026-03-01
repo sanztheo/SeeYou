@@ -65,6 +65,7 @@ export function useTrafficLoader(
       signal,
     ).catch((err) => {
       loadingBboxRef.current = null;
+      lastKeyRef.current = "";
       if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("[Traffic] load error:", err);
       setLoading(false);
