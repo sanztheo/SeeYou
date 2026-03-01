@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { Viewer as ResiumViewer } from "resium";
 import {
   Viewer,
@@ -25,6 +25,7 @@ import { DEFAULT_SATELLITE_FILTER } from "../../types/satellite";
 import type { TrafficFilter, Road } from "../../types/traffic";
 import type { Camera, CameraFilter } from "../../types/camera";
 import type { ShaderMode } from "../../shaders/types";
+import type { BBox } from "../../services/cameraService";
 
 interface ViewerRef {
   cesiumElement?: Viewer;
@@ -54,6 +55,8 @@ interface GlobeProps {
   cameraFilter?: CameraFilter;
   onSelectCamera?: (cam: Camera) => void;
 
+  onViewportChange?: (bbox: BBox) => void;
+
   shaderMode?: ShaderMode;
 }
 
@@ -78,10 +81,29 @@ export function Globe({
   cameras,
   cameraFilter,
   onSelectCamera,
+  onViewportChange,
   shaderMode,
 }: GlobeProps): React.ReactElement {
   const viewerRef = useRef<ViewerRef>(null);
   const shaderManagerRef = useRef<ShaderManager | null>(null);
+  const onViewportChangeRef = useRef(onViewportChange);
+
+  useEffect(() => {
+    onViewportChangeRef.current = onViewportChange;
+  }, [onViewportChange]);
+
+  const RAD2DEG = 180 / Math.PI;
+
+  const emitViewport = useCallback((viewer: Viewer): void => {
+    const rect = viewer.camera.computeViewRectangle();
+    if (!rect) return;
+    onViewportChangeRef.current?.({
+      south: rect.south * RAD2DEG,
+      west: rect.west * RAD2DEG,
+      north: rect.north * RAD2DEG,
+      east: rect.east * RAD2DEG,
+    });
+  }, []);
 
   useEffect(() => {
     const viewer = viewerRef.current?.cesiumElement;
@@ -120,8 +142,21 @@ export function Globe({
     }
 
     shaderManagerRef.current = new ShaderManager(viewer);
-    return () => shaderManagerRef.current?.destroy();
-  }, []);
+
+    viewer.camera.percentageChanged = 0.1;
+    const onChanged = () => {
+      if (!viewer.isDestroyed()) emitViewport(viewer);
+    };
+    viewer.camera.changed.addEventListener(onChanged);
+    emitViewport(viewer);
+
+    return () => {
+      if (!viewer.isDestroyed()) {
+        viewer.camera.changed.removeEventListener(onChanged);
+      }
+      shaderManagerRef.current?.destroy();
+    };
+  }, [emitViewport]);
 
   useEffect(() => {
     shaderManagerRef.current?.setMode(shaderMode ?? "normal");
