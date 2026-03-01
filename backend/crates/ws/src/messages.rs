@@ -16,6 +16,17 @@ pub struct AircraftPosition {
     pub is_military: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SatellitePosition {
+    pub norad_id: u64,
+    pub name: String,
+    pub category: String,
+    pub lat: f64,
+    pub lon: f64,
+    pub altitude_km: f64,
+    pub velocity_km_s: f64,
+}
+
 /// Wire format for all WebSocket messages.
 /// The `tag` / `content` serde representation keeps the JSON shape
 /// consistent: `{ "type": "Ping" }` or `{ "type": "Connected", "payload": { "client_id": "..." } }`.
@@ -36,5 +47,11 @@ pub enum WsMessage {
     /// IMM-EKF predicted trajectories for military aircraft.
     Predictions {
         trajectories: Vec<PredictedTrajectory>,
+    },
+    /// Chunked satellite delivery.
+    SatelliteBatch {
+        satellites: Vec<SatellitePosition>,
+        chunk_index: u32,
+        total_chunks: u32,
     },
 }
