@@ -7,6 +7,14 @@ import {
 } from "cesium";
 import type { AircraftPosition } from "../../types/aircraft";
 
+function extractIcao(picked: { id?: unknown } | undefined): string | undefined {
+  if (!picked) return undefined;
+  if (typeof picked.id === "string") return picked.id;
+  const entity = picked.id as { id?: unknown } | undefined;
+  if (entity && typeof entity.id === "string") return entity.id;
+  return undefined;
+}
+
 export function setupInteractions(
   viewer: Viewer,
   canvas: HTMLCanvasElement,
@@ -22,7 +30,6 @@ export function setupInteractions(
 ): () => void {
   const container = canvas.parentElement as HTMLElement;
   const setCursor = (c: string): void => {
-     
     container.style.cursor = c;
   };
   setCursor("grab");
@@ -33,11 +40,10 @@ export function setupInteractions(
 
   handler.setInputAction((event: { position: Cartesian2 }) => {
     const picked = viewer.scene.pick(event.position);
-    if (defined(picked) && picked.id?.id) {
-      const ac = aircraftRef.current.get(picked.id.id as string);
-      if (ac) {
-        onSelectRef.current?.(ac);
-      }
+    const icao = extractIcao(defined(picked) ? picked : undefined);
+    if (icao) {
+      const ac = aircraftRef.current.get(icao);
+      if (ac) onSelectRef.current?.(ac);
     }
   }, ScreenSpaceEventType.LEFT_CLICK);
 
@@ -63,8 +69,9 @@ export function setupInteractions(
     const y = e.clientY - rect.top;
 
     const picked = viewer.scene.pick(new Cartesian2(x, y));
-    if (defined(picked) && picked.id?.id) {
-      const ac = aircraftRef.current.get(picked.id.id as string);
+    const icao = extractIcao(defined(picked) ? picked : undefined);
+    if (icao) {
+      const ac = aircraftRef.current.get(icao);
       if (ac) {
         isHoveringEntity = true;
         setCursor("pointer");

@@ -1,13 +1,19 @@
 import { useEffect, useRef } from "react";
 import { useCesium } from "resium";
-import { CustomDataSource, type Viewer } from "cesium";
+import {
+  BillboardCollection,
+  LabelCollection,
+  CustomDataSource,
+  JulianDate,
+  type Viewer,
+} from "cesium";
 import type {
   AircraftPosition,
   AircraftFilter,
   FlightRoute,
   PredictedTrajectory,
 } from "../../types/aircraft";
-import { cullEntities } from "./aircraftUtils";
+import { makePositionProperty } from "./aircraftUtils";
 import { setupInteractions } from "./AircraftInteractions";
 import { useAircraftBillboards } from "./AircraftBillboards";
 import { useFlightRoute } from "./AircraftRouteOverlay";
@@ -38,9 +44,11 @@ export function AircraftLayer({
 }: AircraftLayerProps): null {
   const { viewer } = useCesium();
   const viewerRef = useRef<Viewer | null>(null);
-  const dataSourceRef = useRef<CustomDataSource | null>(null);
+  const bbCollRef = useRef<BillboardCollection | null>(null);
+  const lblCollRef = useRef<LabelCollection | null>(null);
   const routeDsRef = useRef<CustomDataSource | null>(null);
   const predDsRef = useRef<CustomDataSource | null>(null);
+  const trackDsRef = useRef<CustomDataSource | null>(null);
   const onSelectRef = useRef(onSelect);
   const onHoverRef = useRef(onHover);
   const aircraftRef = useRef(aircraft);
@@ -62,13 +70,17 @@ export function AircraftLayer({
     viewerRef.current = viewer ?? null;
   }, [viewer]);
 
-  // Mount datasources, interaction handlers, and camera-change listener
   useEffect(() => {
     if (!viewer) return;
 
-    const ds = new CustomDataSource("aircraft");
-    viewer.dataSources.add(ds);
-    dataSourceRef.current = ds;
+    const bbColl = viewer.scene.primitives.add(
+      new BillboardCollection({ scene: viewer.scene }),
+    ) as BillboardCollection;
+    const lblColl = viewer.scene.primitives.add(
+      new LabelCollection({ scene: viewer.scene }),
+    ) as LabelCollection;
+    bbCollRef.current = bbColl;
+    lblCollRef.current = lblColl;
 
     const routeDs = new CustomDataSource("flightRoute");
     viewer.dataSources.add(routeDs);
@@ -77,6 +89,10 @@ export function AircraftLayer({
     const predDs = new CustomDataSource("predictions");
     viewer.dataSources.add(predDs);
     predDsRef.current = predDs;
+
+    const trackDs = new CustomDataSource("tracking");
+    viewer.dataSources.add(trackDs);
+    trackDsRef.current = trackDs;
 
     const canvas = viewer.scene.canvas as HTMLCanvasElement;
     const cleanupInteractions = setupInteractions(
@@ -87,51 +103,57 @@ export function AircraftLayer({
       onHoverRef,
     );
 
-    const onCameraChanged = (): void => {
-      if (viewer.isDestroyed()) return;
-      cullEntities(viewer, ds, trackedIcaoRef.current);
-    };
-    viewer.camera.changed.addEventListener(onCameraChanged);
-
     return (): void => {
       cleanupInteractions();
-      viewer.camera.changed.removeEventListener(onCameraChanged);
       if (!viewer.isDestroyed()) {
-        viewer.dataSources.remove(ds, true);
+        viewer.scene.primitives.remove(bbColl);
+        viewer.scene.primitives.remove(lblColl);
         viewer.dataSources.remove(routeDs, true);
         viewer.dataSources.remove(predDs, true);
+        viewer.dataSources.remove(trackDs, true);
       }
-      dataSourceRef.current = null;
+      bbCollRef.current = null;
+      lblCollRef.current = null;
       routeDsRef.current = null;
       predDsRef.current = null;
+      trackDsRef.current = null;
     };
   }, [viewer]);
 
-  // Track selected entity — camera follows it continuously
   useEffect(() => {
     const v = viewerRef.current;
-    if (!v || v.isDestroyed()) return;
-    const ds = dataSourceRef.current;
+    const trackDs = trackDsRef.current;
+    if (!v || v.isDestroyed() || !trackDs) return;
 
-    if (!trackedIcao || !ds) {
+    if (!trackedIcao) {
+      trackDs.entities.removeAll();
       v.trackedEntity = undefined;
       return;
     }
 
-    const entity = ds.entities.getById(trackedIcao);
-    if (entity) {
+    const ac = aircraft.get(trackedIcao);
+    if (!ac) {
+      trackDs.entities.removeAll();
+      v.trackedEntity = undefined;
+      return;
+    }
+
+    const now = JulianDate.now();
+    const existing = trackDs.entities.getById(trackedIcao);
+    if (existing) {
+      existing.position = makePositionProperty(ac, now) as never;
+    } else {
+      trackDs.entities.removeAll();
+      const entity = trackDs.entities.add({
+        id: trackedIcao,
+        position: makePositionProperty(ac, now) as never,
+      });
       v.trackedEntity = entity;
     }
   }, [trackedIcao, aircraft]);
 
-  useAircraftBillboards(
-    dataSourceRef,
-    aircraft,
-    filter,
-    viewerRef,
-    trackedIcaoRef,
-  );
-  useFlightRoute(routeDsRef, dataSourceRef, flightRoute, trackedIcao, aircraft);
+  useAircraftBillboards(bbCollRef, lblCollRef, aircraft, filter);
+  useFlightRoute(routeDsRef, trackDsRef, flightRoute, trackedIcao, aircraft);
   usePredictions(predDsRef, predictions, aircraft, filter);
 
   return null;

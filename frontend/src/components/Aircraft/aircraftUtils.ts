@@ -6,13 +6,6 @@ import {
   JulianDate,
   LinearApproximation,
   ExtrapolationType,
-  Occluder,
-  BoundingSphere,
-  Rectangle,
-  Cartographic,
-  Ellipsoid,
-  CustomDataSource,
-  type Viewer,
 } from "cesium";
 import type {
   AircraftPosition,
@@ -86,73 +79,6 @@ export const ROUTE_ARR_COLOR = Color.WHITE;
 export const AIRPORT_COLOR = Color.fromCssColorString("#FACC15");
 export const PREDICTION_COLOR = Color.fromCssColorString("#FF6B35");
 export const PATTERN_LABEL_FONT = "bold 11px monospace";
-
-// ── Viewport culling (pre-allocated to avoid GC pressure) ────────
-const scratchViewRect = new Rectangle();
-const scratchPaddedRect = new Rectangle();
-const GLOBE_SPHERE = new BoundingSphere(
-  Cartesian3.ZERO,
-  Ellipsoid.WGS84.minimumRadius,
-);
-const RECT_PAD_RAD = CesiumMath.toRadians(2);
-
-/**
- * Toggle entity.show for every aircraft entity based on whether it falls
- * inside the camera's current view rectangle AND is not occluded by the globe.
- */
-export function cullEntities(
-  viewer: Viewer,
-  ds: CustomDataSource,
-  trackedIcao: string | null,
-): void {
-  const viewRect = viewer.camera.computeViewRectangle(
-    viewer.scene.globe.ellipsoid,
-    scratchViewRect,
-  );
-
-  if (!viewRect) {
-    for (const entity of ds.entities.values) entity.show = true;
-    return;
-  }
-
-  scratchPaddedRect.west = viewRect.west - RECT_PAD_RAD;
-  scratchPaddedRect.south = Math.max(
-    viewRect.south - RECT_PAD_RAD,
-    -CesiumMath.PI_OVER_TWO,
-  );
-  scratchPaddedRect.east = viewRect.east + RECT_PAD_RAD;
-  scratchPaddedRect.north = Math.min(
-    viewRect.north + RECT_PAD_RAD,
-    CesiumMath.PI_OVER_TWO,
-  );
-
-  const occluder = new Occluder(GLOBE_SPHERE, viewer.camera.position);
-  const now = JulianDate.now();
-  const entities = ds.entities.values;
-
-  for (let i = 0; i < entities.length; i++) {
-    const entity = entities[i];
-
-    if (entity.id === trackedIcao) {
-      entity.show = true;
-      continue;
-    }
-
-    const pos = entity.position?.getValue(now);
-    if (!pos) {
-      entity.show = false;
-      continue;
-    }
-
-    const carto = Cartographic.fromCartesian(pos);
-    if (!Rectangle.contains(scratchPaddedRect, carto)) {
-      entity.show = false;
-      continue;
-    }
-
-    entity.show = occluder.isPointVisible(pos);
-  }
-}
 
 /** Extract a human-readable label from a MilitaryPattern. */
 export function patternLabel(
