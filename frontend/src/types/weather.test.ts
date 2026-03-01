@@ -40,14 +40,16 @@ describe("weather types", () => {
     expect(grid.fetched_at).toBe("2026-01-01T00:00:00Z");
   });
 
-  it("WeatherFilter has enabled, showWind, showTemperature", () => {
+  it("WeatherFilter has enabled, showWind, showTemperature, showClouds", () => {
     const filter: WeatherFilter = {
       enabled: false,
       showWind: true,
       showTemperature: true,
+      showClouds: true,
     };
     expect(filter.enabled).toBe(false);
     expect(filter.showWind).toBe(true);
     expect(filter.showTemperature).toBe(true);
+    expect(filter.showClouds).toBe(true);
   });
 });

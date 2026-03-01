@@ -5,8 +5,11 @@ import {
   Cartesian3,
   Color,
   NearFarScalar,
+  DistanceDisplayCondition,
   VerticalOrigin,
   Math as CesiumMath,
+  EllipseGraphics,
+  HeightReference,
 } from "cesium";
 import type { WeatherPoint, WeatherFilter } from "../../types/weather";
 
@@ -24,6 +27,7 @@ const TEMP_COOL = Color.fromCssColorString("#06b6d4");
 const TEMP_MILD = Color.fromCssColorString("#22c55e");
 const TEMP_WARM = Color.fromCssColorString("#eab308");
 const TEMP_HOT = Color.fromCssColorString("#ef4444");
+const PRECIP_COLOR = Color.fromCssColorString("#3b82f6");
 
 function temperatureColor(tempC: number): Color {
   if (tempC <= -10) return TEMP_COLD;
@@ -44,6 +48,16 @@ function temperatureColor(tempC: number): Color {
     return Color.lerp(TEMP_WARM, TEMP_HOT, t, new Color());
   }
   return TEMP_HOT;
+}
+
+function cloudRadiusMeters(coverPct: number): number {
+  const t = (coverPct - 10) / 90;
+  return 50_000 + t * 100_000;
+}
+
+function cloudAlpha(coverPct: number): number {
+  const t = (coverPct - 10) / 90;
+  return 0.05 + t * 0.3;
 }
 
 function windArrowScale(speedMs: number): number {
@@ -74,6 +88,7 @@ export function WeatherLayer({ points, filter }: WeatherLayerProps): null {
     const ds = dsRef.current;
     if (!ds) return;
 
+    ds.entities.suspendEvents();
     ds.entities.removeAll();
 
     for (let i = 0; i < points.length; i++) {
@@ -112,8 +127,52 @@ export function WeatherLayer({ points, filter }: WeatherLayerProps): null {
           },
         });
       }
+
+      if (filter.showClouds && p.cloud_cover_pct > 10) {
+        const radius = cloudRadiusMeters(p.cloud_cover_pct);
+        const alpha = cloudAlpha(p.cloud_cover_pct);
+        const ellipse = new EllipseGraphics({
+          semiMajorAxis: radius,
+          semiMinorAxis: radius * 0.8,
+          material: Color.WHITE.withAlpha(alpha),
+          outline: false,
+          height: 2000,
+          heightReference: HeightReference.NONE,
+          distanceDisplayCondition: new DistanceDisplayCondition(0, 3_000_000),
+        });
+
+        ds.entities.add({
+          id: `weather-cloud-${i}`,
+          position,
+          ellipse,
+        });
+
+        if (p.precipitation_mm > 0) {
+          const precipAlpha = Math.min(0.05 + p.precipitation_mm * 0.02, 0.25);
+          const precipEllipse = new EllipseGraphics({
+            semiMajorAxis: radius * 0.6,
+            semiMinorAxis: radius * 0.5,
+            material: PRECIP_COLOR.withAlpha(precipAlpha),
+            outline: false,
+            height: 1800,
+            heightReference: HeightReference.NONE,
+            distanceDisplayCondition: new DistanceDisplayCondition(
+              0,
+              3_000_000,
+            ),
+          });
+
+          ds.entities.add({
+            id: `weather-precip-${i}`,
+            position,
+            ellipse: precipEllipse,
+          });
+        }
+      }
     }
-  }, [points, filter.showWind, filter.showTemperature]);
+
+    ds.entities.resumeEvents();
+  }, [points, filter.showWind, filter.showTemperature, filter.showClouds]);
 
   return null;
 }

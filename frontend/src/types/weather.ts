@@ -19,4 +19,5 @@ export interface WeatherFilter {
   enabled: boolean;
   showWind: boolean;
   showTemperature: boolean;
+  showClouds: boolean;
 }

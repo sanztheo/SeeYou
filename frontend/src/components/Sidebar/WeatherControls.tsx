@@ -62,6 +62,11 @@ export function WeatherControls({
             checked={filter.showTemperature}
             onChange={(v) => onFilterChange({ ...filter, showTemperature: v })}
           />
+          <SubToggle
+            label="Clouds"
+            checked={filter.showClouds}
+            onChange={(v) => onFilterChange({ ...filter, showClouds: v })}
+          />
         </div>
       )}
     </div>

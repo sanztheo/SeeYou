@@ -10,6 +10,7 @@ const baseFilter: WeatherFilter = {
   enabled: false,
   showWind: true,
   showTemperature: true,
+  showClouds: true,
 };
 
 describe("WeatherControls", () => {

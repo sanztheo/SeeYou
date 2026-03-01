@@ -81,6 +81,7 @@ export interface AppState {
   eventFilter: EventFilter;
   setEventFilter: (f: EventFilter) => void;
   events: NaturalEvent[];
+  eventsLoading: boolean;
   selectedEvent: NaturalEvent | null;
   setSelectedEvent: (e: NaturalEvent | null) => void;
 
@@ -168,6 +169,7 @@ export function useAppState(): AppState {
     enabled: false,
     showWind: true,
     showTemperature: true,
+    showClouds: true,
   });
   const [weatherPoints, setWeatherPoints] = useState<WeatherPoint[]>([]);
   const [weatherLoading, setWeatherLoading] = useState(false);
@@ -184,6 +186,7 @@ export function useAppState(): AppState {
     categories: new Set(),
   });
   const [events, setEvents] = useState<NaturalEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<NaturalEvent | null>(null);
 
   const [shaderMode, setShaderMode] = useState<ShaderMode>("normal");
@@ -330,9 +333,11 @@ export function useAppState(): AppState {
   useEffect(() => {
     if (!eventFilter.enabled) {
       setEvents([]);
+      setEventsLoading(false);
       return;
     }
     const ac = new AbortController();
+    setEventsLoading(true);
     fetchEvents(ac.signal)
       .then((data) => {
         if (!ac.signal.aborted) setEvents(data.events);
@@ -340,6 +345,9 @@ export function useAppState(): AppState {
       .catch((e) => {
         if (e instanceof DOMException && e.name === "AbortError") return;
         console.error("[Events] fetch error:", e);
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setEventsLoading(false);
       });
 
     const interval = setInterval(() => {
@@ -414,6 +422,7 @@ export function useAppState(): AppState {
     eventFilter,
     setEventFilter,
     events,
+    eventsLoading,
     selectedEvent,
     setSelectedEvent,
 
