@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "datagouv": {
+      "url": "https://mcp.data.gouv.fr/mcp",
+      "transport": "http"
+    },
+    "ckan": {
+      "url": "https://ckan-mcp-server.andy-pr.workers.dev/mcp",
+      "transport": "http"
+    },
+    "nasa": {
+      "command": "npx",
+      "args": ["-y", "@programcomputer/nasa-mcp-server@latest"]
+    },
+    "aviation-weather": {
+      "command": "npx",
+      "args": ["-y", "aviation-weather-mcp"]
+    },
+    "osm": {
+      "command": "npx",
+      "args": ["-y", "osmmcp"]
+    }
+  }
+}
