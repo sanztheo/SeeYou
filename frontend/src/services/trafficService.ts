@@ -81,8 +81,7 @@ export async function fetchRoadsChunked(
 
     const res = await fetch(url.toString(), { signal });
     if (!res.ok) {
-      console.warn(`[Traffic] fetch failed: ${res.status}`);
-      return;
+      throw new Error(`[Traffic] fetch failed: ${res.status}`);
     }
 
     const data: RoadsResponse = await res.json();
