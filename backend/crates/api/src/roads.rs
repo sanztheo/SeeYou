@@ -23,7 +23,12 @@ fn validate_bbox(q: &RoadsQuery) -> Result<(), StatusCode> {
     if q.south.is_nan() || q.north.is_nan() || q.west.is_nan() || q.east.is_nan() {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if q.south > q.north || q.south < -90.0 || q.north > 90.0 || q.west < -180.0 || q.east > 180.0
+    if q.south > q.north
+        || q.west > q.east
+        || q.south < -90.0
+        || q.north > 90.0
+        || q.west < -180.0
+        || q.east > 180.0
     {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -132,6 +137,11 @@ mod tests {
     fn out_of_range_lon_rejected() {
         assert!(validate_bbox(&query(48.0, -181.0, 49.0, 3.0)).is_err());
         assert!(validate_bbox(&query(48.0, 2.0, 49.0, 181.0)).is_err());
+    }
+
+    #[test]
+    fn west_greater_than_east_rejected() {
+        assert!(validate_bbox(&query(48.0, 170.0, 49.0, -170.0)).is_err());
     }
 
     #[test]
