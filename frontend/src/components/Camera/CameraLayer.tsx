@@ -17,6 +17,7 @@ import type { Camera, CameraFilter } from "../../types/camera";
 const ALTITUDE_THRESHOLD = 100_000;
 const POINT_SIZE = 10;
 const LABEL_DISTANCE = 50_000;
+const RAD2DEG = 180 / Math.PI;
 
 interface CameraLayerProps {
   cameras: Camera[];
@@ -107,11 +108,29 @@ export function CameraLayer({
 
     const onCameraChanged = (): void => {
       if (viewer.isDestroyed() || !dsRef.current) return;
+
       const alt = viewer.camera.positionCartographic.height;
-      const show = alt < ALTITUDE_THRESHOLD;
-      const entities = dsRef.current.entities.values;
-      for (let i = 0; i < entities.length; i++) {
-        entities[i].show = show;
+      if (alt >= ALTITUDE_THRESHOLD) {
+        for (const e of dsRef.current.entities.values) e.show = false;
+        return;
+      }
+
+      const rect = viewer.camera.computeViewRectangle();
+      if (!rect) return;
+
+      const west = rect.west * RAD2DEG;
+      const east = rect.east * RAD2DEG;
+      const south = rect.south * RAD2DEG;
+      const north = rect.north * RAD2DEG;
+
+      for (const entity of dsRef.current.entities.values) {
+        const cam = cameraMapRef.current.get(entity.id);
+        if (!cam) continue;
+        entity.show =
+          cam.lat >= south &&
+          cam.lat <= north &&
+          cam.lon >= west &&
+          cam.lon <= east;
       }
     };
 
