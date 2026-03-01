@@ -31,7 +31,7 @@ const MILITARY_COLOR = Color.fromCssColorString("#EF4444");
 const LABEL_FONT = "12px monospace";
 
 /** Predict this many seconds ahead — slightly > poll interval for smooth overlap. */
-const PREDICTION_SECS = 6;
+const PREDICTION_SECS = 3;
 
 function buildAircraftSvg(hex: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M16 2L13.5 13L4 18.5V21L13.5 18L13.5 26L10 28.5V30.5L16 28.5L22 30.5V28.5L18.5 26L18.5 18L28 21V18.5L18.5 13Z" fill="${hex}" stroke="#000" stroke-width="0.8"/></svg>`;
@@ -65,11 +65,6 @@ function predictPosition(ac: AircraftPosition, dt: number): Cartesian3 {
   );
 }
 
-/**
- * Build a SampledPositionProperty with two samples:
- * current position (now) + predicted position (now + PREDICTION_SECS).
- * Cesium interpolates linearly between them → smooth movement.
- */
 function makePositionProperty(
   ac: AircraftPosition,
   now: JulianDate,
@@ -79,8 +74,7 @@ function makePositionProperty(
     interpolationDegree: 1,
     interpolationAlgorithm: LinearApproximation,
   });
-  // Without HOLD, Cesium returns undefined outside the sample window → invisible entities
-  prop.forwardExtrapolationType = ExtrapolationType.HOLD;
+  prop.forwardExtrapolationType = ExtrapolationType.EXTRAPOLATE;
   prop.backwardExtrapolationType = ExtrapolationType.HOLD;
 
   const current = Cartesian3.fromDegrees(ac.lon, ac.lat, ac.altitude_m);
@@ -234,12 +228,10 @@ export function AircraftLayer({
         const label = ac.callsign ?? ac.icao;
         const rotation = -CesiumMath.toRadians(ac.heading);
 
-        // Interpolated position: Cesium lerps between now → predicted future
         const posProp = makePositionProperty(ac, now);
 
         const entity = ds.entities.getById(ac.icao);
         if (entity) {
-          // Update existing entity — just swap the position property + visuals
           entity.position = posProp as never;
           if (entity.billboard) {
             entity.billboard.image = icon as never;
@@ -250,7 +242,6 @@ export function AircraftLayer({
             entity.label.text = label as never;
           }
         } else {
-          // Create new entity with interpolated position
           ds.entities.add({
             id: ac.icao,
             position: posProp as never,
@@ -291,15 +282,12 @@ export function AircraftLayer({
         rafId = requestAnimationFrame(processChunk);
       } else {
         console.log(
-          `[AircraftLayer] render complete — ${visible.length} entities with smooth interpolation`,
+          `[AircraftLayer] render complete — ${visible.length} entities`,
         );
       }
     };
 
     if (visible.length > 0) {
-      console.log(
-        `[AircraftLayer] starting chunked render: ${visible.length} aircraft (interpolation: ${PREDICTION_SECS}s prediction)`,
-      );
       rafId = requestAnimationFrame(processChunk);
     }
 

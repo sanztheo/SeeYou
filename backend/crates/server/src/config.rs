@@ -1,7 +1,7 @@
 const DEFAULT_HOST: &str = "0.0.0.0";
 const DEFAULT_PORT: u16 = 3001;
 const DEFAULT_REDIS_URL: &str = "redis://127.0.0.1:6379";
-const DEFAULT_POLL_INTERVAL_SECS: u64 = 5;
+const DEFAULT_POLL_INTERVAL_SECS: u64 = 2;
 
 pub struct Config {
     pub host: String,
