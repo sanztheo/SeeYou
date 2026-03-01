@@ -18,7 +18,6 @@ import { WeatherLayer } from "../Weather/WeatherLayer";
 import { WindParticleLayer } from "../Weather/WindParticleLayer";
 import { EventLayer } from "../Events/EventLayer";
 import { MetarLayer } from "../Aviation/MetarLayer";
-import { ShaderManager } from "../../shaders/ShaderManager";
 import { useViewerCallbacks } from "../../hooks/useViewerCallbacks";
 import type { CameraState, CursorState } from "../../hooks/useViewerCallbacks";
 import type {
@@ -38,7 +37,6 @@ import type {
 } from "../../types/weather";
 import type { NaturalEvent, EventFilter } from "../../types/events";
 import type { MetarStation, MetarFilter } from "../../types/metar";
-import type { ShaderMode } from "../../shaders/types";
 import type { BBox } from "../../services/cameraService";
 
 const RAD2DEG = 180 / Math.PI;
@@ -93,8 +91,6 @@ interface GlobeProps {
 
   flyToTarget?: { lat: number; lon: number; alt: number } | null;
   onFlyComplete?: () => void;
-
-  shaderMode?: ShaderMode;
 }
 
 const DEFAULT_AIRCRAFT_FILTER: AircraftFilter = {
@@ -132,10 +128,8 @@ export function Globe({
   onCursorMove,
   flyToTarget,
   onFlyComplete,
-  shaderMode,
 }: GlobeProps): React.ReactElement {
   const viewerRef = useRef<ViewerRef>(null);
-  const shaderManagerRef = useRef<ShaderManager | null>(null);
   const onViewportChangeRef = useRef(onViewportChange);
   const [viewerReady, setViewerReady] = useState<Viewer | null>(null);
   const lastViewportEmit = useRef(0);
@@ -197,7 +191,6 @@ export function Globe({
         });
     }
 
-    shaderManagerRef.current = new ShaderManager(viewer);
     setViewerReady(viewer);
 
     viewer.camera.percentageChanged = 0.05;
@@ -211,13 +204,8 @@ export function Globe({
       if (!viewer.isDestroyed()) {
         viewer.camera.changed.removeEventListener(onChanged);
       }
-      shaderManagerRef.current?.destroy();
     };
   }, [emitViewport]);
-
-  useEffect(() => {
-    shaderManagerRef.current?.setMode(shaderMode ?? "normal");
-  }, [shaderMode, viewerReady]);
 
   useEffect(() => {
     if (!flyToTarget) return;

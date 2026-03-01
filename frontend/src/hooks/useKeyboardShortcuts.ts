@@ -1,21 +1,11 @@
 import { useEffect, useRef } from "react";
-import type { ShaderMode } from "../shaders/types";
 
 interface KeyboardShortcutOptions {
-  onShaderChange?: (mode: ShaderMode) => void;
   onToggleFullscreen?: () => void;
   onSearch?: () => void;
   onToggleSidebar?: () => void;
   onEscape?: () => void;
 }
-
-const SHADER_MAP: Record<string, ShaderMode> = {
-  "1": "normal",
-  "2": "nightVision",
-  "3": "flir",
-  "4": "crt",
-  "5": "anime",
-};
 
 export function useKeyboardShortcuts(options: KeyboardShortcutOptions): void {
   const optionsRef = useRef(options);
@@ -41,12 +31,6 @@ export function useKeyboardShortcuts(options: KeyboardShortcutOptions): void {
       }
 
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-
-      const shader = SHADER_MAP[e.key];
-      if (shader) {
-        optionsRef.current.onShaderChange?.(shader);
-        return;
-      }
 
       switch (e.key) {
         case "f":

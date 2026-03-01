@@ -22,7 +22,6 @@ import type {
 } from "../types/weather";
 import type { MetarFilter, MetarStation } from "../types/metar";
 import type { NaturalEvent, EventFilter } from "../types/events";
-import type { ShaderMode } from "../shaders/types";
 import type { WsMessage } from "../types/ws";
 import type { ConnectionStatus } from "../types/ws";
 import { fetchWeather } from "../services/weatherService";
@@ -99,9 +98,6 @@ export interface AppState {
   setFlyToTarget: (
     target: { lat: number; lon: number; alt: number } | null,
   ) => void;
-
-  shaderMode: ShaderMode;
-  setShaderMode: (m: ShaderMode) => void;
 }
 
 export function useAppState(): AppState {
@@ -199,8 +195,6 @@ export function useAppState(): AppState {
   const [events, setEvents] = useState<NaturalEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<NaturalEvent | null>(null);
-
-  const [shaderMode, setShaderMode] = useState<ShaderMode>("normal");
 
   const handleHoverAircraft = useCallback(
     (ac: AircraftPosition | null, screenX: number, screenY: number): void => {
@@ -451,8 +445,5 @@ export function useAppState(): AppState {
 
     flyToTarget,
     setFlyToTarget,
-
-    shaderMode,
-    setShaderMode,
   };
 }

@@ -17,10 +17,6 @@ import { MetarPopup } from "./components/Aviation/MetarPopup";
 import { EventFilters } from "./components/Sidebar/EventFilters";
 import { EventPopup } from "./components/Events/EventPopup";
 import { CameraPlayer } from "./components/Camera/CameraPlayer";
-import { ShaderControls } from "./components/Shaders/ShaderControls";
-import { NvgHud } from "./components/HUD/NvgHud";
-import { FlirHud } from "./components/HUD/FlirHud";
-import { CrtHud } from "./components/HUD/CrtHud";
 import { Minimap } from "./components/Minimap/Minimap";
 import { Timeline } from "./components/Timeline/Timeline";
 import { SearchBar } from "./components/SearchBar/SearchBar";
@@ -88,7 +84,6 @@ export function App(): React.ReactElement {
   );
 
   useKeyboardShortcuts({
-    onShaderChange: state.setShaderMode,
     onToggleFullscreen: handleToggleFullscreen,
     onToggleSidebar: handleToggleSidebar,
   });
@@ -155,7 +150,6 @@ export function App(): React.ReactElement {
         onCursorMove={setCursorState}
         flyToTarget={state.flyToTarget}
         onFlyComplete={handleFlyComplete}
-        shaderMode={state.shaderMode}
       />
 
       {/* Sidebar */}
@@ -283,22 +277,6 @@ export function App(): React.ReactElement {
         )}
       </div>
 
-      {/* Shader HUDs (fullscreen overlays) */}
-      {state.shaderMode === "nightVision" && (
-        <NvgHud
-          lat={cursorState.lat ?? cameraState.lat}
-          lon={cursorState.lon ?? cameraState.lon}
-          alt={cameraState.altitude}
-        />
-      )}
-      {state.shaderMode === "flir" && (
-        <FlirHud
-          range={cameraState.altitude / 1000}
-          bearing={cameraState.heading}
-        />
-      )}
-      {state.shaderMode === "crt" && <CrtHud />}
-
       {/* Bottom zone: above timeline */}
       <CursorCoords
         lat={cursorState.lat}
@@ -309,10 +287,6 @@ export function App(): React.ReactElement {
       <Minimap
         viewCenter={{ lat: cameraState.lat, lon: cameraState.lon }}
         viewAltitude={cameraState.altitude}
-      />
-      <ShaderControls
-        currentMode={state.shaderMode}
-        onModeChange={state.setShaderMode}
       />
 
       {/* Bottom bar: Timeline */}

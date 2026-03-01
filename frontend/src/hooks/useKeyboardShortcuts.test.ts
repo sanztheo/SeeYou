@@ -23,34 +23,6 @@ describe("useKeyboardShortcuts", () => {
     vi.restoreAllMocks();
   });
 
-  describe("shader shortcuts", () => {
-    it.each([
-      ["1", "normal"],
-      ["2", "nightVision"],
-      ["3", "flir"],
-      ["4", "crt"],
-      ["5", "anime"],
-    ] as const)("key '%s' triggers shader mode '%s'", (key, mode) => {
-      const onShaderChange = vi.fn();
-      renderHook(() => useKeyboardShortcuts({ onShaderChange }));
-
-      fireKey(key);
-
-      expect(onShaderChange).toHaveBeenCalledWith(mode);
-    });
-
-    it("does not trigger shader change for unmapped key", () => {
-      const onShaderChange = vi.fn();
-      renderHook(() => useKeyboardShortcuts({ onShaderChange }));
-
-      fireKey("6");
-      fireKey("0");
-      fireKey("a");
-
-      expect(onShaderChange).not.toHaveBeenCalled();
-    });
-  });
-
   describe("fullscreen shortcut", () => {
     it("triggers on 'f' key", () => {
       const onToggleFullscreen = vi.fn();
@@ -123,24 +95,6 @@ describe("useKeyboardShortcuts", () => {
   });
 
   describe("modifier key suppression", () => {
-    it("ignores shader keys when Ctrl is held", () => {
-      const onShaderChange = vi.fn();
-      renderHook(() => useKeyboardShortcuts({ onShaderChange }));
-
-      fireKey("2", { ctrlKey: true });
-
-      expect(onShaderChange).not.toHaveBeenCalled();
-    });
-
-    it("ignores shader keys when Alt is held", () => {
-      const onShaderChange = vi.fn();
-      renderHook(() => useKeyboardShortcuts({ onShaderChange }));
-
-      fireKey("3", { altKey: true });
-
-      expect(onShaderChange).not.toHaveBeenCalled();
-    });
-
     it("ignores 'f' when Meta is held", () => {
       const onToggleFullscreen = vi.fn();
       renderHook(() => useKeyboardShortcuts({ onToggleFullscreen }));
@@ -153,23 +107,23 @@ describe("useKeyboardShortcuts", () => {
 
   describe("input field suppression", () => {
     it("ignores shortcuts when target is an input", () => {
-      const onShaderChange = vi.fn();
-      renderHook(() => useKeyboardShortcuts({ onShaderChange }));
+      const onToggleFullscreen = vi.fn();
+      renderHook(() => useKeyboardShortcuts({ onToggleFullscreen }));
 
       const input = document.createElement("input");
-      fireKey("2", {}, input);
+      fireKey("f", {}, input);
 
-      expect(onShaderChange).not.toHaveBeenCalled();
+      expect(onToggleFullscreen).not.toHaveBeenCalled();
     });
 
     it("ignores shortcuts when target is a textarea", () => {
-      const onShaderChange = vi.fn();
-      renderHook(() => useKeyboardShortcuts({ onShaderChange }));
+      const onToggleSidebar = vi.fn();
+      renderHook(() => useKeyboardShortcuts({ onToggleSidebar }));
 
       const textarea = document.createElement("textarea");
-      fireKey("3", {}, textarea);
+      fireKey("b", {}, textarea);
 
-      expect(onShaderChange).not.toHaveBeenCalled();
+      expect(onToggleSidebar).not.toHaveBeenCalled();
     });
 
     it("blurs input on Escape", () => {
@@ -187,42 +141,15 @@ describe("useKeyboardShortcuts", () => {
 
   describe("cleanup", () => {
     it("removes listener on unmount", () => {
-      const onShaderChange = vi.fn();
+      const onToggleFullscreen = vi.fn();
       const { unmount } = renderHook(() =>
-        useKeyboardShortcuts({ onShaderChange }),
+        useKeyboardShortcuts({ onToggleFullscreen }),
       );
 
       unmount();
-      fireKey("2");
+      fireKey("f");
 
-      expect(onShaderChange).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("callback ref updates", () => {
-    it("uses latest callback without re-subscribing", () => {
-      const spy = vi.spyOn(window, "addEventListener");
-      const cb1 = vi.fn();
-      const cb2 = vi.fn();
-
-      const { rerender } = renderHook(
-        ({ cb }) => useKeyboardShortcuts({ onShaderChange: cb }),
-        { initialProps: { cb: cb1 } },
-      );
-
-      const addCount = spy.mock.calls.filter((c) => c[0] === "keydown").length;
-
-      rerender({ cb: cb2 });
-
-      const addCount2 = spy.mock.calls.filter((c) => c[0] === "keydown").length;
-      expect(addCount2).toBe(addCount);
-
-      fireKey("2");
-
-      expect(cb1).not.toHaveBeenCalled();
-      expect(cb2).toHaveBeenCalledWith("nightVision");
-
-      spy.mockRestore();
+      expect(onToggleFullscreen).not.toHaveBeenCalled();
     });
   });
 });
