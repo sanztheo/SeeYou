@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   CustomDataSource,
   Color,
@@ -19,7 +19,11 @@ import {
   MIL_ICON,
   makePositionProperty,
   cullEntities,
+  filterVisibleAircraft,
+  computeEntityDiff,
 } from "./aircraftUtils";
+
+const ADD_CHUNK_SIZE = 500;
 
 export function useAircraftBillboards(
   dataSourceRef: { current: CustomDataSource | null },
@@ -28,26 +32,27 @@ export function useAircraftBillboards(
   viewerRef: { current: Viewer | null },
   trackedIcaoRef: { current: string | null },
 ): void {
+  const rafIdRef = useRef(0);
+
   useEffect(() => {
     const ds = dataSourceRef.current;
     if (!ds) return;
 
     const now = JulianDate.now();
 
-    const visible: AircraftPosition[] = [];
-    for (const ac of aircraft.values()) {
-      if (ac.is_military && !filter.showMilitary) continue;
-      if (!ac.is_military && !filter.showCivilian) continue;
-      visible.push(ac);
-    }
-    const visibleIcaos = new Set(visible.map((ac) => ac.icao));
+    const visible = filterVisibleAircraft(aircraft, filter);
 
-    const toRemove: string[] = [];
+    const renderedIds = new Set<string>();
     for (const entity of ds.entities.values) {
-      if (entity.id && !visibleIcaos.has(entity.id)) {
-        toRemove.push(entity.id);
-      }
+      if (entity.id) renderedIds.add(entity.id);
     }
+
+    const { toAdd, toUpdate, toRemove } = computeEntityDiff(
+      visible,
+      renderedIds,
+    );
+
+    // Phase 1: Remove departed entities — synchronous, fast
     if (toRemove.length > 0) {
       ds.entities.suspendEvents();
       for (const id of toRemove) {
@@ -55,82 +60,79 @@ export function useAircraftBillboards(
         if (entity) ds.entities.remove(entity);
       }
       ds.entities.resumeEvents();
-      console.log(`[AircraftLayer] removed ${toRemove.length} stale entities`);
     }
 
-    const CHUNK_SIZE = 500;
-    let cursor = 0;
-    let rafId = 0;
-    let cancelled = false;
-
-    const processChunk = (): void => {
-      if (cancelled) return;
-      const end = Math.min(cursor + CHUNK_SIZE, visible.length);
-
+    // Phase 2: Update existing entities — synchronous, no entity creation
+    if (toUpdate.length > 0) {
       ds.entities.suspendEvents();
-      for (let i = cursor; i < end; i++) {
-        const ac = visible[i];
-        const color = ac.is_military ? MILITARY_COLOR : CIVILIAN_COLOR;
-        const icon = ac.is_military ? MIL_ICON : CIVIL_ICON;
-        const label = ac.callsign ?? ac.icao;
-        const rotation = -CesiumMath.toRadians(ac.heading);
-
-        const posProp = makePositionProperty(ac, now);
-
+      for (const ac of toUpdate) {
         const entity = ds.entities.getById(ac.icao);
         if (entity) {
-          entity.position = posProp as never;
+          const color = ac.is_military ? MILITARY_COLOR : CIVILIAN_COLOR;
+          const icon = ac.is_military ? MIL_ICON : CIVIL_ICON;
+          const rotation = -CesiumMath.toRadians(ac.heading);
+          entity.position = makePositionProperty(ac, now) as never;
           if (entity.billboard) {
             entity.billboard.image = icon as never;
             entity.billboard.color = color as never;
             entity.billboard.rotation = rotation as never;
           }
           if (entity.label) {
-            entity.label.text = label as never;
+            entity.label.text = (ac.callsign ?? ac.icao) as never;
           }
-        } else {
-          ds.entities.add({
-            id: ac.icao,
-            position: posProp as never,
-            billboard: {
-              image: icon,
-              width: 24,
-              height: 24,
-              color,
-              rotation,
-              alignedAxis: Cartesian3.UNIT_Z,
-              verticalOrigin: VerticalOrigin.CENTER,
-              horizontalOrigin: HorizontalOrigin.CENTER,
-              scaleByDistance: new NearFarScalar(5_000, 1.2, 2_000_000, 0.3),
-            },
-            label: {
-              text: label,
-              font: LABEL_FONT,
-              fillColor: Color.WHITE,
-              outlineColor: Color.BLACK,
-              outlineWidth: 2,
-              style: 2, // FILL_AND_OUTLINE
-              verticalOrigin: VerticalOrigin.TOP,
-              horizontalOrigin: HorizontalOrigin.LEFT,
-              pixelOffset: { x: 14, y: 4 } as never,
-              scaleByDistance: new NearFarScalar(1_000, 1.0, 500_000, 0.0),
-            },
-          });
         }
       }
       ds.entities.resumeEvents();
+    }
 
-      console.log(
-        `[AircraftLayer] rendered chunk ${Math.ceil(end / CHUNK_SIZE)}/${Math.ceil(visible.length / CHUNK_SIZE)} (${end}/${visible.length} entities)`,
-      );
+    // Phase 3: Add genuinely new entities — chunked via rAF (entity creation is expensive)
+    cancelAnimationFrame(rafIdRef.current);
+    let cursor = 0;
+    let cancelled = false;
+
+    const processAdditions = (): void => {
+      if (cancelled) return;
+      const end = Math.min(cursor + ADD_CHUNK_SIZE, toAdd.length);
+
+      ds.entities.suspendEvents();
+      for (let i = cursor; i < end; i++) {
+        const ac = toAdd[i];
+        const color = ac.is_military ? MILITARY_COLOR : CIVILIAN_COLOR;
+        const icon = ac.is_military ? MIL_ICON : CIVIL_ICON;
+        ds.entities.add({
+          id: ac.icao,
+          position: makePositionProperty(ac, now) as never,
+          billboard: {
+            image: icon,
+            width: 24,
+            height: 24,
+            color,
+            rotation: -CesiumMath.toRadians(ac.heading),
+            alignedAxis: Cartesian3.UNIT_Z,
+            verticalOrigin: VerticalOrigin.CENTER,
+            horizontalOrigin: HorizontalOrigin.CENTER,
+            scaleByDistance: new NearFarScalar(5_000, 1.2, 2_000_000, 0.3),
+          },
+          label: {
+            text: ac.callsign ?? ac.icao,
+            font: LABEL_FONT,
+            fillColor: Color.WHITE,
+            outlineColor: Color.BLACK,
+            outlineWidth: 2,
+            style: 2,
+            verticalOrigin: VerticalOrigin.TOP,
+            horizontalOrigin: HorizontalOrigin.LEFT,
+            pixelOffset: { x: 14, y: 4 } as never,
+            scaleByDistance: new NearFarScalar(1_000, 1.0, 500_000, 0.0),
+          },
+        });
+      }
+      ds.entities.resumeEvents();
 
       cursor = end;
-      if (cursor < visible.length) {
-        rafId = requestAnimationFrame(processChunk);
+      if (cursor < toAdd.length) {
+        rafIdRef.current = requestAnimationFrame(processAdditions);
       } else {
-        console.log(
-          `[AircraftLayer] render complete — ${visible.length} entities`,
-        );
         const v = viewerRef.current;
         if (v && !v.isDestroyed()) {
           cullEntities(v, ds, trackedIcaoRef.current);
@@ -138,14 +140,19 @@ export function useAircraftBillboards(
       }
     };
 
-    if (visible.length > 0) {
-      rafId = requestAnimationFrame(processChunk);
+    if (toAdd.length > 0) {
+      rafIdRef.current = requestAnimationFrame(processAdditions);
+    } else {
+      const v = viewerRef.current;
+      if (v && !v.isDestroyed()) {
+        cullEntities(v, ds, trackedIcaoRef.current);
+      }
     }
 
     return (): void => {
       cancelled = true;
-      cancelAnimationFrame(rafId);
+      cancelAnimationFrame(rafIdRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refs are stable, read lazily via .current
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aircraft, filter]);
 }

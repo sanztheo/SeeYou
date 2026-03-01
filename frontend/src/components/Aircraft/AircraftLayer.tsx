@@ -87,7 +87,6 @@ export function AircraftLayer({
       onHoverRef,
     );
 
-    viewer.camera.percentageChanged = 0.1;
     const onCameraChanged = (): void => {
       if (viewer.isDestroyed()) return;
       cullEntities(viewer, ds, trackedIcaoRef.current);

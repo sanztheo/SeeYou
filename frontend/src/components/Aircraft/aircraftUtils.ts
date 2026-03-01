@@ -16,6 +16,7 @@ import {
 } from "cesium";
 import type {
   AircraftPosition,
+  AircraftFilter,
   PredictedTrajectory,
 } from "../../types/aircraft";
 
@@ -163,4 +164,55 @@ export function patternLabel(
   if ("Transit" in pat) return "TRANSIT";
   if ("Holding" in pat) return "HOLDING";
   return null;
+}
+
+// ── Incremental diffing (pure, testable) ──────────────────────
+
+export interface EntityDiff {
+  toAdd: AircraftPosition[];
+  toUpdate: AircraftPosition[];
+  toRemove: string[];
+}
+
+/**
+ * Filter aircraft by civilian/military visibility.
+ * Pure function — no side-effects.
+ */
+export function filterVisibleAircraft(
+  aircraft: Map<string, AircraftPosition>,
+  filter: AircraftFilter,
+): Map<string, AircraftPosition> {
+  const visible = new Map<string, AircraftPosition>();
+  for (const ac of aircraft.values()) {
+    if (ac.is_military && !filter.showMilitary) continue;
+    if (!ac.is_military && !filter.showCivilian) continue;
+    visible.set(ac.icao, ac);
+  }
+  return visible;
+}
+
+/**
+ * Compute the minimal diff between what's currently rendered and what should be visible.
+ * Pure function — no Cesium dependency.
+ */
+export function computeEntityDiff(
+  visible: Map<string, AircraftPosition>,
+  renderedIds: Set<string>,
+): EntityDiff {
+  const toRemove: string[] = [];
+  for (const id of renderedIds) {
+    if (!visible.has(id)) toRemove.push(id);
+  }
+
+  const toAdd: AircraftPosition[] = [];
+  const toUpdate: AircraftPosition[] = [];
+  for (const [id, ac] of visible) {
+    if (renderedIds.has(id)) {
+      toUpdate.push(ac);
+    } else {
+      toAdd.push(ac);
+    }
+  }
+
+  return { toAdd, toUpdate, toRemove };
 }
