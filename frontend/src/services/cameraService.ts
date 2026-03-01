@@ -13,39 +13,53 @@ export interface BBox {
   east: number;
 }
 
-let inflight: Promise<Camera[]> | null = null;
-let inflightKey = "";
+export interface CameraProgress {
+  loaded: number;
+  total: number;
+  done: boolean;
+}
 
-export async function fetchCameras(bbox?: BBox): Promise<Camera[]> {
-  const key = bbox
-    ? `${bbox.south},${bbox.west},${bbox.north},${bbox.east}`
-    : "__all__";
+const CHUNK_SIZE = 500;
 
-  if (inflight && inflightKey === key) return inflight;
+export async function fetchCamerasChunked(
+  bbox: BBox | undefined,
+  onChunk: (cameras: Camera[], progress: CameraProgress) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  let offset = 0;
+  const accumulated: Camera[] = [];
 
-  const url = new URL(`${API_URL}/cameras`);
-  if (bbox) {
-    url.searchParams.set("south", String(bbox.south));
-    url.searchParams.set("west", String(bbox.west));
-    url.searchParams.set("north", String(bbox.north));
-    url.searchParams.set("east", String(bbox.east));
-  }
+   
+  while (true) {
+    if (signal?.aborted) return;
 
-  inflightKey = key;
-  inflight = fetch(url.toString())
-    .then((res) => {
-      if (!res.ok) throw new Error(`Failed to fetch cameras: ${res.status}`);
-      return res.json() as Promise<CamerasResponse>;
-    })
-    .then((data) => data.cameras)
-    .finally(() => {
-      if (inflightKey === key) {
-        inflight = null;
-        inflightKey = "";
-      }
+    const url = new URL(`${API_URL}/cameras`);
+    if (bbox) {
+      url.searchParams.set("south", String(bbox.south));
+      url.searchParams.set("west", String(bbox.west));
+      url.searchParams.set("north", String(bbox.north));
+      url.searchParams.set("east", String(bbox.east));
+    }
+    url.searchParams.set("offset", String(offset));
+    url.searchParams.set("limit", String(CHUNK_SIZE));
+
+    const res = await fetch(url.toString(), { signal });
+    if (!res.ok) throw new Error(`Camera fetch failed: ${res.status}`);
+
+    const data: CamerasResponse = await res.json();
+    accumulated.push(...data.cameras);
+
+    const done = accumulated.length >= data.total || data.cameras.length === 0;
+
+    onChunk([...accumulated], {
+      loaded: accumulated.length,
+      total: data.total,
+      done,
     });
 
-  return inflight;
+    if (done) break;
+    offset += CHUNK_SIZE;
+  }
 }
 
 export function getProxyUrl(streamUrl: string): string {
