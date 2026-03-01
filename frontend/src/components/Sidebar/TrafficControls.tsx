@@ -10,39 +10,40 @@ export function TrafficControls({
   onFilterChange,
 }: TrafficControlsProps): React.ReactElement {
   return (
-    <div className="space-y-2">
-      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-        Traffic
-      </h3>
-      <Toggle
-        label="Show Traffic"
-        color="bg-green-500"
-        checked={filter.enabled}
-        onChange={(v) => onFilterChange({ ...filter, enabled: v })}
-      />
+    <div className="px-4 py-3 border-b border-zinc-800/60">
+      <div className="flex items-center justify-between mb-2">
+        <span className="font-mono text-[10px] font-medium uppercase tracking-widest text-zinc-500">
+          Traffic
+        </span>
+        <Toggle
+          checked={filter.enabled}
+          color="bg-emerald-500"
+          onChange={(v) => onFilterChange({ ...filter, enabled: v })}
+        />
+      </div>
       {filter.enabled && (
-        <div className="ml-2 space-y-1">
-          <Toggle
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+          <RoadToggle
             label="Motorway"
-            color="bg-yellow-400"
+            color="bg-amber-400"
             checked={filter.showMotorway}
             onChange={(v) => onFilterChange({ ...filter, showMotorway: v })}
           />
-          <Toggle
+          <RoadToggle
             label="Trunk"
             color="bg-orange-500"
             checked={filter.showTrunk}
             onChange={(v) => onFilterChange({ ...filter, showTrunk: v })}
           />
-          <Toggle
+          <RoadToggle
             label="Primary"
-            color="bg-white"
+            color="bg-zinc-300"
             checked={filter.showPrimary}
             onChange={(v) => onFilterChange({ ...filter, showPrimary: v })}
           />
-          <Toggle
+          <RoadToggle
             label="Secondary"
-            color="bg-gray-400"
+            color="bg-zinc-500"
             checked={filter.showSecondary}
             onChange={(v) => onFilterChange({ ...filter, showSecondary: v })}
           />
@@ -53,6 +54,28 @@ export function TrafficControls({
 }
 
 function Toggle({
+  checked,
+  color,
+  onChange,
+}: {
+  checked: boolean;
+  color: string;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <button onClick={() => onChange(!checked)} className="shrink-0">
+      <div
+        className={`h-3.5 w-7 rounded-full transition-colors ${checked ? color : "bg-zinc-700"} relative`}
+      >
+        <div
+          className={`absolute top-[2px] h-2.5 w-2.5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-[14px]" : "translate-x-[2px]"}`}
+        />
+      </div>
+    </button>
+  );
+}
+
+function RoadToggle({
   label,
   color,
   checked,
@@ -61,25 +84,21 @@ function Toggle({
   label: string;
   color: string;
   checked: boolean;
-  onChange: (checked: boolean) => void;
-}): React.ReactElement {
+  onChange: (v: boolean) => void;
+}) {
   return (
     <button
       onClick={() => onChange(!checked)}
-      className="flex items-center gap-2 w-full text-left text-sm text-gray-200 hover:text-gray-100 transition-colors"
+      className="flex items-center gap-1.5 py-0.5 text-zinc-300 hover:text-zinc-100 transition-colors"
     >
       <div
-        className={`w-8 h-4 rounded-full transition-colors ${
-          checked ? color : "bg-gray-600"
-        } relative`}
+        className={`h-3 w-6 rounded-full transition-colors ${checked ? color : "bg-zinc-700"} relative`}
       >
         <div
-          className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
-            checked ? "translate-x-4" : "translate-x-0.5"
-          }`}
+          className={`absolute top-[2px] h-2 w-2 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-[12px]" : "translate-x-[2px]"}`}
         />
       </div>
-      <span>{label}</span>
+      <span className="font-mono text-[10px]">{label}</span>
     </button>
   );
 }
