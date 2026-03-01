@@ -1,8 +1,8 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useCesium } from "resium";
 import {
-  CustomDataSource,
-  Entity,
+  BillboardCollection,
+  PointPrimitiveCollection,
   Cartesian3,
   Color,
   NearFarScalar,
@@ -44,6 +44,14 @@ function getEventIcon(category: EventCategory): string {
   return uri;
 }
 
+const EVT_BB_SCALE = new NearFarScalar(5_000, 1.2, 8_000_000, 0.3);
+const EVT_GLOW_SCALE = new NearFarScalar(5_000, 1.2, 8_000_000, 0.4);
+
+interface EventEntry {
+  billboard: ReturnType<BillboardCollection["add"]>;
+  glow: ReturnType<PointPrimitiveCollection["add"]>;
+}
+
 interface EventLayerProps {
   events: NaturalEvent[];
   filter: EventFilter;
@@ -56,8 +64,10 @@ export function EventLayer({
   onSelect,
 }: EventLayerProps): null {
   const { viewer } = useCesium();
-  const dsRef = useRef<CustomDataSource | null>(null);
-  const eventMapRef = useRef<Map<string, NaturalEvent>>(new Map());
+  const bbCollRef = useRef<BillboardCollection | null>(null);
+  const pointCollRef = useRef<PointPrimitiveCollection | null>(null);
+  const entryMapRef = useRef(new Map<string, EventEntry>());
+  const eventMapRef = useRef(new Map<string, NaturalEvent>());
   const onSelectRef = useRef(onSelect);
 
   useEffect(() => {
@@ -67,29 +77,36 @@ export function EventLayer({
   useEffect(() => {
     if (!viewer) return;
 
-    const ds = new CustomDataSource("events");
-    viewer.dataSources.add(ds);
-    dsRef.current = ds;
+    const bbColl = viewer.scene.primitives.add(
+      new BillboardCollection({ scene: viewer.scene }),
+    ) as BillboardCollection;
+    const pointColl = viewer.scene.primitives.add(
+      new PointPrimitiveCollection(),
+    ) as PointPrimitiveCollection;
+    bbCollRef.current = bbColl;
+    pointCollRef.current = pointColl;
 
     const handler = new ScreenSpaceEventHandler(
       viewer.scene.canvas as HTMLCanvasElement,
     );
     handler.setInputAction((click: ScreenSpaceEventHandler.PositionedEvent) => {
       const picked = viewer.scene.pick(click.position);
-      if (defined(picked) && picked.id instanceof Entity) {
-        const id = picked.id.id;
-        const baseId = id.endsWith("_glow") ? id.slice(0, -5) : id;
-        const evt = eventMapRef.current.get(baseId);
+      if (defined(picked) && typeof picked.id === "string") {
+        const evt = eventMapRef.current.get(picked.id);
         if (evt) onSelectRef.current?.(evt);
       }
     }, ScreenSpaceEventType.LEFT_CLICK);
 
     return () => {
       handler.destroy();
+      entryMapRef.current.clear();
+      eventMapRef.current.clear();
       if (!viewer.isDestroyed()) {
-        viewer.dataSources.remove(ds, true);
+        viewer.scene.primitives.remove(bbColl);
+        viewer.scene.primitives.remove(pointColl);
       }
-      dsRef.current = null;
+      bbCollRef.current = null;
+      pointCollRef.current = null;
     };
   }, [viewer]);
 
@@ -102,64 +119,55 @@ export function EventLayer({
   }, [events, filter]);
 
   useEffect(() => {
-    const ds = dsRef.current;
-    if (!ds || !viewer) return;
+    const bbColl = bbCollRef.current;
+    const pointColl = pointCollRef.current;
+    if (!bbColl || !pointColl || !viewer) return;
 
     const visible = getVisibleEvents();
-    const visibleIds = new Set<string>();
-    for (const e of visible) {
-      visibleIds.add(e.id);
-      visibleIds.add(`${e.id}_glow`);
+    const visibleIds = new Set(visible.map((e) => e.id));
+    const entries = entryMapRef.current;
+
+    const toDelete: string[] = [];
+    for (const id of entries.keys()) {
+      if (!visibleIds.has(id)) toDelete.push(id);
     }
-
-    const existingIds = new Set<string>();
-    for (let i = 0; i < ds.entities.values.length; i++) {
-      existingIds.add(ds.entities.values[i].id);
-    }
-
-    ds.entities.suspendEvents();
-
-    for (const id of existingIds) {
-      if (!visibleIds.has(id)) ds.entities.removeById(id);
+    for (const id of toDelete) {
+      const entry = entries.get(id)!;
+      bbColl.remove(entry.billboard);
+      pointColl.remove(entry.glow);
+      entries.delete(id);
     }
 
     const nextMap = new Map<string, NaturalEvent>();
     for (const evt of visible) {
       nextMap.set(evt.id, evt);
-      if (!ds.entities.getById(evt.id)) {
+      if (!entries.has(evt.id)) {
         const hex =
           EVENT_CATEGORY_COLORS[evt.category] ?? EVENT_CATEGORY_COLORS.Other;
         const glowColor = Color.fromCssColorString(hex).withAlpha(0.3);
+        const pos = Cartesian3.fromDegrees(evt.lon, evt.lat);
 
-        ds.entities.add(
-          new Entity({
-            id: `${evt.id}_glow`,
-            position: Cartesian3.fromDegrees(evt.lon, evt.lat),
-            point: {
-              pixelSize: 22,
-              color: glowColor,
-              outlineWidth: 0,
-              scaleByDistance: new NearFarScalar(5_000, 1.2, 8_000_000, 0.4),
-            },
-          }),
-        );
+        const glow = pointColl.add({
+          position: pos,
+          pixelSize: 22,
+          color: glowColor,
+          scaleByDistance: EVT_GLOW_SCALE,
+          id: evt.id,
+        });
 
-        ds.entities.add(
-          new Entity({
-            id: evt.id,
-            position: Cartesian3.fromDegrees(evt.lon, evt.lat),
-            billboard: {
-              image: getEventIcon(evt.category),
-              width: 28,
-              height: 28,
-              scaleByDistance: new NearFarScalar(5_000, 1.2, 8_000_000, 0.3),
-            },
-          }),
-        );
+        const billboard = bbColl.add({
+          position: pos,
+          image: getEventIcon(evt.category),
+          width: 28,
+          height: 28,
+          scaleByDistance: EVT_BB_SCALE,
+          id: evt.id,
+        });
+
+        entries.set(evt.id, { billboard, glow });
       }
     }
 
-    ds.entities.resumeEvents();
     eventMapRef.current = nextMap;
   }, [events, filter, viewer, getVisibleEvents]);
 
