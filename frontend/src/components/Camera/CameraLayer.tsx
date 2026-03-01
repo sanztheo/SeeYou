@@ -4,20 +4,20 @@ import {
   CustomDataSource,
   Entity,
   Cartesian3,
+  Cartesian2,
   Color,
   NearFarScalar,
   DistanceDisplayCondition,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
+  VerticalOrigin,
   defined,
-  type Viewer,
 } from "cesium";
 import type { Camera, CameraFilter } from "../../types/camera";
+import { CAMERA_ICON_ONLINE, CAMERA_ICON_OFFLINE } from "./cameraIcon";
 
-const ALTITUDE_THRESHOLD = 100_000;
-const POINT_SIZE = 10;
 const LABEL_DISTANCE = 50_000;
-const RAD2DEG = 180 / Math.PI;
+const BILLBOARD_SHOW_DISTANCE = 800_000;
 
 interface CameraLayerProps {
   cameras: Camera[];
@@ -91,11 +91,7 @@ export function CameraLayer({
     const nextMap = new Map<string, Camera>();
     for (const cam of visible) {
       nextMap.set(cam.id, cam);
-      const existing = ds.entities.getById(cam.id);
-
-      if (existing) {
-        updateEntity(existing, cam);
-      } else {
+      if (!ds.entities.getById(cam.id)) {
         ds.entities.add(createEntity(cam));
       }
     }
@@ -103,80 +99,35 @@ export function CameraLayer({
     cameraMapRef.current = nextMap;
   }, [cameras, filter, viewer, getVisibleCameras]);
 
-  useEffect(() => {
-    if (!viewer) return;
-
-    const onCameraChanged = (): void => {
-      if (viewer.isDestroyed() || !dsRef.current) return;
-
-      const alt = viewer.camera.positionCartographic.height;
-      if (alt >= ALTITUDE_THRESHOLD) {
-        for (const e of dsRef.current.entities.values) e.show = false;
-        return;
-      }
-
-      const rect = viewer.camera.computeViewRectangle();
-      if (!rect) return;
-
-      const west = rect.west * RAD2DEG;
-      const east = rect.east * RAD2DEG;
-      const south = rect.south * RAD2DEG;
-      const north = rect.north * RAD2DEG;
-
-      for (const entity of dsRef.current.entities.values) {
-        const cam = cameraMapRef.current.get(entity.id);
-        if (!cam) continue;
-        entity.show =
-          cam.lat >= south &&
-          cam.lat <= north &&
-          cam.lon >= west &&
-          cam.lon <= east;
-      }
-    };
-
-    viewer.camera.percentageChanged = 0.1;
-    viewer.camera.changed.addEventListener(onCameraChanged);
-    onCameraChanged();
-
-    return () => {
-      if (!viewer.isDestroyed()) {
-        viewer.camera.changed.removeEventListener(onCameraChanged);
-      }
-    };
-  }, [viewer]);
-
   return null;
 }
 
 function createEntity(cam: Camera): Entity.ConstructorOptions {
-  const color = cam.is_online ? Color.LIME : Color.RED;
+  const icon = cam.is_online ? CAMERA_ICON_ONLINE : CAMERA_ICON_OFFLINE;
   return {
     id: cam.id,
     position: Cartesian3.fromDegrees(cam.lon, cam.lat),
-    point: {
-      pixelSize: POINT_SIZE,
-      color,
-      outlineColor: Color.BLACK,
-      outlineWidth: 1,
-      scaleByDistance: new NearFarScalar(1_000, 1.2, 100_000, 0.6),
+    billboard: {
+      image: icon,
+      width: 24,
+      height: 24,
+      verticalOrigin: VerticalOrigin.CENTER,
+      scaleByDistance: new NearFarScalar(5_000, 1.0, 500_000, 0.15),
+      distanceDisplayCondition: new DistanceDisplayCondition(
+        0,
+        BILLBOARD_SHOW_DISTANCE,
+      ),
     },
     label: {
-      text: `📷 ${cam.name}`,
+      text: cam.name,
       font: "11px monospace",
       fillColor: Color.WHITE,
       outlineColor: Color.BLACK,
       outlineWidth: 2,
       style: 2,
-      pixelOffset: { x: 0, y: -16, z: 0 } as unknown as Cartesian3,
+      pixelOffset: new Cartesian2(0, -18),
       distanceDisplayCondition: new DistanceDisplayCondition(0, LABEL_DISTANCE),
       scaleByDistance: new NearFarScalar(1_000, 1, LABEL_DISTANCE, 0.5),
     },
   };
-}
-
-function updateEntity(entity: Entity, cam: Camera): void {
-  const color = cam.is_online ? Color.LIME : Color.RED;
-  if (entity.point) {
-    entity.point.color = color as unknown as typeof entity.point.color;
-  }
 }
