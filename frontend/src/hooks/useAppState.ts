@@ -13,7 +13,7 @@ import type {
 } from "../types/aircraft";
 import type { SatellitePosition, SatelliteFilter } from "../types/satellite";
 import { DEFAULT_SATELLITE_FILTER } from "../types/satellite";
-import type { TrafficFilter, Road } from "../types/traffic";
+import type { TrafficFilter } from "../types/traffic";
 import type { Camera, CameraFilter } from "../types/camera";
 import type { ShaderMode } from "../shaders/types";
 import type { WsMessage } from "../types/ws";
@@ -51,8 +51,9 @@ export interface AppState {
 
   trafficFilter: TrafficFilter;
   setTrafficFilter: (f: TrafficFilter) => void;
-  roads: Road[];
-  setRoads: (r: Road[]) => void;
+  trafficLoading: boolean;
+  trafficRoadCount: number;
+  setTrafficLoadState: (loading: boolean, count: number) => void;
 
   cameraFilter: CameraFilter;
   setCameraFilter: (f: CameraFilter) => void;
@@ -100,7 +101,13 @@ export function useAppState(): AppState {
     showPrimary: true,
     showSecondary: false,
   });
-  const [roads, setRoads] = useState<Road[]>([]);
+  const [trafficLoading, setTrafficLoading] = useState(false);
+  const [trafficRoadCount, setTrafficRoadCount] = useState(0);
+
+  const setTrafficLoadState = useCallback((loading: boolean, count: number) => {
+    setTrafficLoading(loading);
+    setTrafficRoadCount(count);
+  }, []);
 
   const [cameraFilter, setCameraFilter] = useState<CameraFilter>({
     enabled: false,
@@ -247,8 +254,9 @@ export function useAppState(): AppState {
 
     trafficFilter,
     setTrafficFilter,
-    roads,
-    setRoads,
+    trafficLoading,
+    trafficRoadCount,
+    setTrafficLoadState,
 
     cameraFilter,
     setCameraFilter,
