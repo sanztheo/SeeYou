@@ -22,7 +22,7 @@ import type {
 } from "../../types/aircraft";
 import type { SatellitePosition, SatelliteFilter } from "../../types/satellite";
 import { DEFAULT_SATELLITE_FILTER } from "../../types/satellite";
-import type { TrafficFilter, Road } from "../../types/traffic";
+import type { TrafficFilter } from "../../types/traffic";
 import type { Camera, CameraFilter } from "../../types/camera";
 import type { ShaderMode } from "../../shaders/types";
 import type { BBox } from "../../services/cameraService";
@@ -49,7 +49,7 @@ interface GlobeProps {
   onSelectSatellite?: (sat: SatellitePosition) => void;
 
   trafficFilter?: TrafficFilter;
-  roads?: Road[];
+  onTrafficLoading?: (loading: boolean, count: number) => void;
 
   cameras?: Camera[];
   cameraFilter?: CameraFilter;
@@ -77,7 +77,7 @@ export function Globe({
   satelliteFilter,
   onSelectSatellite,
   trafficFilter,
-  roads,
+  onTrafficLoading,
   cameras,
   cameraFilter,
   onSelectCamera,
@@ -198,7 +198,10 @@ export function Globe({
       )}
 
       {trafficFilter?.enabled && (
-        <TrafficLayer filter={trafficFilter} roads={roads ?? []} />
+        <TrafficLayer
+          filter={trafficFilter}
+          onLoadingChange={onTrafficLoading}
+        />
       )}
 
       {cameraFilter?.enabled && cameras && (
