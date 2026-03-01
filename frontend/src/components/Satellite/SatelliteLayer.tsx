@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 import { useCesium } from "resium";
 import {
-  CustomDataSource,
+  BillboardCollection,
+  LabelCollection,
   Cartesian3,
   Cartesian2,
   Color,
-  ConstantPositionProperty,
   NearFarScalar,
   DistanceDisplayCondition,
   LabelStyle,
@@ -13,8 +13,6 @@ import {
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   defined,
-  type Viewer,
-  type Entity,
 } from "cesium";
 import type {
   SatellitePosition,
@@ -123,6 +121,16 @@ function getCategoryIcon(category: SatelliteCategory): string {
   return uri;
 }
 
+const SAT_BB_SCALE = new NearFarScalar(1e6, 1.2, 1e8, 0.4);
+const SAT_LBL_SCALE = new NearFarScalar(5e5, 1, 5e7, 0);
+const SAT_LBL_DIST = new DistanceDisplayCondition(0, 1e7);
+const SAT_LBL_OFFSET = new Cartesian2(0, -14);
+
+interface SatelliteEntry {
+  billboard: ReturnType<BillboardCollection["add"]>;
+  label: ReturnType<LabelCollection["add"]>;
+}
+
 interface SatelliteLayerProps {
   satellites: Map<number, SatellitePosition>;
   filter: SatelliteFilter;
@@ -141,10 +149,12 @@ export function SatelliteLayer({
   onHover,
 }: SatelliteLayerProps): null {
   const { viewer } = useCesium();
-  const dsRef = useRef<CustomDataSource | null>(null);
+  const bbCollRef = useRef<BillboardCollection | null>(null);
+  const lblCollRef = useRef<LabelCollection | null>(null);
+  const entryMapRef = useRef(new Map<string, SatelliteEntry>());
+  const satMapRef = useRef(new Map<string, SatellitePosition>());
   const onSelectRef = useRef(onSelect);
   const onHoverRef = useRef(onHover);
-  const satellitesRef = useRef(satellites);
 
   useEffect(() => {
     onSelectRef.current = onSelect;
@@ -152,16 +162,18 @@ export function SatelliteLayer({
   useEffect(() => {
     onHoverRef.current = onHover;
   }, [onHover]);
-  useEffect(() => {
-    satellitesRef.current = satellites;
-  }, [satellites]);
 
   useEffect(() => {
     if (!viewer) return;
 
-    const ds = new CustomDataSource("satellites");
-    viewer.dataSources.add(ds);
-    dsRef.current = ds;
+    const bbColl = viewer.scene.primitives.add(
+      new BillboardCollection({ scene: viewer.scene }),
+    ) as BillboardCollection;
+    const lblColl = viewer.scene.primitives.add(
+      new LabelCollection({ scene: viewer.scene }),
+    ) as LabelCollection;
+    bbCollRef.current = bbColl;
+    lblCollRef.current = lblColl;
 
     const handler = new ScreenSpaceEventHandler(
       viewer.scene.canvas as HTMLCanvasElement,
@@ -169,54 +181,52 @@ export function SatelliteLayer({
 
     handler.setInputAction((click: { position: Cartesian2 }) => {
       const picked = viewer.scene.pick(click.position);
-      if (defined(picked?.id) && (picked.id as any)._satData) {
-        onSelectRef.current?.((picked.id as any)._satData);
+      if (defined(picked) && typeof picked.id === "string") {
+        const sat = satMapRef.current.get(picked.id);
+        if (sat) onSelectRef.current?.(sat);
       }
     }, ScreenSpaceEventType.LEFT_CLICK);
 
     handler.setInputAction((move: { endPosition: Cartesian2 }) => {
       const picked = viewer.scene.pick(move.endPosition);
-      if (defined(picked?.id) && (picked.id as any)._satData) {
-        onHoverRef.current?.(
-          (picked.id as any)._satData,
-          move.endPosition.x,
-          move.endPosition.y,
-        );
-      } else {
-        onHoverRef.current?.(null, 0, 0);
+      if (defined(picked) && typeof picked.id === "string") {
+        const sat = satMapRef.current.get(picked.id);
+        if (sat) {
+          onHoverRef.current?.(sat, move.endPosition.x, move.endPosition.y);
+          return;
+        }
       }
+      onHoverRef.current?.(null, 0, 0);
     }, ScreenSpaceEventType.MOUSE_MOVE);
-
-    const onCameraChange = (): void => {
-      if (viewer.isDestroyed() || !ds) return;
-      cullEntities(viewer, ds);
-    };
-    viewer.camera.changed.addEventListener(onCameraChange);
 
     return (): void => {
       handler.destroy();
-      viewer.camera.changed.removeEventListener(onCameraChange);
+      entryMapRef.current.clear();
+      satMapRef.current.clear();
       if (!viewer.isDestroyed()) {
-        viewer.dataSources.remove(ds, true);
+        viewer.scene.primitives.remove(bbColl);
+        viewer.scene.primitives.remove(lblColl);
       }
-      dsRef.current = null;
+      bbCollRef.current = null;
+      lblCollRef.current = null;
     };
   }, [viewer]);
 
   useEffect(() => {
-    const ds = dsRef.current;
-    if (!ds || !viewer) return;
+    const bbColl = bbCollRef.current;
+    const lblColl = lblCollRef.current;
+    if (!bbColl || !lblColl || !viewer) return;
 
-    const entities = ds.entities;
+    const entries = entryMapRef.current;
+    const nextSatMap = new Map<string, SatellitePosition>();
     const activeIds = new Set<string>();
-
-    entities.suspendEvents();
 
     for (const [noradId, sat] of satellites) {
       if (!filter[CATEGORY_FILTER_KEY[sat.category]]) continue;
 
       const id = String(noradId);
       activeIds.add(id);
+      nextSatMap.set(id, sat);
 
       const color = CATEGORY_COLORS[sat.category] ?? Color.GRAY;
       const pos = Cartesian3.fromDegrees(
@@ -224,84 +234,56 @@ export function SatelliteLayer({
         sat.lat,
         sat.altitude_km * 1000,
       );
+      const icon = getCategoryIcon(sat.category);
 
-      const existing = entities.getById(id);
+      const existing = entries.get(id);
       if (existing) {
-        (existing.position as ConstantPositionProperty).setValue(pos);
-        if (existing.billboard) {
-          existing.billboard.color = color as never;
-          existing.billboard.image = getCategoryIcon(sat.category) as never;
-        }
-        (existing as any)._satData = sat;
+        existing.billboard.position = pos;
+        existing.billboard.color = color;
+        existing.billboard.image = icon;
+        existing.label.position = pos;
+        existing.label.text = sat.name;
       } else {
-        const entity = entities.add({
-          id,
+        const billboard = bbColl.add({
           position: pos,
-          billboard: {
-            image: getCategoryIcon(sat.category),
-            width: 20,
-            height: 20,
-            color,
-            scaleByDistance: new NearFarScalar(1e6, 1.2, 1e8, 0.4),
-          },
-          label: {
-            text: sat.name,
-            font: "11px monospace",
-            fillColor: Color.WHITE.withAlpha(0.9),
-            outlineColor: Color.BLACK,
-            outlineWidth: 2,
-            style: LabelStyle.FILL_AND_OUTLINE,
-            verticalOrigin: VerticalOrigin.BOTTOM,
-            pixelOffset: new Cartesian2(0, -14),
-            scaleByDistance: new NearFarScalar(5e5, 1, 5e7, 0),
-            distanceDisplayCondition: new DistanceDisplayCondition(0, 1e7),
-          },
+          image: icon,
+          width: 20,
+          height: 20,
+          color,
+          scaleByDistance: SAT_BB_SCALE,
+          id,
         });
-        (entity as any)._satData = sat;
+        const label = lblColl.add({
+          position: pos,
+          text: sat.name,
+          font: "11px monospace",
+          fillColor: Color.WHITE.withAlpha(0.9),
+          outlineColor: Color.BLACK,
+          outlineWidth: 2,
+          style: LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: VerticalOrigin.BOTTOM,
+          pixelOffset: SAT_LBL_OFFSET,
+          scaleByDistance: SAT_LBL_SCALE,
+          distanceDisplayCondition: SAT_LBL_DIST,
+          id,
+        });
+        entries.set(id, { billboard, label });
       }
     }
 
-    const toRemove: Entity[] = [];
-    const all = entities.values;
-    for (let i = 0; i < all.length; i++) {
-      if (!activeIds.has(all[i].id)) toRemove.push(all[i]);
+    const toDelete: string[] = [];
+    for (const id of entries.keys()) {
+      if (!activeIds.has(id)) toDelete.push(id);
     }
-    for (const e of toRemove) entities.remove(e);
+    for (const id of toDelete) {
+      const entry = entries.get(id)!;
+      bbColl.remove(entry.billboard);
+      lblColl.remove(entry.label);
+      entries.delete(id);
+    }
 
-    entities.resumeEvents();
+    satMapRef.current = nextSatMap;
   }, [satellites, filter, viewer]);
 
   return null;
-}
-
-function cullEntities(viewer: Viewer, ds: CustomDataSource): void {
-  const camera = viewer.camera;
-  const cameraPos = camera.positionWC;
-  const height =
-    viewer.scene.globe.ellipsoid.cartesianToCartographic(cameraPos)?.height ??
-    1e8;
-
-  if (height > 3e7) {
-    ds.entities.values.forEach((e) => (e.show = true));
-    return;
-  }
-
-  const rect = camera.computeViewRectangle();
-  if (!rect) return;
-
-  const west = rect.west * (180 / Math.PI);
-  const east = rect.east * (180 / Math.PI);
-  const south = rect.south * (180 / Math.PI);
-  const north = rect.north * (180 / Math.PI);
-  const crossesAntimeridian = west > east;
-
-  for (const entity of ds.entities.values) {
-    const satData = (entity as any)._satData as SatellitePosition | undefined;
-    if (!satData) continue;
-    const inLat = satData.lat >= south && satData.lat <= north;
-    const inLon = crossesAntimeridian
-      ? satData.lon >= west || satData.lon <= east
-      : satData.lon >= west && satData.lon <= east;
-    entity.show = inLat && inLon;
-  }
 }
