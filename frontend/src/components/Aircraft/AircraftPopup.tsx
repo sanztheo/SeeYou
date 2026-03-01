@@ -1,15 +1,33 @@
 import { useState } from "react";
-import type { AircraftPosition, FlightRoute } from "../../types/aircraft";
+import type {
+  AircraftPosition,
+  FlightRoute,
+  PredictedTrajectory,
+} from "../../types/aircraft";
 
 const METERS_TO_FEET = 3.28084;
 const MS_TO_KNOTS = 1.94384;
 const MS_TO_KMH = 3.6;
+
+const MODEL_NAMES = ["CV", "CA", "CT", "CD"] as const;
+
+function getPatternName(pat: PredictedTrajectory["pattern"]): string | null {
+  if (!pat) return null;
+  if ("Orbit" in pat)
+    return `Orbit (r=${Math.round(pat.Orbit.radius_m / 1000)} km)`;
+  if ("Cap" in pat) return "Combat Air Patrol";
+  if ("Transit" in pat)
+    return `Transit ${Math.round(pat.Transit.heading_deg)}°`;
+  if ("Holding" in pat) return "Holding";
+  return null;
+}
 
 interface AircraftPopupProps {
   aircraft: AircraftPosition | null;
   onClose: () => void;
   flightRoute: FlightRoute | null;
   routeLoading: boolean;
+  prediction: PredictedTrajectory | null;
 }
 
 export function AircraftPopup({
@@ -17,6 +35,7 @@ export function AircraftPopup({
   onClose,
   flightRoute,
   routeLoading,
+  prediction,
 }: AircraftPopupProps): React.ReactElement | null {
   const [expanded, setExpanded] = useState(false);
 
@@ -175,6 +194,54 @@ export function AircraftPopup({
                 label=""
                 value={`${flightRoute.arrival.icao}  ${flightRoute.arrival.lat.toFixed(2)}, ${flightRoute.arrival.lon.toFixed(2)}`}
               />
+            </div>
+          )}
+
+          {prediction && (
+            <div className="pt-1.5 mt-1.5 border-t border-orange-500/30 space-y-2">
+              <span className="text-orange-400 text-[10px] font-semibold uppercase tracking-wider">
+                IMM-EKF Prediction
+              </span>
+              {getPatternName(prediction.pattern) && (
+                <Row
+                  label="Pattern"
+                  value={getPatternName(prediction.pattern)!}
+                />
+              )}
+              <Row
+                label="Horizon"
+                value={`${prediction.points.length > 0 ? Math.round(prediction.points[prediction.points.length - 1].dt_secs / 60) : 0} min`}
+              />
+              <div className="space-y-1">
+                <span className="text-gray-400 text-[10px]">Model weights</span>
+                <div className="flex gap-0.5 h-3 rounded overflow-hidden">
+                  {prediction.model_probabilities.map((p, i) => (
+                    <div
+                      key={MODEL_NAMES[i]}
+                      className="relative h-full transition-all duration-300"
+                      style={{
+                        width: `${p * 100}%`,
+                        backgroundColor:
+                          i === 0
+                            ? "#3B82F6"
+                            : i === 1
+                              ? "#F59E0B"
+                              : i === 2
+                                ? "#EF4444"
+                                : "#8B5CF6",
+                      }}
+                      title={`${MODEL_NAMES[i]}: ${(p * 100).toFixed(1)}%`}
+                    />
+                  ))}
+                </div>
+                <div className="flex justify-between text-[9px] text-gray-500 font-mono">
+                  {prediction.model_probabilities.map((p, i) => (
+                    <span key={MODEL_NAMES[i]}>
+                      {MODEL_NAMES[i]} {(p * 100).toFixed(0)}%
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>

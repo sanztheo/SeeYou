@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Globe } from "./components/Globe/Globe";
 import { Sidebar } from "./components/Sidebar/Sidebar";
 import { ConnectionStatus } from "./components/ConnectionStatus/ConnectionStatus";
@@ -12,6 +12,7 @@ import type {
   AircraftPosition,
   AircraftFilter,
   FlightRoute,
+  PredictedTrajectory,
 } from "./types/aircraft";
 import type { WsMessage } from "./types/ws";
 
@@ -32,6 +33,9 @@ export function App(): React.ReactElement {
     useState<AircraftPosition | null>(null);
   const [flightRoute, setFlightRoute] = useState<FlightRoute | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
+  const [predictions, setPredictions] = useState<
+    Map<string, PredictedTrajectory>
+  >(() => new Map());
 
   useEffect(() => {
     if (!selectedAircraft?.callsign) {
@@ -74,6 +78,13 @@ export function App(): React.ReactElement {
           `[WS] AircraftBatch chunk ${chunk_index + 1}/${total_chunks}: ${batch.length} aircraft`,
         );
         ingestBatch(batch, chunk_index, total_chunks);
+      } else if (msg.type === "Predictions") {
+        const { trajectories } = msg.payload;
+        const next = new Map<string, PredictedTrajectory>();
+        for (const t of trajectories) {
+          next.set(t.icao, t);
+        }
+        setPredictions(next);
       }
     },
     [update, ingestBatch],
@@ -93,6 +104,7 @@ export function App(): React.ReactElement {
         trackedIcao={selectedAircraft?.icao ?? null}
         onSelectAircraft={setSelectedAircraft}
         flightRoute={flightRoute}
+        predictions={predictions}
       />
       <Sidebar>
         <div className="space-y-4">
@@ -110,6 +122,11 @@ export function App(): React.ReactElement {
         onClose={handleClosePopup}
         flightRoute={flightRoute}
         routeLoading={routeLoading}
+        prediction={
+          selectedAircraft
+            ? (predictions.get(selectedAircraft.icao) ?? null)
+            : null
+        }
       />
     </div>
   );

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use cache::pool::RedisPool;
+use prediction::service::{AircraftMeasurement, PredictionService};
 use ws::broadcast::Broadcaster;
 use ws::messages::{AircraftPosition, WsMessage};
 
@@ -21,9 +22,11 @@ pub async fn run_aircraft_tracker(
     poll_interval: Duration,
 ) {
     tracing::info!(
-        "aircraft tracker started, polling every {}s",
+        "aircraft tracker started, polling every {}s (IMM-EKF prediction enabled)",
         poll_interval.as_secs()
     );
+
+    let mut predictor = PredictionService::new();
 
     loop {
         let mut merged: HashMap<String, Aircraft> = HashMap::new();
@@ -74,6 +77,35 @@ pub async fn run_aircraft_tracker(
             tracing::warn!("failed to cache aircraft: {e}");
         }
 
+        // ── IMM-EKF prediction for military aircraft ────────────
+        let measurements: Vec<AircraftMeasurement> = aircraft
+            .iter()
+            .filter(|a| a.is_military && !a.on_ground)
+            .map(|a| AircraftMeasurement {
+                icao: a.icao.clone(),
+                lat: a.lat,
+                lon: a.lon,
+                alt_m: a.altitude_m,
+                speed_ms: a.speed_ms,
+                heading_deg: a.heading,
+                vertical_rate_ms: a.vertical_rate_ms,
+                is_military: true,
+            })
+            .collect();
+
+        let trajectories = predictor.process_batch(&measurements);
+
+        if !trajectories.is_empty() {
+            tracing::debug!(
+                tracked = predictor.tracked_count(),
+                predictions = trajectories.len(),
+                "IMM-EKF predictions generated"
+            );
+            let pred_msg = WsMessage::Predictions { trajectories };
+            broadcaster.send(pred_msg);
+        }
+
+        // ── Broadcast aircraft positions ────────────────────────
         let positions: Vec<AircraftPosition> = aircraft
             .into_iter()
             .map(|a| AircraftPosition {
@@ -91,7 +123,6 @@ pub async fn run_aircraft_tracker(
             })
             .collect();
 
-        // Send in chunks to avoid a single multi-MB WebSocket frame
         let total_chunks = (positions.len() + WS_CHUNK_SIZE - 1) / WS_CHUNK_SIZE;
         let total_chunks = total_chunks.max(1) as u32;
 

@@ -29,3 +29,34 @@ export interface FlightRoute {
   departure: Airport;
   arrival: Airport;
 }
+
+// ── IMM-EKF Prediction types ────────────────────────────────
+
+export interface PredictedPoint {
+  lat: number;
+  lon: number;
+  alt_m: number;
+  dt_secs: number;
+  sigma_xy_m: number;
+  sigma_z_m: number;
+}
+
+export type MilitaryPattern =
+  | { Orbit: { center_lat: number; center_lon: number; radius_m: number } }
+  | {
+      Cap: {
+        wp1_lat: number;
+        wp1_lon: number;
+        wp2_lat: number;
+        wp2_lon: number;
+      };
+    }
+  | { Transit: { heading_deg: number } }
+  | { Holding: { center_lat: number; center_lon: number } };
+
+export interface PredictedTrajectory {
+  icao: string;
+  points: PredictedPoint[];
+  pattern: MilitaryPattern | null;
+  model_probabilities: [number, number, number, number];
+}

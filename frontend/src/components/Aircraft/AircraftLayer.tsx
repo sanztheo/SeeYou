@@ -18,12 +18,18 @@ import {
   ArcType,
   PolylineDashMaterialProperty,
   CallbackProperty,
+  Occluder,
+  BoundingSphere,
+  Rectangle,
+  Cartographic,
+  Ellipsoid,
   type Viewer,
 } from "cesium";
 import type {
   AircraftPosition,
   AircraftFilter,
   FlightRoute,
+  PredictedTrajectory,
 } from "../../types/aircraft";
 
 const CIVILIAN_COLOR = Color.fromCssColorString("#3B82F6");
@@ -90,6 +96,86 @@ function makePositionProperty(
 const ROUTE_DEP_COLOR = Color.fromCssColorString("#22C55E");
 const ROUTE_ARR_COLOR = Color.WHITE;
 const AIRPORT_COLOR = Color.fromCssColorString("#FACC15");
+const PREDICTION_COLOR = Color.fromCssColorString("#FF6B35");
+const UNCERTAINTY_COLOR = Color.fromCssColorString("#FF6B35").withAlpha(0.15);
+const PATTERN_LABEL_FONT = "bold 11px monospace";
+
+// ── Viewport culling (pre-allocated to avoid GC pressure) ────────
+const scratchViewRect = new Rectangle();
+const scratchPaddedRect = new Rectangle();
+const GLOBE_SPHERE = new BoundingSphere(
+  Cartesian3.ZERO,
+  Ellipsoid.WGS84.minimumRadius,
+);
+const RECT_PAD_RAD = CesiumMath.toRadians(2);
+
+/**
+ * Toggle entity.show for every aircraft entity based on whether it falls
+ * inside the camera's current view rectangle AND is not occluded by the globe.
+ */
+function cullEntities(
+  viewer: Viewer,
+  ds: CustomDataSource,
+  trackedIcao: string | null,
+): void {
+  const viewRect = viewer.camera.computeViewRectangle(
+    viewer.scene.globe.ellipsoid,
+    scratchViewRect,
+  );
+
+  if (!viewRect) {
+    for (const entity of ds.entities.values) entity.show = true;
+    return;
+  }
+
+  scratchPaddedRect.west = viewRect.west - RECT_PAD_RAD;
+  scratchPaddedRect.south = Math.max(
+    viewRect.south - RECT_PAD_RAD,
+    -CesiumMath.PI_OVER_TWO,
+  );
+  scratchPaddedRect.east = viewRect.east + RECT_PAD_RAD;
+  scratchPaddedRect.north = Math.min(
+    viewRect.north + RECT_PAD_RAD,
+    CesiumMath.PI_OVER_TWO,
+  );
+
+  const occluder = new Occluder(GLOBE_SPHERE, viewer.camera.position);
+  const now = JulianDate.now();
+  const entities = ds.entities.values;
+
+  for (let i = 0; i < entities.length; i++) {
+    const entity = entities[i];
+
+    if (entity.id === trackedIcao) {
+      entity.show = true;
+      continue;
+    }
+
+    const pos = entity.position?.getValue(now);
+    if (!pos) {
+      entity.show = false;
+      continue;
+    }
+
+    const carto = Cartographic.fromCartesian(pos);
+    if (!Rectangle.contains(scratchPaddedRect, carto)) {
+      entity.show = false;
+      continue;
+    }
+
+    entity.show = occluder.isPointVisible(pos);
+  }
+}
+
+/** Extract a human-readable label from a MilitaryPattern. */
+function patternLabel(pat: PredictedTrajectory["pattern"]): string | null {
+  if (!pat) return null;
+  if ("Orbit" in pat) return "ORBIT";
+  if ("Cap" in pat) return "CAP";
+  if ("Transit" in pat) return "TRANSIT";
+  if ("Holding" in pat) return "HOLDING";
+  return null;
+}
 
 interface AircraftLayerProps {
   aircraft: Map<string, AircraftPosition>;
@@ -97,6 +183,7 @@ interface AircraftLayerProps {
   trackedIcao: string | null;
   onSelect?: (aircraft: AircraftPosition) => void;
   flightRoute: FlightRoute | null;
+  predictions: Map<string, PredictedTrajectory>;
 }
 
 export function AircraftLayer({
@@ -105,13 +192,16 @@ export function AircraftLayer({
   trackedIcao,
   onSelect,
   flightRoute,
+  predictions,
 }: AircraftLayerProps): null {
   const { viewer } = useCesium();
   const viewerRef = useRef<Viewer | null>(null);
   const dataSourceRef = useRef<CustomDataSource | null>(null);
   const routeDsRef = useRef<CustomDataSource | null>(null);
+  const predDsRef = useRef<CustomDataSource | null>(null);
   const onSelectRef = useRef(onSelect);
   const aircraftRef = useRef(aircraft);
+  const trackedIcaoRef = useRef(trackedIcao);
 
   useEffect(() => {
     onSelectRef.current = onSelect;
@@ -120,6 +210,10 @@ export function AircraftLayer({
   useEffect(() => {
     aircraftRef.current = aircraft;
   }, [aircraft]);
+
+  useEffect(() => {
+    trackedIcaoRef.current = trackedIcao;
+  }, [trackedIcao]);
 
   // Store raw viewer in a mutable ref
   useEffect(() => {
@@ -138,6 +232,10 @@ export function AircraftLayer({
     viewer.dataSources.add(routeDs);
     routeDsRef.current = routeDs;
 
+    const predDs = new CustomDataSource("predictions");
+    viewer.dataSources.add(predDs);
+    predDsRef.current = predDs;
+
     const handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction((event: { position: { x: number; y: number } }) => {
       const picked = viewer.scene.pick(event.position);
@@ -149,14 +247,24 @@ export function AircraftLayer({
       }
     }, ScreenSpaceEventType.LEFT_CLICK);
 
+    viewer.camera.percentageChanged = 0.1;
+    const onCameraChanged = (): void => {
+      if (viewer.isDestroyed()) return;
+      cullEntities(viewer, ds, trackedIcaoRef.current);
+    };
+    viewer.camera.changed.addEventListener(onCameraChanged);
+
     return (): void => {
       handler.destroy();
+      viewer.camera.changed.removeEventListener(onCameraChanged);
       if (!viewer.isDestroyed()) {
         viewer.dataSources.remove(ds, true);
         viewer.dataSources.remove(routeDs, true);
+        viewer.dataSources.remove(predDs, true);
       }
       dataSourceRef.current = null;
       routeDsRef.current = null;
+      predDsRef.current = null;
     };
   }, [viewer]);
 
@@ -284,6 +392,10 @@ export function AircraftLayer({
         console.log(
           `[AircraftLayer] render complete — ${visible.length} entities`,
         );
+        const v = viewerRef.current;
+        if (v && !v.isDestroyed()) {
+          cullEntities(v, ds, trackedIcaoRef.current);
+        }
       }
     };
 
@@ -415,6 +527,95 @@ export function AircraftLayer({
 
     routeDs.entities.resumeEvents();
   }, [flightRoute, trackedIcao, aircraft]);
+
+  // ── Render IMM-EKF predicted trajectories ───────────────────
+  useEffect(() => {
+    const predDs = predDsRef.current;
+    if (!predDs) return;
+
+    predDs.entities.removeAll();
+
+    if (predictions.size === 0) return;
+
+    predDs.entities.suspendEvents();
+
+    for (const [icao, pred] of predictions) {
+      if (pred.points.length < 2) continue;
+
+      // Only show predictions for military aircraft currently visible
+      const ac = aircraft.get(icao);
+      if (!ac || !ac.is_military || !filter.showMilitary) continue;
+
+      // Build the predicted trajectory polyline
+      const positions = pred.points.map((p) =>
+        Cartesian3.fromDegrees(p.lon, p.lat, p.alt_m),
+      );
+
+      // Prepend current aircraft position for continuity
+      const acPos = Cartesian3.fromDegrees(ac.lon, ac.lat, ac.altitude_m);
+      positions.unshift(acPos);
+
+      // Predicted path: orange dashed, fading with distance
+      predDs.entities.add({
+        id: `pred-path-${icao}`,
+        polyline: {
+          positions,
+          width: 2,
+          material: new PolylineDashMaterialProperty({
+            color: PREDICTION_COLOR,
+            dashLength: 12,
+          }),
+          arcType: ArcType.GEODESIC,
+          clampToGround: false,
+        },
+      });
+
+      // Uncertainty corridor: semi-transparent wider polyline
+      // Use only every 4th point for the corridor to avoid too many entities
+      for (let i = 0; i < pred.points.length; i += 4) {
+        const p = pred.points[i];
+        if (p.sigma_xy_m < 500) continue; // Skip tiny uncertainties
+
+        const corridorCenter = Cartesian3.fromDegrees(p.lon, p.lat, p.alt_m);
+        const alpha = Math.max(0.03, 0.15 - (i / pred.points.length) * 0.12);
+
+        predDs.entities.add({
+          id: `pred-unc-${icao}-${i}`,
+          position: corridorCenter,
+          ellipse: {
+            semiMajorAxis: p.sigma_xy_m,
+            semiMinorAxis: p.sigma_xy_m,
+            height: p.alt_m,
+            material: PREDICTION_COLOR.withAlpha(alpha),
+            outline: false,
+          } as never,
+        });
+      }
+
+      // Pattern label near the aircraft
+      const label = patternLabel(pred.pattern);
+      if (label) {
+        predDs.entities.add({
+          id: `pred-label-${icao}`,
+          position: acPos,
+          label: {
+            text: label,
+            font: PATTERN_LABEL_FONT,
+            fillColor: PREDICTION_COLOR,
+            outlineColor: Color.BLACK,
+            outlineWidth: 2,
+            style: 2,
+            verticalOrigin: VerticalOrigin.BOTTOM,
+            horizontalOrigin: HorizontalOrigin.CENTER,
+            pixelOffset: { x: 0, y: -18 } as never,
+            scaleByDistance: new NearFarScalar(5_000, 1.0, 500_000, 0.0),
+          },
+        });
+      }
+    }
+
+    predDs.entities.resumeEvents();
+  }, [predictions, aircraft, filter]);
 
   return null;
 }

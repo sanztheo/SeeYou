@@ -1,4 +1,4 @@
-import type { AircraftPosition } from "./aircraft";
+import type { AircraftPosition, PredictedTrajectory } from "./aircraft";
 
 export type WsMessageType =
   | "Connected"
@@ -6,7 +6,8 @@ export type WsMessageType =
   | "Pong"
   | "Error"
   | "AircraftUpdate"
-  | "AircraftBatch";
+  | "AircraftBatch"
+  | "Predictions";
 
 export interface WsConnected {
   type: "Connected";
@@ -40,12 +41,18 @@ export interface WsAircraftBatch {
   };
 }
 
+export interface WsPredictions {
+  type: "Predictions";
+  payload: { trajectories: PredictedTrajectory[] };
+}
+
 export type WsMessage =
   | WsConnected
   | WsPing
   | WsPong
   | WsError
   | WsAircraftUpdate
-  | WsAircraftBatch;
+  | WsAircraftBatch
+  | WsPredictions;
 
 export type ConnectionStatus = "connected" | "connecting" | "disconnected";

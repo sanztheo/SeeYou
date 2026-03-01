@@ -1,3 +1,4 @@
+use prediction::PredictedTrajectory;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,5 +32,9 @@ pub enum WsMessage {
         aircraft: Vec<AircraftPosition>,
         chunk_index: u32,
         total_chunks: u32,
+    },
+    /// IMM-EKF predicted trajectories for military aircraft.
+    Predictions {
+        trajectories: Vec<PredictedTrajectory>,
     },
 }

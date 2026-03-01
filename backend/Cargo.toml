@@ -5,6 +5,7 @@ members = [
     "crates/ws",
     "crates/cache",
     "crates/services",
+    "crates/prediction",
 ]
 resolver = "2"
 

@@ -14,6 +14,7 @@ import type {
   AircraftPosition,
   AircraftFilter,
   FlightRoute,
+  PredictedTrajectory,
 } from "../../types/aircraft";
 
 interface ViewerRef {
@@ -26,6 +27,7 @@ interface GlobeProps {
   trackedIcao?: string | null;
   onSelectAircraft?: (aircraft: AircraftPosition) => void;
   flightRoute?: FlightRoute | null;
+  predictions?: Map<string, PredictedTrajectory>;
 }
 
 const DEFAULT_FILTER: AircraftFilter = {
@@ -39,6 +41,7 @@ export function Globe({
   trackedIcao,
   onSelectAircraft,
   flightRoute,
+  predictions,
 }: GlobeProps): React.ReactElement {
   const viewerRef = useRef<ViewerRef>(null);
 
@@ -105,6 +108,7 @@ export function Globe({
           trackedIcao={trackedIcao ?? null}
           onSelect={onSelectAircraft}
           flightRoute={flightRoute ?? null}
+          predictions={predictions ?? new Map()}
         />
       )}
     </ResiumViewer>
