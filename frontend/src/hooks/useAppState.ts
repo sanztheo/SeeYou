@@ -53,7 +53,8 @@ export interface AppState {
   setTrafficFilter: (f: TrafficFilter) => void;
   trafficLoading: boolean;
   trafficRoadCount: number;
-  setTrafficLoadState: (loading: boolean, count: number) => void;
+  trafficTotalRoads: number;
+  setTrafficLoadState: (loading: boolean, count: number, total: number) => void;
 
   cameraFilter: CameraFilter;
   setCameraFilter: (f: CameraFilter) => void;
@@ -103,11 +104,16 @@ export function useAppState(): AppState {
   });
   const [trafficLoading, setTrafficLoading] = useState(false);
   const [trafficRoadCount, setTrafficRoadCount] = useState(0);
+  const [trafficTotalRoads, setTrafficTotalRoads] = useState(0);
 
-  const setTrafficLoadState = useCallback((loading: boolean, count: number) => {
-    setTrafficLoading(loading);
-    setTrafficRoadCount(count);
-  }, []);
+  const setTrafficLoadState = useCallback(
+    (loading: boolean, count: number, total: number) => {
+      setTrafficLoading(loading);
+      setTrafficRoadCount(count);
+      setTrafficTotalRoads(total);
+    },
+    [],
+  );
 
   const [cameraFilter, setCameraFilter] = useState<CameraFilter>({
     enabled: false,
@@ -188,46 +194,44 @@ export function useAppState(): AppState {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAircraft?.icao]);
 
+  const cameraLoadedRef = useRef(false);
+
   useEffect(() => {
     if (!cameraFilter.enabled) {
       setCameras([]);
       setCameraProgress({ loaded: 0, total: 0, done: true });
+      cameraLoadedRef.current = false;
       if (cameraAbortRef.current) cameraAbortRef.current.abort();
       return;
     }
 
-    setCameraProgress((prev) =>
-      prev.done ? { loaded: 0, total: 0, done: false } : prev,
-    );
+    if (cameraLoadedRef.current) return;
+    cameraLoadedRef.current = true;
 
-    if (cameraDebounceRef.current) clearTimeout(cameraDebounceRef.current);
+    setCameraProgress({ loaded: 0, total: 0, done: false });
 
-    cameraDebounceRef.current = setTimeout(() => {
-      if (cameraAbortRef.current) cameraAbortRef.current.abort();
-      const ac = new AbortController();
-      cameraAbortRef.current = ac;
+    if (cameraAbortRef.current) cameraAbortRef.current.abort();
+    const ac = new AbortController();
+    cameraAbortRef.current = ac;
 
-      setCameraProgress({ loaded: 0, total: 0, done: false });
-
-      fetchCamerasChunked(
-        viewportBbox ?? undefined,
-        (cams, progress) => {
-          setCameras(cams);
-          setCameraProgress(progress);
-        },
-        ac.signal,
-      ).catch((err) => {
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        console.error("[Cameras] chunk fetch error:", err);
-        setCameraProgress({ loaded: 0, total: 0, done: true });
-      });
-    }, 300);
+    fetchCamerasChunked(
+      undefined,
+      (cams, progress) => {
+        setCameras(cams);
+        setCameraProgress(progress);
+      },
+      ac.signal,
+    ).catch((err) => {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      console.error("[Cameras] chunk fetch error:", err);
+      setCameraProgress({ loaded: 0, total: 0, done: true });
+      cameraLoadedRef.current = false;
+    });
 
     return () => {
-      if (cameraDebounceRef.current) clearTimeout(cameraDebounceRef.current);
       if (cameraAbortRef.current) cameraAbortRef.current.abort();
     };
-  }, [cameraFilter.enabled, viewportBbox]);
+  }, [cameraFilter.enabled]);
 
   const { status } = useWebSocket({ onMessage: handleWsMessage });
 
@@ -261,6 +265,7 @@ export function useAppState(): AppState {
     setTrafficFilter,
     trafficLoading,
     trafficRoadCount,
+    trafficTotalRoads,
     setTrafficLoadState,
 
     cameraFilter,
