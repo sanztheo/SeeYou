@@ -3,8 +3,8 @@ import { useWebSocket } from "./useWebSocket";
 import { useAircraftStore } from "./useAircraftStore";
 import { useSatelliteStore } from "./useSatelliteStore";
 import { fetchFlightRoute } from "../services/flightRoute";
-import { fetchCameras } from "../services/cameraService";
-import type { BBox } from "../services/cameraService";
+import { fetchCamerasChunked } from "../services/cameraService";
+import type { BBox, CameraProgress } from "../services/cameraService";
 import type {
   AircraftPosition,
   AircraftFilter,
@@ -62,6 +62,7 @@ export interface AppState {
 
   viewportBbox: BBox | null;
   setViewportBbox: (bbox: BBox | null) => void;
+  cameraProgress: CameraProgress;
 
   shaderMode: ShaderMode;
   setShaderMode: (m: ShaderMode) => void;
@@ -110,6 +111,12 @@ export function useAppState(): AppState {
 
   const [viewportBbox, setViewportBbox] = useState<BBox | null>(null);
   const cameraDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cameraAbortRef = useRef<AbortController | null>(null);
+  const [cameraProgress, setCameraProgress] = useState<CameraProgress>({
+    loaded: 0,
+    total: 0,
+    done: true,
+  });
 
   const [shaderMode, setShaderMode] = useState<ShaderMode>("normal");
 
@@ -177,17 +184,36 @@ export function useAppState(): AppState {
   useEffect(() => {
     if (!cameraFilter.enabled || !viewportBbox) {
       setCameras([]);
+      setCameraProgress({ loaded: 0, total: 0, done: true });
+      if (cameraAbortRef.current) cameraAbortRef.current.abort();
       return;
     }
 
     if (cameraDebounceRef.current) clearTimeout(cameraDebounceRef.current);
 
     cameraDebounceRef.current = setTimeout(() => {
-      fetchCameras(viewportBbox).then(setCameras).catch(console.error);
+      if (cameraAbortRef.current) cameraAbortRef.current.abort();
+      const ac = new AbortController();
+      cameraAbortRef.current = ac;
+
+      setCameraProgress({ loaded: 0, total: 0, done: false });
+
+      fetchCamerasChunked(
+        viewportBbox,
+        (cams, progress) => {
+          setCameras(cams);
+          setCameraProgress(progress);
+        },
+        ac.signal,
+      ).catch((err) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        console.error("[Cameras] chunk fetch error:", err);
+      });
     }, 300);
 
     return () => {
       if (cameraDebounceRef.current) clearTimeout(cameraDebounceRef.current);
+      if (cameraAbortRef.current) cameraAbortRef.current.abort();
     };
   }, [cameraFilter.enabled, viewportBbox]);
 
@@ -232,6 +258,7 @@ export function useAppState(): AppState {
 
     viewportBbox,
     setViewportBbox,
+    cameraProgress,
 
     shaderMode,
     setShaderMode,
