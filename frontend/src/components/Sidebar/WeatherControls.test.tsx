@@ -8,9 +8,11 @@ afterEach(cleanup);
 
 const baseFilter: WeatherFilter = {
   enabled: false,
+  showRadar: true,
   showWind: true,
-  showTemperature: true,
-  showClouds: true,
+  radarOpacity: 0.7,
+  windOpacity: 0.6,
+  animationSpeed: 500,
 };
 
 describe("WeatherControls", () => {
@@ -19,7 +21,6 @@ describe("WeatherControls", () => {
       <WeatherControls
         filter={baseFilter}
         onFilterChange={() => {}}
-        pointCount={0}
         loading={false}
       />,
     );
@@ -32,7 +33,6 @@ describe("WeatherControls", () => {
       <WeatherControls
         filter={baseFilter}
         onFilterChange={onChange}
-        pointCount={0}
         loading={false}
       />,
     );
@@ -48,7 +48,6 @@ describe("WeatherControls", () => {
       <WeatherControls
         filter={{ ...baseFilter, enabled: true }}
         onFilterChange={onChange}
-        pointCount={0}
         loading={false}
       />,
     );
@@ -58,36 +57,11 @@ describe("WeatherControls", () => {
     );
   });
 
-  it("shows point count when enabled and points > 0", () => {
-    render(
-      <WeatherControls
-        filter={{ ...baseFilter, enabled: true }}
-        onFilterChange={() => {}}
-        pointCount={1250}
-        loading={false}
-      />,
-    );
-    expect(screen.getByText(/1,250 pts/)).toBeInTheDocument();
-  });
-
-  it("does not show point count when disabled", () => {
-    render(
-      <WeatherControls
-        filter={baseFilter}
-        onFilterChange={() => {}}
-        pointCount={40}
-        loading={false}
-      />,
-    );
-    expect(screen.queryByText(/pts/)).not.toBeInTheDocument();
-  });
-
   it("shows loading state when enabled and loading", () => {
     render(
       <WeatherControls
         filter={{ ...baseFilter, enabled: true }}
         onFilterChange={() => {}}
-        pointCount={0}
         loading={true}
       />,
     );
@@ -99,24 +73,26 @@ describe("WeatherControls", () => {
       <WeatherControls
         filter={baseFilter}
         onFilterChange={() => {}}
-        pointCount={0}
         loading={true}
       />,
     );
     expect(screen.queryByText("loading…")).not.toBeInTheDocument();
   });
 
-  it("shows sub-toggles for Wind and Temperature when enabled", () => {
+  it("shows sub-toggles for Radar and Wind when enabled", () => {
     render(
       <WeatherControls
         filter={{ ...baseFilter, enabled: true }}
         onFilterChange={() => {}}
-        pointCount={0}
         loading={false}
       />,
     );
-    expect(screen.getByText("Wind")).toBeInTheDocument();
-    expect(screen.getByText("Temperature")).toBeInTheDocument();
+    expect(
+      screen.getByRole("switch", { name: /toggle radar/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("switch", { name: /toggle wind/i }),
+    ).toBeInTheDocument();
   });
 
   it("hides sub-toggles when disabled", () => {
@@ -124,12 +100,11 @@ describe("WeatherControls", () => {
       <WeatherControls
         filter={baseFilter}
         onFilterChange={() => {}}
-        pointCount={0}
         loading={false}
       />,
     );
+    expect(screen.queryByText("Radar")).not.toBeInTheDocument();
     expect(screen.queryByText("Wind")).not.toBeInTheDocument();
-    expect(screen.queryByText("Temperature")).not.toBeInTheDocument();
   });
 
   it("clicking Wind sub-toggle calls onFilterChange with showWind:false", () => {
@@ -138,7 +113,6 @@ describe("WeatherControls", () => {
       <WeatherControls
         filter={{ ...baseFilter, enabled: true }}
         onFilterChange={onChange}
-        pointCount={0}
         loading={false}
       />,
     );
@@ -148,21 +122,66 @@ describe("WeatherControls", () => {
     );
   });
 
-  it("clicking Temperature sub-toggle calls onFilterChange with showTemperature:false", () => {
+  it("clicking Radar sub-toggle calls onFilterChange with showRadar:false", () => {
     const onChange = vi.fn();
     render(
       <WeatherControls
         filter={{ ...baseFilter, enabled: true }}
         onFilterChange={onChange}
-        pointCount={0}
         loading={false}
       />,
     );
-    fireEvent.click(
-      screen.getByRole("switch", { name: /toggle temperature/i }),
-    );
+    fireEvent.click(screen.getByRole("switch", { name: /toggle radar/i }));
     expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ showTemperature: false }),
+      expect.objectContaining({ showRadar: false }),
     );
+  });
+
+  it("radar opacity slider calls onFilterChange with radarOpacity", () => {
+    const onChange = vi.fn();
+    render(
+      <WeatherControls
+        filter={{
+          ...baseFilter,
+          enabled: true,
+          showRadar: true,
+          showWind: true,
+        }}
+        onFilterChange={onChange}
+        loading={false}
+      />,
+    );
+    const sliders = screen.getAllByRole("slider");
+    fireEvent.change(sliders[0], { target: { value: "0.5" } });
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ radarOpacity: 0.5 }),
+    );
+  });
+
+  it("animation speed slider appears when radar is enabled", () => {
+    render(
+      <WeatherControls
+        filter={{ ...baseFilter, enabled: true, showRadar: true }}
+        onFilterChange={() => {}}
+        loading={false}
+      />,
+    );
+    expect(screen.getByText("Speed")).toBeInTheDocument();
+  });
+
+  it("animation speed slider hidden when radar is disabled", () => {
+    render(
+      <WeatherControls
+        filter={{
+          ...baseFilter,
+          enabled: true,
+          showRadar: false,
+          showWind: true,
+        }}
+        onFilterChange={() => {}}
+        loading={false}
+      />,
+    );
+    expect(screen.queryByText("Speed")).not.toBeInTheDocument();
   });
 });
