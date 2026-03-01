@@ -32,7 +32,7 @@ export function SatellitePopup({
 
   return (
     <div
-      className={`fixed top-4 right-4 z-20 w-72 backdrop-blur-sm border rounded-lg shadow-xl ${
+      className={`w-72 backdrop-blur-sm border rounded-lg shadow-xl ${
         isISS
           ? "bg-gray-800/95 border-yellow-500/40 shadow-yellow-500/10"
           : "bg-gray-800/95 border-gray-700/50"

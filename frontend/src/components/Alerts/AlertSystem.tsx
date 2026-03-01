@@ -111,7 +111,7 @@ export function AlertSystem({ aircraft, satellites }: AlertSystemProps) {
   }, [alerts]);
 
   return (
-    <div className="fixed top-12 right-3 z-30 flex flex-col items-end gap-1.5 w-72">
+    <div className="flex flex-col items-end gap-1.5 w-72">
       <button
         onClick={() => setCollapsed((v) => !v)}
         className="flex items-center gap-1.5 rounded-md border border-zinc-800/60 bg-zinc-950/70 px-2 py-1 font-mono text-[9px] text-emerald-400/80 backdrop-blur-md transition-colors hover:border-emerald-500/40"

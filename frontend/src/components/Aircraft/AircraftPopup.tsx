@@ -53,7 +53,7 @@ export function AircraftPopup({
     : null;
 
   return (
-    <div className="fixed top-4 right-4 z-20 w-72 bg-gray-800/95 backdrop-blur-sm border border-gray-700/50 rounded-lg shadow-xl">
+    <div className="w-72 bg-gray-800/95 backdrop-blur-sm border border-gray-700/50 rounded-lg shadow-xl">
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-gray-700/50">
         <div className="flex items-center gap-2">

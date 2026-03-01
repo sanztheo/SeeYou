@@ -233,7 +233,7 @@ export function App(): React.ReactElement {
         </button>
       )}
 
-      {/* Top bar: Search + Camera info */}
+      {/* Top bar: Search */}
       <SearchBar
         aircraft={state.aircraft}
         satellites={state.satellites}
@@ -244,14 +244,42 @@ export function App(): React.ReactElement {
         onFlyToCity={handleFlyToCity}
         sidebarOpen={showSidebar}
       />
-      <CameraInfo
-        altitude={cameraState.altitude}
-        heading={cameraState.heading}
-        pitch={cameraState.pitch}
-      />
 
-      {/* Right side: Alerts */}
-      <AlertSystem aircraft={state.aircraft} satellites={state.satellites} />
+      {/* Right column: CameraInfo → Alerts → Active popup */}
+      <div className="fixed top-3 right-3 z-30 flex flex-col items-end gap-2 pointer-events-none max-h-[calc(100vh-5rem)] overflow-y-auto overflow-x-hidden scrollbar-none">
+        <div className="pointer-events-auto">
+          <CameraInfo
+            altitude={cameraState.altitude}
+            heading={cameraState.heading}
+            pitch={cameraState.pitch}
+          />
+        </div>
+        <div className="pointer-events-auto">
+          <AlertSystem
+            aircraft={state.aircraft}
+            satellites={state.satellites}
+          />
+        </div>
+        <div className="pointer-events-auto">
+          <AircraftPopup
+            aircraft={state.selectedAircraft}
+            onClose={handleCloseAircraft}
+            flightRoute={state.flightRoute}
+            routeLoading={state.routeLoading}
+            prediction={
+              state.selectedAircraft
+                ? (state.predictions.get(state.selectedAircraft.icao) ?? null)
+                : null
+            }
+          />
+        </div>
+        <div className="pointer-events-auto">
+          <SatellitePopup
+            satellite={state.selectedSatellite}
+            onClose={handleCloseSatellite}
+          />
+        </div>
+      </div>
 
       {/* Shader HUDs (fullscreen overlays) */}
       {state.shaderMode === "nightVision" && (
@@ -294,26 +322,11 @@ export function App(): React.ReactElement {
         sidebarOpen={showSidebar}
       />
 
-      {/* Popups & Tooltips (highest z) */}
+      {/* Tooltips & remaining popups */}
       <AircraftTooltip
         aircraft={state.hoveredAircraft}
         screenX={state.hoverPos.x}
         screenY={state.hoverPos.y}
-      />
-      <AircraftPopup
-        aircraft={state.selectedAircraft}
-        onClose={handleCloseAircraft}
-        flightRoute={state.flightRoute}
-        routeLoading={state.routeLoading}
-        prediction={
-          state.selectedAircraft
-            ? (state.predictions.get(state.selectedAircraft.icao) ?? null)
-            : null
-        }
-      />
-      <SatellitePopup
-        satellite={state.selectedSatellite}
-        onClose={handleCloseSatellite}
       />
       <CameraPlayer camera={state.selectedCamera} onClose={handleCloseCamera} />
       <EventPopup event={state.selectedEvent} onClose={handleCloseEvent} />
