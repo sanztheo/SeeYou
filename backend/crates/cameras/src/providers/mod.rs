@@ -1,6 +1,7 @@
 mod caltrans;
 mod generic;
 mod nycdot;
+mod otcmap;
 mod tfl;
 
 use anyhow::Result;
@@ -19,6 +20,7 @@ fn all_providers() -> Vec<Box<dyn CameraProvider>> {
         Box::new(tfl::TflProvider),
         Box::new(nycdot::NycdotProvider),
         Box::new(caltrans::CaltransProvider),
+        Box::new(otcmap::OtcMapProvider),
         Box::new(generic::GenericProvider),
     ]
 }
