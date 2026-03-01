@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useCesium } from "resium";
 import {
-  CustomDataSource,
+  LabelCollection,
+  PointPrimitiveCollection,
   Cartesian3,
   Cartesian2,
   Color,
@@ -10,7 +11,7 @@ import {
   LabelStyle,
   VerticalOrigin,
 } from "cesium";
-import { CAPITALS, type Capital } from "../../data/capitals";
+import { CAPITALS } from "../../data/capitals";
 
 function maxDistance(pop: number): number {
   if (pop >= 5_000_000) return 8_000_000;
@@ -27,60 +28,60 @@ function fontSize(pop: number): string {
 
 export function CityLabelsLayer(): null {
   const { viewer } = useCesium();
+  const mountedRef = useRef(false);
 
   useEffect(() => {
-    if (!viewer) return;
+    if (!viewer || mountedRef.current) return;
+    mountedRef.current = true;
 
-    const existing = viewer.dataSources.getByName("city-labels");
-    if (existing.length > 0) return;
-
-    const ds = new CustomDataSource("city-labels");
+    const lblColl = viewer.scene.primitives.add(
+      new LabelCollection({ scene: viewer.scene }),
+    ) as LabelCollection;
+    const pointColl = viewer.scene.primitives.add(
+      new PointPrimitiveCollection(),
+    ) as PointPrimitiveCollection;
 
     for (const cap of CAPITALS) {
-      addCapitalEntity(ds, cap);
+      const dist = maxDistance(cap.population);
+      const pos = Cartesian3.fromDegrees(cap.lon, cap.lat);
+
+      pointColl.add({
+        position: pos,
+        pixelSize: 4,
+        color: Color.fromAlpha(Color.WHITE, 0.8),
+        outlineColor: Color.BLACK,
+        outlineWidth: 1,
+        distanceDisplayCondition: new DistanceDisplayCondition(0, dist),
+        scaleByDistance: new NearFarScalar(1e4, 1.0, dist, 0.5),
+      });
+
+      lblColl.add({
+        position: pos,
+        text: cap.name,
+        font: fontSize(cap.population),
+        fillColor: Color.WHITE,
+        outlineColor: Color.BLACK,
+        outlineWidth: 2,
+        style: LabelStyle.FILL_AND_OUTLINE,
+        showBackground: true,
+        backgroundColor: Color.fromAlpha(Color.BLACK, 0.55),
+        backgroundPadding: new Cartesian2(6, 3),
+        pixelOffset: new Cartesian2(0, -14),
+        verticalOrigin: VerticalOrigin.BOTTOM,
+        distanceDisplayCondition: new DistanceDisplayCondition(0, dist),
+        scaleByDistance: new NearFarScalar(1e4, 1.0, dist, 0.4),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      });
     }
 
-    viewer.dataSources.add(ds);
-
     return () => {
+      mountedRef.current = false;
       if (!viewer.isDestroyed()) {
-        viewer.dataSources.remove(ds, true);
+        viewer.scene.primitives.remove(lblColl);
+        viewer.scene.primitives.remove(pointColl);
       }
     };
   }, [viewer]);
 
   return null;
-}
-
-function addCapitalEntity(ds: CustomDataSource, cap: Capital): void {
-  const dist = maxDistance(cap.population);
-
-  ds.entities.add({
-    id: `capital_${cap.name}_${cap.country}`,
-    position: Cartesian3.fromDegrees(cap.lon, cap.lat),
-    point: {
-      pixelSize: 4,
-      color: Color.fromAlpha(Color.WHITE, 0.8),
-      outlineColor: Color.BLACK,
-      outlineWidth: 1,
-      distanceDisplayCondition: new DistanceDisplayCondition(0, dist),
-      scaleByDistance: new NearFarScalar(1e4, 1.0, dist, 0.5),
-    },
-    label: {
-      text: cap.name,
-      font: fontSize(cap.population),
-      fillColor: Color.WHITE,
-      outlineColor: Color.BLACK,
-      outlineWidth: 2,
-      style: LabelStyle.FILL_AND_OUTLINE,
-      showBackground: true,
-      backgroundColor: Color.fromAlpha(Color.BLACK, 0.55),
-      backgroundPadding: new Cartesian2(6, 3),
-      pixelOffset: new Cartesian2(0, -14),
-      verticalOrigin: VerticalOrigin.BOTTOM,
-      distanceDisplayCondition: new DistanceDisplayCondition(0, dist),
-      scaleByDistance: new NearFarScalar(1e4, 1.0, dist, 0.4),
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
-    },
-  });
 }
