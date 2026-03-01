@@ -1,9 +1,10 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useWebSocket } from "./useWebSocket";
 import { useAircraftStore } from "./useAircraftStore";
 import { useSatelliteStore } from "./useSatelliteStore";
 import { fetchFlightRoute } from "../services/flightRoute";
 import { fetchCameras } from "../services/cameraService";
+import type { BBox } from "../services/cameraService";
 import type {
   AircraftPosition,
   AircraftFilter,
@@ -59,6 +60,9 @@ export interface AppState {
   selectedCamera: Camera | null;
   setSelectedCamera: (c: Camera | null) => void;
 
+  viewportBbox: BBox | null;
+  setViewportBbox: (bbox: BBox | null) => void;
+
   shaderMode: ShaderMode;
   setShaderMode: (m: ShaderMode) => void;
 }
@@ -103,6 +107,9 @@ export function useAppState(): AppState {
   });
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [selectedCamera, setSelectedCamera] = useState<Camera | null>(null);
+
+  const [viewportBbox, setViewportBbox] = useState<BBox | null>(null);
+  const cameraDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [shaderMode, setShaderMode] = useState<ShaderMode>("normal");
 
@@ -168,9 +175,21 @@ export function useAppState(): AppState {
   }, [selectedAircraft?.icao]);
 
   useEffect(() => {
-    if (!cameraFilter.enabled) return;
-    fetchCameras().then(setCameras).catch(console.error);
-  }, [cameraFilter.enabled]);
+    if (!cameraFilter.enabled || !viewportBbox) {
+      setCameras([]);
+      return;
+    }
+
+    if (cameraDebounceRef.current) clearTimeout(cameraDebounceRef.current);
+
+    cameraDebounceRef.current = setTimeout(() => {
+      fetchCameras(viewportBbox).then(setCameras).catch(console.error);
+    }, 300);
+
+    return () => {
+      if (cameraDebounceRef.current) clearTimeout(cameraDebounceRef.current);
+    };
+  }, [cameraFilter.enabled, viewportBbox]);
 
   const { status } = useWebSocket({ onMessage: handleWsMessage });
 
@@ -210,6 +229,9 @@ export function useAppState(): AppState {
     cameras,
     selectedCamera,
     setSelectedCamera,
+
+    viewportBbox,
+    setViewportBbox,
 
     shaderMode,
     setShaderMode,
