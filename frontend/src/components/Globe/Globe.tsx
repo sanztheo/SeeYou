@@ -16,6 +16,8 @@ import { CameraLayer } from "../Camera/CameraLayer";
 import { CityLabelsLayer } from "../City/CityLabelsLayer";
 import { WeatherLayer } from "../Weather/WeatherLayer";
 import { WindParticleLayer } from "../Weather/WindParticleLayer";
+import { TemperatureLayer } from "../Weather/TemperatureLayer";
+import { AirQualityLayer } from "../Weather/AirQualityLayer";
 import { EventLayer } from "../Events/EventLayer";
 import { MetarLayer } from "../Aviation/MetarLayer";
 import { SubmarineCableLayer } from "../Cables/SubmarineCableLayer";
@@ -391,6 +393,12 @@ export function Globe({
                 opacity={weatherFilter.windOpacity}
               />
             )}
+          {weatherFilter.showTemperature && (
+            <TemperatureLayer opacity={weatherFilter.temperatureOpacity} />
+          )}
+          {weatherFilter.showAirQuality && (
+            <AirQualityLayer opacity={weatherFilter.airQualityOpacity} />
+          )}
         </>
       )}
 

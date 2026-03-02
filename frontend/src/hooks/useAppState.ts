@@ -264,8 +264,12 @@ export function useAppState(): AppState {
     enabled: false,
     showRadar: true,
     showWind: true,
+    showTemperature: false,
+    showAirQuality: false,
     radarOpacity: 0.7,
     windOpacity: 0.6,
+    temperatureOpacity: 0.5,
+    airQualityOpacity: 0.5,
     animationSpeed: 500,
   });
   const [weatherPoints, setWeatherPoints] = useState<WeatherPoint[]>([]);

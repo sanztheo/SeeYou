@@ -56,6 +56,18 @@ export function WeatherControls({
               checked={filter.showWind}
               onChange={(v) => onFilterChange({ ...filter, showWind: v })}
             />
+            <SubToggle
+              label="Temperature"
+              checked={filter.showTemperature}
+              onChange={(v) =>
+                onFilterChange({ ...filter, showTemperature: v })
+              }
+            />
+            <SubToggle
+              label="Air Quality"
+              checked={filter.showAirQuality}
+              onChange={(v) => onFilterChange({ ...filter, showAirQuality: v })}
+            />
           </div>
 
           {filter.showRadar && (
@@ -71,6 +83,26 @@ export function WeatherControls({
               label="Wind"
               value={filter.windOpacity}
               onChange={(v) => onFilterChange({ ...filter, windOpacity: v })}
+            />
+          )}
+
+          {filter.showTemperature && (
+            <SliderControl
+              label="Temp"
+              value={filter.temperatureOpacity}
+              onChange={(v) =>
+                onFilterChange({ ...filter, temperatureOpacity: v })
+              }
+            />
+          )}
+
+          {filter.showAirQuality && (
+            <SliderControl
+              label="AQI"
+              value={filter.airQualityOpacity}
+              onChange={(v) =>
+                onFilterChange({ ...filter, airQualityOpacity: v })
+              }
             />
           )}
 
