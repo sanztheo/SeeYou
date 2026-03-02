@@ -158,15 +158,15 @@ export function IntelligenceLegend(props: Props): React.ReactElement | null {
 
   return (
     <div className={`fixed bottom-14 ${left} z-20 transition-all`}>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 rounded-md bg-black/70 backdrop-blur-md border border-zinc-700/40 px-3 py-1.5">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 hud-bracket bg-black/80 backdrop-blur-md border border-emerald-900/30 px-3 py-1.5">
         {items.map((item) => (
           <div key={item.label} className="flex items-center gap-1.5">
             <Shape shape={item.shape} color={item.color} />
-            <span className="text-[10px] text-zinc-300 font-mono whitespace-nowrap">
+            <span className="text-[10px] text-emerald-400/70 font-mono whitespace-nowrap">
               {item.label}
               {item.count != null && (
-                <span className="text-zinc-500 ml-0.5">
-                  ({fmt(item.count)})
+                <span className="text-emerald-800/50 ml-0.5">
+                  [{fmt(item.count)}]
                 </span>
               )}
             </span>

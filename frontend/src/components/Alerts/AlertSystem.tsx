@@ -114,7 +114,7 @@ export function AlertSystem({ aircraft, satellites }: AlertSystemProps) {
     <div className="flex flex-col items-end gap-1.5 w-72">
       <button
         onClick={() => setCollapsed((v) => !v)}
-        className="flex items-center gap-1.5 rounded-md border border-zinc-800/60 bg-zinc-950/70 px-2 py-1 font-mono text-[9px] text-emerald-400/80 backdrop-blur-md transition-colors hover:border-emerald-500/40"
+        className="flex items-center gap-1.5 border border-emerald-900/30 bg-black/80 px-2 py-1 font-mono text-[9px] text-emerald-400/80 backdrop-blur-md transition-colors hover:border-emerald-500/40 hud-bracket"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -136,7 +136,7 @@ export function AlertSystem({ aircraft, satellites }: AlertSystemProps) {
         alerts.map((alert) => (
           <div
             key={alert.id}
-            className={`w-full rounded-md border-l-2 ${ACCENT[alert.type]} border border-zinc-800/60 bg-zinc-950/80 p-2.5 shadow-lg backdrop-blur-md transition-opacity duration-500 ${alert.fading ? "opacity-0" : "opacity-100"}`}
+            className={`w-full border-l-2 ${ACCENT[alert.type]} border border-emerald-900/30 bg-black/90 p-2.5 shadow-[0_0_12px_rgba(0,0,0,0.4)] backdrop-blur-md transition-opacity duration-500 ${alert.fading ? "opacity-0" : "opacity-100"}`}
           >
             <div className="flex items-center justify-between">
               <span className="font-mono text-[9px] font-bold uppercase tracking-widest text-emerald-400">

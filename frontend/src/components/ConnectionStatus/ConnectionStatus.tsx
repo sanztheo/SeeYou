@@ -27,7 +27,7 @@ export function ConnectionStatus({
 }: ConnectionStatusProps): React.ReactElement {
   const c = CFG[status];
   return (
-    <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-zinc-800/60">
+    <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-emerald-900/20">
       <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
       <span className={`font-mono text-[10px] tracking-widest ${c.text}`}>
         {c.label}
