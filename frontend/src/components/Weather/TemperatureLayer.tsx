@@ -166,6 +166,8 @@ interface TemperatureLayerProps {
 export function TemperatureLayer({ opacity }: TemperatureLayerProps): null {
   const { viewer } = useCesium();
   const layerRef = useRef<ImageryLayer | null>(null);
+  const opacityRef = useRef(opacity);
+  opacityRef.current = opacity;
 
   useEffect(() => {
     if (!viewer || viewer.isDestroyed()) return;
@@ -187,7 +189,7 @@ export function TemperatureLayer({ opacity }: TemperatureLayerProps): null {
         });
         if (cancelled || viewer.isDestroyed()) return;
         const layer = viewer.imageryLayers.addImageryProvider(provider);
-        layer.alpha = opacity;
+        layer.alpha = opacityRef.current;
         layerRef.current = layer;
         return;
       }
@@ -205,7 +207,7 @@ export function TemperatureLayer({ opacity }: TemperatureLayerProps): null {
         });
         if (cancelled || viewer.isDestroyed()) return;
         const layer = viewer.imageryLayers.addImageryProvider(provider);
-        layer.alpha = opacity;
+        layer.alpha = opacityRef.current;
         layerRef.current = layer;
       } catch (err) {
         console.warn("Temperature layer failed:", err);
@@ -228,7 +230,7 @@ export function TemperatureLayer({ opacity }: TemperatureLayerProps): null {
       }
       layerRef.current = null;
     };
-  }, [viewer]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [viewer]);  
 
   useEffect(() => {
     if (
