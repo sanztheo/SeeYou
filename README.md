@@ -36,6 +36,8 @@ The entire stack runs locally with no paid services.
 | **CCTV Cameras** | 800+ live video feeds from 30+ cities across 6 continents | TfL, NYC DOT, Caltrans, and more |
 | **Traffic** | Animated particle flow on real road networks | OpenStreetMap Overpass |
 | **Weather Radar** | Global radar overlay with temporal animation | RainViewer |
+| **Temperature** | Global temperature heatmap overlay | OpenWeatherMap |
+| **Air Quality** | Global AQI heatmap overlay (US EPA scale) | WAQI / AQICN |
 | **Wind** | 4,000-particle wind flow with IDW interpolation | Open-Meteo |
 | **METAR** | Aviation weather stations with flight categories (VFR/MVFR/IFR/LIFR) | aviationweather.gov |
 | **Natural Events** | Active wildfires, storms, volcanoes, floods | NASA EONET |
@@ -221,7 +223,7 @@ All visualization layers use imperative CesiumJS Primitive Collections instead o
 
 ## Data Sources
 
-All data is fetched from free, public APIs. No API keys required except for Cesium Ion (free tier).
+All data is fetched from free, public APIs. Optional API keys unlock extra layers (temperature, air quality).
 
 | Source | Data | Polling |
 |--------|------|---------|
@@ -237,6 +239,8 @@ All data is fetched from free, public APIs. No API keys required except for Cesi
 | aviationweather.gov | METAR stations | 5min |
 | Open-Meteo | Weather grid | 10min |
 | RainViewer | Radar tiles | 5min |
+| OpenWeatherMap | Temperature heatmap | On-demand |
+| WAQI / AQICN | Air quality heatmap | On-demand |
 | Overpass API | Road networks | On-demand |
 | TfL / NYC DOT / Caltrans | CCTV camera feeds | 5min |
 | Wikidata | Military bases | Static |
@@ -267,6 +271,10 @@ VITE_CESIUM_ION_TOKEN=       # Free from https://ion.cesium.com
 VITE_WS_URL=ws://localhost:3001/ws
 VITE_API_URL=http://localhost:3001
 REDIS_URL=redis://127.0.0.1:6379
+
+# Optional — weather heatmap layers
+VITE_OPENWEATHER_API_KEY=    # Free from https://home.openweathermap.org/api_keys
+VITE_WAQI_TOKEN=             # Free from https://aqicn.org/data-platform/token/
 
 # Optional — backend tuning
 SERVER_HOST=0.0.0.0
