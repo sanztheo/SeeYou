@@ -93,7 +93,7 @@ export function Timeline({
     [displayTime, onTimeChange],
   );
 
-  const leftMargin = sidebarOpen ? "pl-[280px]" : "pl-0";
+  const leftMargin = sidebarOpen ? "pl-[304px]" : "pl-[44px]";
 
   return (
     <div

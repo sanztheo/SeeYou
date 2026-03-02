@@ -23,7 +23,7 @@ export function CursorCoords({
   altitude,
   sidebarOpen,
 }: CursorCoordsProps) {
-  const left = sidebarOpen ? "left-[292px]" : "left-3";
+  const left = sidebarOpen ? "left-[316px]" : "left-[56px]";
   return (
     <div
       className={`fixed bottom-12 ${left} z-20 hud-bracket flex items-center gap-2 border border-emerald-900/30 bg-black/80 px-3 py-1 font-mono text-[10px] backdrop-blur-md select-none transition-all`}

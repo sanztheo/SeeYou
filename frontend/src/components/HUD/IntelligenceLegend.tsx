@@ -13,6 +13,7 @@ interface LegendItem {
   color: string;
   shape: "circle" | "diamond" | "triangle" | "line";
   count?: number;
+  onClick?: () => void;
 }
 
 interface Props {
@@ -34,7 +35,9 @@ interface Props {
   threatCount: number;
   spaceWeatherFilter: SpaceWeatherFilter;
   kpIndex: number;
+  alertCount: number;
   sidebarOpen: boolean;
+  onClickSpaceWeather?: () => void;
 }
 
 function Shape({
@@ -150,28 +153,37 @@ export function IntelligenceLegend(props: Props): React.ReactElement | null {
       label: `Aurora Kp${props.kpIndex.toFixed(1)}`,
       color: "#22C55E",
       shape: "circle",
+      count: props.alertCount,
+      onClick: props.onClickSpaceWeather,
     });
 
   if (items.length === 0) return null;
 
-  const left = props.sidebarOpen ? "left-[290px]" : "left-3";
+  const left = props.sidebarOpen ? "left-[316px]" : "left-[56px]";
 
   return (
     <div className={`fixed bottom-14 ${left} z-20 transition-all`}>
       <div className="flex flex-wrap gap-x-3 gap-y-1 hud-bracket bg-black/80 backdrop-blur-md border border-emerald-900/30 px-3 py-1.5">
-        {items.map((item) => (
-          <div key={item.label} className="flex items-center gap-1.5">
-            <Shape shape={item.shape} color={item.color} />
-            <span className="text-[10px] text-emerald-400/70 font-mono whitespace-nowrap">
-              {item.label}
-              {item.count != null && (
-                <span className="text-emerald-800/50 ml-0.5">
-                  [{fmt(item.count)}]
-                </span>
-              )}
-            </span>
-          </div>
-        ))}
+        {items.map((item) => {
+          const Tag = item.onClick ? "button" : "div";
+          return (
+            <Tag
+              key={item.label}
+              className={`flex items-center gap-1.5${item.onClick ? " cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+              onClick={item.onClick}
+            >
+              <Shape shape={item.shape} color={item.color} />
+              <span className="text-[10px] text-emerald-400/70 font-mono whitespace-nowrap">
+                {item.label}
+                {item.count != null && (
+                  <span className="text-emerald-800/50 ml-0.5">
+                    [{fmt(item.count)}]
+                  </span>
+                )}
+              </span>
+            </Tag>
+          );
+        })}
       </div>
     </div>
   );

@@ -302,7 +302,9 @@ export function SearchBar({
     [onFlyToCity],
   );
 
-  const leftOffset = sidebarOpen ? "left-1/2" : "left-[calc(50%-144px)]";
+  const leftOffset = sidebarOpen
+    ? "left-[calc(50%+8px)]"
+    : "left-[calc(50%-122px)]";
 
   return (
     <div
