@@ -7,12 +7,16 @@ import {
   NearFarScalar,
   DistanceDisplayCondition,
   VerticalOrigin,
+  ScreenSpaceEventHandler,
+  ScreenSpaceEventType,
+  defined,
 } from "cesium";
 import type { MilitaryBase, MilitaryFilter } from "../../types/military";
 
 interface Props {
   bases: MilitaryBase[];
   filter: MilitaryFilter;
+  onSelect?: (base: MilitaryBase) => void;
 }
 
 const BRANCH_COLORS: Record<string, Color> = {
@@ -51,33 +55,64 @@ function getDiamondCanvas(branch: string): HTMLCanvasElement {
   return canvasCache.get(key)!;
 }
 
-export function MilitaryBasesLayer({ bases, filter }: Props): null {
+function baseKey(b: MilitaryBase): string {
+  return `${b.name}::${b.country}`;
+}
+
+const MIL_SCALE = new NearFarScalar(1e5, 1.5, 1e7, 0.4);
+const MIL_DDC = new DistanceDisplayCondition(0, 3e7);
+
+export function MilitaryBasesLayer({ bases, filter, onSelect }: Props): null {
   const { scene } = useCesium();
-  const bbRef = useRef<BillboardCollection | null>(null);
+  const dataMapRef = useRef(new Map<string, MilitaryBase>());
+  const onSelectRef = useRef(onSelect);
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  useEffect(() => {
+    if (!scene || scene.isDestroyed()) return;
+    const handler = new ScreenSpaceEventHandler(
+      scene.canvas as HTMLCanvasElement,
+    );
+    handler.setInputAction((click: ScreenSpaceEventHandler.PositionedEvent) => {
+      const picked = scene.pick(click.position);
+      if (defined(picked) && typeof picked.id === "string") {
+        const base = dataMapRef.current.get(picked.id);
+        if (base) onSelectRef.current?.(base);
+      }
+    }, ScreenSpaceEventType.LEFT_CLICK);
+    return () => handler.destroy();
+  }, [scene]);
 
   useEffect(() => {
     if (!scene || scene.isDestroyed()) return;
 
     const bbs = new BillboardCollection({ scene });
+    const map = new Map<string, MilitaryBase>();
 
     if (filter.enabled) {
-      for (const base of bases) {
-        if (filter.branches.size > 0 && !filter.branches.has(base.branch))
+      for (const b of bases) {
+        if (filter.branches.size > 0 && !filter.branches.has(b.branch))
           continue;
+        const key = baseKey(b);
+        map.set(key, b);
         bbs.add({
-          position: Cartesian3.fromDegrees(base.lon, base.lat),
-          image: getDiamondCanvas(base.branch),
+          position: Cartesian3.fromDegrees(b.lon, b.lat),
+          image: getDiamondCanvas(b.branch),
           width: 16,
           height: 16,
           verticalOrigin: VerticalOrigin.CENTER,
-          scaleByDistance: new NearFarScalar(1e5, 1.5, 1e7, 0.4),
-          distanceDisplayCondition: new DistanceDisplayCondition(0, 3e7),
+          scaleByDistance: MIL_SCALE,
+          distanceDisplayCondition: MIL_DDC,
+          id: key,
         });
       }
     }
 
     scene.primitives.add(bbs);
-    bbRef.current = bbs;
+    dataMapRef.current = map;
 
     return () => {
       if (!scene.isDestroyed()) scene.primitives.remove(bbs);

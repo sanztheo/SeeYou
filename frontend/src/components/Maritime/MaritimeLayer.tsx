@@ -7,12 +7,16 @@ import {
   NearFarScalar,
   DistanceDisplayCondition,
   VerticalOrigin,
+  ScreenSpaceEventHandler,
+  ScreenSpaceEventType,
+  defined,
 } from "cesium";
 import type { Vessel, MaritimeFilter } from "../../types/maritime";
 
 interface Props {
   vessels: Vessel[];
   filter: MaritimeFilter;
+  onSelect?: (vessel: Vessel) => void;
 }
 
 function createShipCanvas(sanctioned: boolean): HTMLCanvasElement {
@@ -40,18 +44,43 @@ function createShipCanvas(sanctioned: boolean): HTMLCanvasElement {
 const normalShipCanvas = createShipCanvas(false);
 const sanctionedShipCanvas = createShipCanvas(true);
 
-export function MaritimeLayer({ vessels, filter }: Props): null {
+const VESSEL_SCALE = new NearFarScalar(1e4, 2.0, 1e7, 0.4);
+const VESSEL_DDC = new DistanceDisplayCondition(0, 3e7);
+
+export function MaritimeLayer({ vessels, filter, onSelect }: Props): null {
   const { scene } = useCesium();
-  const bbRef = useRef<BillboardCollection | null>(null);
+  const dataMapRef = useRef(new Map<string, Vessel>());
+  const onSelectRef = useRef(onSelect);
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  useEffect(() => {
+    if (!scene || scene.isDestroyed()) return;
+    const handler = new ScreenSpaceEventHandler(
+      scene.canvas as HTMLCanvasElement,
+    );
+    handler.setInputAction((click: ScreenSpaceEventHandler.PositionedEvent) => {
+      const picked = scene.pick(click.position);
+      if (defined(picked) && typeof picked.id === "string") {
+        const vessel = dataMapRef.current.get(picked.id);
+        if (vessel) onSelectRef.current?.(vessel);
+      }
+    }, ScreenSpaceEventType.LEFT_CLICK);
+    return () => handler.destroy();
+  }, [scene]);
 
   useEffect(() => {
     if (!scene || scene.isDestroyed()) return;
 
     const bbs = new BillboardCollection({ scene });
+    const map = new Map<string, Vessel>();
 
     if (filter.enabled) {
       for (const v of vessels) {
         if (filter.sanctionedOnly && !v.is_sanctioned) continue;
+        map.set(v.mmsi, v);
         bbs.add({
           position: Cartesian3.fromDegrees(v.lon, v.lat),
           image: v.is_sanctioned ? sanctionedShipCanvas : normalShipCanvas,
@@ -62,14 +91,15 @@ export function MaritimeLayer({ vessels, filter }: Props): null {
           color: v.is_sanctioned
             ? Color.RED
             : Color.fromCssColorString("#60A5FA"),
-          scaleByDistance: new NearFarScalar(1e4, 2.0, 1e7, 0.4),
-          distanceDisplayCondition: new DistanceDisplayCondition(0, 3e7),
+          scaleByDistance: VESSEL_SCALE,
+          distanceDisplayCondition: VESSEL_DDC,
+          id: v.mmsi,
         });
       }
     }
 
     scene.primitives.add(bbs);
-    bbRef.current = bbs;
+    dataMapRef.current = map;
 
     return () => {
       if (!scene.isDestroyed()) scene.primitives.remove(bbs);

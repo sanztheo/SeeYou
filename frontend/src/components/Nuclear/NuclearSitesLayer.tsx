@@ -7,12 +7,16 @@ import {
   NearFarScalar,
   DistanceDisplayCondition,
   VerticalOrigin,
+  ScreenSpaceEventHandler,
+  ScreenSpaceEventType,
+  defined,
 } from "cesium";
 import type { NuclearSite, NuclearFilter } from "../../types/nuclear";
 
 interface Props {
   sites: NuclearSite[];
   filter: NuclearFilter;
+  onSelect?: (site: NuclearSite) => void;
 }
 
 const TYPE_COLORS: Record<string, Color> = {
@@ -49,32 +53,63 @@ function getNuclearCanvas(type: string): HTMLCanvasElement {
   return canvasCache.get(color)!;
 }
 
-export function NuclearSitesLayer({ sites, filter }: Props): null {
+function siteKey(s: NuclearSite): string {
+  return `${s.name}::${s.country}`;
+}
+
+const NUC_SCALE = new NearFarScalar(1e5, 1.5, 1e7, 0.4);
+const NUC_DDC = new DistanceDisplayCondition(0, 3e7);
+
+export function NuclearSitesLayer({ sites, filter, onSelect }: Props): null {
   const { scene } = useCesium();
-  const bbRef = useRef<BillboardCollection | null>(null);
+  const dataMapRef = useRef(new Map<string, NuclearSite>());
+  const onSelectRef = useRef(onSelect);
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  useEffect(() => {
+    if (!scene || scene.isDestroyed()) return;
+    const handler = new ScreenSpaceEventHandler(
+      scene.canvas as HTMLCanvasElement,
+    );
+    handler.setInputAction((click: ScreenSpaceEventHandler.PositionedEvent) => {
+      const picked = scene.pick(click.position);
+      if (defined(picked) && typeof picked.id === "string") {
+        const site = dataMapRef.current.get(picked.id);
+        if (site) onSelectRef.current?.(site);
+      }
+    }, ScreenSpaceEventType.LEFT_CLICK);
+    return () => handler.destroy();
+  }, [scene]);
 
   useEffect(() => {
     if (!scene || scene.isDestroyed()) return;
 
     const bbs = new BillboardCollection({ scene });
+    const map = new Map<string, NuclearSite>();
 
     if (filter.enabled) {
       for (const site of sites) {
         if (filter.types.size > 0 && !filter.types.has(site.type)) continue;
+        const key = siteKey(site);
+        map.set(key, site);
         bbs.add({
           position: Cartesian3.fromDegrees(site.lon, site.lat),
           image: getNuclearCanvas(site.type),
           width: 18,
           height: 18,
           verticalOrigin: VerticalOrigin.CENTER,
-          scaleByDistance: new NearFarScalar(1e5, 1.5, 1e7, 0.4),
-          distanceDisplayCondition: new DistanceDisplayCondition(0, 3e7),
+          scaleByDistance: NUC_SCALE,
+          distanceDisplayCondition: NUC_DDC,
+          id: key,
         });
       }
     }
 
     scene.primitives.add(bbs);
-    bbRef.current = bbs;
+    dataMapRef.current = map;
 
     return () => {
       if (!scene.isDestroyed()) scene.primitives.remove(bbs);
