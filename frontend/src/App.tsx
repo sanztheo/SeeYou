@@ -309,7 +309,7 @@ export function App(): React.ReactElement {
       {!isFullscreen && !sidebarOpen && (
         <button
           onClick={handleExpandSidebar}
-          className="fixed top-3 left-3 z-30 flex h-8 w-8 items-center justify-center rounded-md bg-black/60 text-zinc-400 backdrop-blur-md border border-zinc-700/40 hover:text-zinc-100 hover:border-zinc-500/60 transition-all"
+          className="fixed top-2 left-2 z-30 flex h-8 w-8 items-center justify-center bg-black/80 text-emerald-800/60 backdrop-blur-md border border-emerald-900/30 hover:text-emerald-400 hover:border-emerald-500/40 transition-all hud-bracket"
           aria-label="Open sidebar"
         >
           <svg

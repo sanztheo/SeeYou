@@ -97,7 +97,7 @@ export function Timeline({
 
   return (
     <div
-      className={`fixed bottom-0 left-0 right-0 z-30 flex h-10 items-center border-t border-zinc-800/80 bg-zinc-950/90 backdrop-blur-xl ${leftMargin} transition-all select-none`}
+      className={`fixed bottom-0 left-0 right-0 z-30 flex h-10 items-center border-t border-emerald-900/20 bg-black/92 backdrop-blur-xl ${leftMargin} transition-all select-none`}
     >
       <div className="flex w-full items-center gap-2 px-3">
         {/* LIVE */}

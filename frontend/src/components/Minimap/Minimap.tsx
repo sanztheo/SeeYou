@@ -122,10 +122,10 @@ export function Minimap({ viewCenter, viewAltitude }: MinimapProps) {
 
   return (
     <div
-      className="fixed bottom-12 right-3 z-20 pointer-events-none select-none"
+      className="pointer-events-none select-none"
       style={{ width: W, height: H }}
     >
-      <div className="relative w-full h-full rounded-md border border-zinc-800/60 bg-zinc-950/80 backdrop-blur-md overflow-hidden">
+      <div className="relative w-full h-full hud-bracket border border-emerald-900/30 bg-black/80 backdrop-blur-md overflow-hidden">
         <svg
           width={W}
           height={H}

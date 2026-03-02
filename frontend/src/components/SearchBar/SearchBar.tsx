@@ -309,19 +309,12 @@ export function SearchBar({
   return (
     <div
       ref={containerRef}
-      className={`fixed top-3 ${leftOffset} z-40 w-[340px] -translate-x-1/2`}
+      className={`fixed top-2 ${leftOffset} z-40 w-[380px] -translate-x-1/2`}
     >
-      <div className="relative">
-        <svg
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2}
-        >
-          <circle cx="11" cy="11" r="7" />
-          <path d="M21 21l-4.35-4.35" strokeLinecap="round" />
-        </svg>
+      <div className="relative hud-bracket">
+        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 font-mono text-[10px] text-emerald-500/70 select-none">
+          &gt;_
+        </span>
         <input
           ref={inputRef}
           value={query}
@@ -330,16 +323,16 @@ export function SearchBar({
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Search aircraft, satellites, cities, bases, cables..."
-          className="w-full rounded-md border border-zinc-700/60 bg-zinc-900/80 py-1.5 pl-9 pr-14 font-mono text-[11px] text-zinc-200 placeholder-zinc-600 shadow-lg shadow-black/30 backdrop-blur-xl outline-none transition-colors focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
+          placeholder="query // aircraft, satellites, SIGINT, geo..."
+          className="w-full border border-emerald-900/40 bg-black/85 py-1.5 pl-8 pr-14 font-mono text-[11px] text-emerald-300 placeholder-emerald-800/50 shadow-[0_0_20px_rgba(34,197,94,0.06)] backdrop-blur-xl outline-none transition-all focus:border-emerald-500/40 focus:shadow-[0_0_24px_rgba(34,197,94,0.12)] caret-emerald-400"
         />
-        <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-zinc-700/50 bg-zinc-800/60 px-1.5 py-0.5 font-mono text-[9px] text-zinc-600">
+        <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 border border-emerald-900/30 bg-emerald-950/30 px-1.5 py-0.5 font-mono text-[9px] text-emerald-700/60">
           /
         </kbd>
       </div>
 
       {open && q && (hasResults || geoLoading) && (
-        <div className="mt-1 max-h-72 overflow-y-auto rounded-md border border-zinc-700/60 bg-zinc-900/95 shadow-2xl shadow-black/40 backdrop-blur-xl">
+        <div className="mt-0.5 max-h-72 overflow-y-auto border border-emerald-900/30 bg-black/95 shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-xl">
           {geoResults.length > 0 && (
             <Group label="CITIES" count={geoResults.length}>
               {geoResults.map((r, i) => (
@@ -493,9 +486,9 @@ export function SearchBar({
       )}
 
       {open && q && !hasResults && !geoLoading && (
-        <div className="mt-1 rounded-md border border-zinc-700/60 bg-zinc-900/95 p-3 text-center shadow-2xl backdrop-blur-xl">
-          <span className="font-mono text-[10px] text-zinc-600">
-            NO RESULTS FOR "{query}"
+        <div className="mt-0.5 border border-emerald-900/30 bg-black/95 p-3 text-center shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+          <span className="font-mono text-[10px] text-emerald-800/60">
+            0 MATCHES // &quot;{query}&quot;
           </span>
         </div>
       )}
@@ -514,11 +507,13 @@ function Group({
 }) {
   return (
     <div>
-      <div className="flex items-center justify-between border-b border-zinc-800/60 bg-zinc-950/50 px-3 py-1">
-        <span className="font-mono text-[9px] tracking-widest text-zinc-500">
+      <div className="flex items-center justify-between border-b border-emerald-900/20 bg-emerald-950/15 px-3 py-1">
+        <span className="font-mono text-[8px] tracking-[0.25em] text-emerald-600/60 uppercase">
           {label}
         </span>
-        <span className="font-mono text-[9px] text-zinc-700">{count}</span>
+        <span className="font-mono text-[8px] text-emerald-800/40">
+          [{count}]
+        </span>
       </div>
       {children}
     </div>
@@ -535,7 +530,7 @@ function Row({
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center gap-1 px-3 py-1.5 font-mono text-[11px] text-left transition-colors hover:bg-emerald-500/8"
+      className="flex w-full items-center gap-1 px-3 py-1.5 font-mono text-[11px] text-left transition-all hover:bg-emerald-500/8 hover:pl-4 border-l-2 border-transparent hover:border-emerald-500/40"
     >
       {children}
     </button>

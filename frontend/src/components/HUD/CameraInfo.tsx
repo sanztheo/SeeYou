@@ -33,21 +33,27 @@ function fmtAlt(m: number): string {
 export function CameraInfo({ altitude, heading, pitch }: CameraInfoProps) {
   const dir = compassDir(heading);
   return (
-    <div className="flex items-center gap-3 rounded-md border border-zinc-800/60 bg-zinc-950/70 px-3 py-1.5 font-mono text-[10px] text-emerald-400/80 backdrop-blur-md select-none">
-      <span>
-        ALT <span className="text-emerald-300">{fmtAlt(altitude)}</span>
-      </span>
-      <span className="text-zinc-700">|</span>
-      <span>
-        HDG{" "}
-        <span className="text-emerald-300">
-          {heading.toFixed(0)}° {dir}
-        </span>
-      </span>
-      <span className="text-zinc-700">|</span>
-      <span>
-        PIT <span className="text-emerald-300">{pitch.toFixed(1)}°</span>
-      </span>
+    <div className="hud-bracket flex items-center gap-2 border border-emerald-900/30 bg-black/80 px-3 py-1.5 font-mono text-[10px] backdrop-blur-md select-none">
+      <HudField label="ALT" value={fmtAlt(altitude)} />
+      <Sep />
+      <HudField label="HDG" value={`${heading.toFixed(0)}\u00b0 ${dir}`} />
+      <Sep />
+      <HudField label="PIT" value={`${pitch.toFixed(1)}\u00b0`} />
     </div>
   );
+}
+
+function HudField({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="flex items-center gap-1">
+      <span className="text-emerald-800/60 text-[8px] tracking-widest">
+        {label}
+      </span>
+      <span className="text-emerald-400 hud-glow tabular-nums">{value}</span>
+    </span>
+  );
+}
+
+function Sep() {
+  return <span className="text-emerald-900/40 text-[8px]">//</span>;
 }

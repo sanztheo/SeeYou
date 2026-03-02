@@ -8,7 +8,7 @@ interface CursorCoordsProps {
 function fmt(deg: number | null, pos: string, neg: string): string {
   if (deg === null) return "---";
   const dir = deg >= 0 ? pos : neg;
-  return `${Math.abs(deg).toFixed(4)}° ${dir}`;
+  return `${Math.abs(deg).toFixed(4)}\u00b0 ${dir}`;
 }
 
 function fmtAlt(m: number | null): string {
@@ -26,19 +26,28 @@ export function CursorCoords({
   const left = sidebarOpen ? "left-[292px]" : "left-3";
   return (
     <div
-      className={`fixed bottom-12 ${left} z-20 flex items-center gap-3 rounded-md border border-zinc-800/60 bg-zinc-950/70 px-3 py-1 font-mono text-[10px] text-emerald-400/80 backdrop-blur-md select-none transition-all`}
+      className={`fixed bottom-12 ${left} z-20 hud-bracket flex items-center gap-2 border border-emerald-900/30 bg-black/80 px-3 py-1 font-mono text-[10px] backdrop-blur-md select-none transition-all`}
     >
-      <span>
-        LAT <span className="text-emerald-300">{fmt(lat, "N", "S")}</span>
-      </span>
-      <span className="text-zinc-700">|</span>
-      <span>
-        LON <span className="text-emerald-300">{fmt(lon, "E", "W")}</span>
-      </span>
-      <span className="text-zinc-700">|</span>
-      <span>
-        ALT <span className="text-emerald-300">{fmtAlt(altitude)}</span>
-      </span>
+      <CField label="LAT" value={fmt(lat, "N", "S")} />
+      <Sep />
+      <CField label="LON" value={fmt(lon, "E", "W")} />
+      <Sep />
+      <CField label="ALT" value={fmtAlt(altitude)} />
     </div>
   );
+}
+
+function CField({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="flex items-center gap-1">
+      <span className="text-emerald-800/60 text-[8px] tracking-widest">
+        {label}
+      </span>
+      <span className="text-emerald-400 hud-glow tabular-nums">{value}</span>
+    </span>
+  );
+}
+
+function Sep() {
+  return <span className="text-emerald-900/40 text-[8px]">//</span>;
 }
