@@ -302,9 +302,7 @@ export function SearchBar({
     [onFlyToCity],
   );
 
-  const leftOffset = sidebarOpen
-    ? "left-[calc(280px+50%-(280px/2))]"
-    : "left-1/2";
+  const leftOffset = sidebarOpen ? "left-1/2" : "left-[calc(50%-144px)]";
 
   return (
     <div
@@ -401,7 +399,7 @@ export function SearchBar({
           )}
           {localResults.mil.length > 0 && (
             <Group label="MILITARY BASES" count={localResults.mil.length}>
-              {localResults.mil.map((b, i) => (
+              {localResults.mil.map((b) => (
                 <Row
                   key={`mil-${b.name}-${b.lat}-${b.lon}`}
                   onClick={() => selectIntel("mil", b)}
@@ -419,7 +417,7 @@ export function SearchBar({
           )}
           {localResults.nuc.length > 0 && (
             <Group label="NUCLEAR SITES" count={localResults.nuc.length}>
-              {localResults.nuc.map((s, i) => (
+              {localResults.nuc.map((s) => (
                 <Row
                   key={`nuc-${s.name}-${s.lat}-${s.lon}`}
                   onClick={() => selectIntel("nuc", s)}
