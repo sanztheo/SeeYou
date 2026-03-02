@@ -14,6 +14,7 @@ pub async fn proxy_camera_stream(
     let upstream = client
         .get(camera_url)
         .timeout(PROXY_TIMEOUT)
+        .header("User-Agent", "Mozilla/5.0 (compatible; SeeYou/1.0)")
         .send()
         .await
         .map_err(|e| (StatusCode::BAD_GATEWAY, format!("upstream request failed: {e}")))?

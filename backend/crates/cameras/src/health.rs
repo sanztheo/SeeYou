@@ -4,16 +4,36 @@ use crate::types::Camera;
 
 const HEALTH_CHECK_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// HEAD-request a single camera URL. Returns `true` if the server responds 2xx.
+/// Check if a camera URL is reachable. Tries HEAD first, falls back to
+/// a range-limited GET (many servers reject HEAD but accept GET).
 pub async fn check_camera_health(client: &reqwest::Client, camera: &Camera) -> bool {
-    let result = client
+    let head = client
         .head(&camera.stream_url)
+        .header("User-Agent", "Mozilla/5.0 (compatible; SeeYou/1.0)")
         .timeout(HEALTH_CHECK_TIMEOUT)
         .send()
         .await;
 
-    match result {
-        Ok(resp) => resp.status().is_success(),
+    if let Ok(resp) = head {
+        if resp.status().is_success() {
+            return true;
+        }
+    }
+
+    // HEAD failed — try GET with Range to avoid downloading the whole body
+    let get = client
+        .get(&camera.stream_url)
+        .header("User-Agent", "Mozilla/5.0 (compatible; SeeYou/1.0)")
+        .header("Range", "bytes=0-0")
+        .timeout(HEALTH_CHECK_TIMEOUT)
+        .send()
+        .await;
+
+    match get {
+        Ok(resp) => {
+            let s = resp.status();
+            s.is_success() || s.as_u16() == 206
+        }
         Err(_) => false,
     }
 }
