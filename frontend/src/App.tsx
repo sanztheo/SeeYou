@@ -308,6 +308,7 @@ export function App(): React.ReactElement {
             cameras={state.cameras}
             progress={state.cameraProgress}
             onFilterChange={state.setCameraFilter}
+            onSelect={state.setSelectedCamera}
           />
         </SidePanel>
       )}
