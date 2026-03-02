@@ -54,7 +54,7 @@ function getNuclearCanvas(type: string): HTMLCanvasElement {
 }
 
 function siteKey(s: NuclearSite): string {
-  return `${s.name}::${s.country}`;
+  return `nuc::${s.name}::${s.country}`;
 }
 
 const NUC_SCALE = new NearFarScalar(1e5, 1.5, 1e7, 0.4);

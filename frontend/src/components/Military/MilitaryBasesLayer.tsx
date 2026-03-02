@@ -56,7 +56,7 @@ function getDiamondCanvas(branch: string): HTMLCanvasElement {
 }
 
 function baseKey(b: MilitaryBase): string {
-  return `${b.name}::${b.country}`;
+  return `mil::${b.name}::${b.country}`;
 }
 
 const MIL_SCALE = new NearFarScalar(1e5, 1.5, 1e7, 0.4);
