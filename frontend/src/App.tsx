@@ -17,6 +17,16 @@ import { MetarPopup } from "./components/Aviation/MetarPopup";
 import { EventFilters } from "./components/Sidebar/EventFilters";
 import { EventPopup } from "./components/Events/EventPopup";
 import { IntelligenceFilters } from "./components/Sidebar/IntelligenceFilters";
+import { EarthquakePopup } from "./components/Seismic/EarthquakePopup";
+import { FirePopup } from "./components/Fires/FirePopup";
+import { CablePopup } from "./components/Cables/CablePopup";
+import { MilitaryBasePopup } from "./components/Military/MilitaryBasePopup";
+import { NuclearSitePopup } from "./components/Nuclear/NuclearSitePopup";
+import { VesselPopup } from "./components/Maritime/VesselPopup";
+import { CyberThreatPopup } from "./components/Cyber/CyberThreatPopup";
+import { GdeltPopup } from "./components/Gdelt/GdeltPopup";
+import { SpaceWeatherPopup } from "./components/SpaceWeather/SpaceWeatherPopup";
+import { IntelligenceLegend } from "./components/HUD/IntelligenceLegend";
 import { CameraPlayer } from "./components/Camera/CameraPlayer";
 import { Minimap } from "./components/Minimap/Minimap";
 import { Timeline } from "./components/Timeline/Timeline";
@@ -115,11 +125,47 @@ export function App(): React.ReactElement {
     () => state.setSelectedMetar(null),
     [state.setSelectedMetar],
   );
+  const handleCloseEarthquake = useCallback(
+    () => state.setSelectedEarthquake(null),
+    [state.setSelectedEarthquake],
+  );
+  const handleCloseFire = useCallback(
+    () => state.setSelectedFire(null),
+    [state.setSelectedFire],
+  );
+  const handleCloseCable = useCallback(
+    () => state.setSelectedCable(null),
+    [state.setSelectedCable],
+  );
+  const handleCloseMilitaryBase = useCallback(
+    () => state.setSelectedMilitaryBase(null),
+    [state.setSelectedMilitaryBase],
+  );
+  const handleCloseNuclearSite = useCallback(
+    () => state.setSelectedNuclearSite(null),
+    [state.setSelectedNuclearSite],
+  );
+  const handleCloseVessel = useCallback(
+    () => state.setSelectedVessel(null),
+    [state.setSelectedVessel],
+  );
+  const handleCloseCyberThreat = useCallback(
+    () => state.setSelectedCyberThreat(null),
+    [state.setSelectedCyberThreat],
+  );
+  const handleCloseGdeltEvent = useCallback(
+    () => state.setSelectedGdeltEvent(null),
+    [state.setSelectedGdeltEvent],
+  );
+  const handleCloseSpaceWeather = useCallback(
+    () => state.setShowSpaceWeatherPopup(false),
+    [state.setShowSpaceWeatherPopup],
+  );
 
   const showSidebar = !isFullscreen && sidebarOpen;
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-black">
+    <div className="relative w-screen h-screen overflow-hidden bg-black scanline-overlay">
       {/* Globe fills everything */}
       <Globe
         aircraft={state.aircraft}
@@ -167,6 +213,14 @@ export function App(): React.ReactElement {
         kpIndex={state.kpIndex}
         spaceWeatherFilter={state.spaceWeatherFilter}
         convergenceZones={state.convergenceZones}
+        onSelectEarthquake={state.setSelectedEarthquake}
+        onSelectFire={state.setSelectedFire}
+        onSelectCable={state.setSelectedCable}
+        onSelectMilitaryBase={state.setSelectedMilitaryBase}
+        onSelectNuclearSite={state.setSelectedNuclearSite}
+        onSelectVessel={state.setSelectedVessel}
+        onSelectCyberThreat={state.setSelectedCyberThreat}
+        onSelectGdeltEvent={state.setSelectedGdeltEvent}
         onViewportChange={state.setViewportBbox}
         onCameraChange={setCameraState}
         onCursorMove={setCursorState}
@@ -279,15 +333,26 @@ export function App(): React.ReactElement {
         aircraft={state.aircraft}
         satellites={state.satellites}
         cameras={state.cameras}
+        militaryBases={state.militaryBases}
+        nuclearSites={state.nuclearSites}
+        cables={state.cables}
+        earthquakes={state.earthquakes}
+        vessels={state.vessels}
         onSelectAircraft={state.setSelectedAircraft}
         onSelectSatellite={state.setSelectedSatellite}
         onSelectCamera={state.setSelectedCamera}
+        onSelectMilitary={state.setSelectedMilitaryBase}
+        onSelectNuclear={state.setSelectedNuclearSite}
+        onSelectCable={state.setSelectedCable}
+        onSelectEarthquake={state.setSelectedEarthquake}
+        onSelectVessel={state.setSelectedVessel}
         onFlyToCity={handleFlyToCity}
         sidebarOpen={showSidebar}
       />
 
-      {/* Right column: CameraInfo → Alerts → Active popup */}
-      <div className="fixed top-3 right-3 z-30 flex flex-col items-end gap-2 pointer-events-none max-h-[calc(100vh-5rem)] overflow-y-auto overflow-x-hidden scrollbar-none">
+      {/* ═══ RIGHT PANEL: unified detail column ═══ */}
+      <div className="fixed top-2 right-2 bottom-12 z-30 flex flex-col gap-1.5 w-[280px] pointer-events-none">
+        {/* HUD strip */}
         <div className="pointer-events-auto">
           <CameraInfo
             altitude={cameraState.altitude}
@@ -295,14 +360,18 @@ export function App(): React.ReactElement {
             pitch={cameraState.pitch}
           />
         </div>
+
+        {/* Alerts */}
         <div className="pointer-events-auto">
           <AlertSystem
             aircraft={state.aircraft}
             satellites={state.satellites}
           />
         </div>
-        {state.selectedAircraft && (
-          <div className="pointer-events-auto">
+
+        {/* Scrollable detail popups */}
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden detail-panel pointer-events-auto flex flex-col gap-1.5">
+          {state.selectedAircraft && (
             <AircraftPopup
               aircraft={state.selectedAircraft}
               onClose={handleCloseAircraft}
@@ -312,31 +381,117 @@ export function App(): React.ReactElement {
                 state.predictions.get(state.selectedAircraft.icao) ?? null
               }
             />
-          </div>
-        )}
-        {state.selectedSatellite && (
-          <div className="pointer-events-auto">
+          )}
+          {state.selectedSatellite && (
             <SatellitePopup
               satellite={state.selectedSatellite}
               onClose={handleCloseSatellite}
             />
-          </div>
-        )}
+          )}
+          {state.selectedEvent && (
+            <EventPopup
+              event={state.selectedEvent}
+              onClose={handleCloseEvent}
+            />
+          )}
+          {state.selectedMetar && (
+            <MetarPopup
+              station={state.selectedMetar}
+              onClose={handleCloseMetar}
+            />
+          )}
+          {state.selectedEarthquake && (
+            <EarthquakePopup
+              earthquake={state.selectedEarthquake}
+              onClose={handleCloseEarthquake}
+            />
+          )}
+          {state.selectedFire && (
+            <FirePopup fire={state.selectedFire} onClose={handleCloseFire} />
+          )}
+          {state.selectedCable && (
+            <CablePopup
+              cable={state.selectedCable}
+              onClose={handleCloseCable}
+            />
+          )}
+          {state.selectedMilitaryBase && (
+            <MilitaryBasePopup
+              base={state.selectedMilitaryBase}
+              onClose={handleCloseMilitaryBase}
+            />
+          )}
+          {state.selectedNuclearSite && (
+            <NuclearSitePopup
+              site={state.selectedNuclearSite}
+              onClose={handleCloseNuclearSite}
+            />
+          )}
+          {state.selectedVessel && (
+            <VesselPopup
+              vessel={state.selectedVessel}
+              onClose={handleCloseVessel}
+            />
+          )}
+          {state.selectedCyberThreat && (
+            <CyberThreatPopup
+              threat={state.selectedCyberThreat}
+              onClose={handleCloseCyberThreat}
+            />
+          )}
+          {state.selectedGdeltEvent && (
+            <GdeltPopup
+              event={state.selectedGdeltEvent}
+              onClose={handleCloseGdeltEvent}
+            />
+          )}
+          <SpaceWeatherPopup
+            kpIndex={state.kpIndex}
+            alerts={state.spaceWeatherAlerts}
+            onClose={handleCloseSpaceWeather}
+            visible={state.showSpaceWeatherPopup}
+          />
+        </div>
+
+        {/* Minimap at bottom of right panel */}
+        <div className="pointer-events-none shrink-0">
+          <Minimap
+            viewCenter={{ lat: cameraState.lat, lon: cameraState.lon }}
+            viewAltitude={cameraState.altitude}
+          />
+        </div>
       </div>
 
-      {/* Bottom zone: above timeline */}
+      {/* ═══ BOTTOM LEFT: coords + legend ═══ */}
       <CursorCoords
         lat={cursorState.lat}
         lon={cursorState.lon}
         altitude={cursorState.altitude}
         sidebarOpen={showSidebar}
       />
-      <Minimap
-        viewCenter={{ lat: cameraState.lat, lon: cameraState.lon }}
-        viewAltitude={cameraState.altitude}
+      <IntelligenceLegend
+        cablesFilter={state.cablesFilter}
+        cableCount={state.cables.length}
+        seismicFilter={state.seismicFilter}
+        earthquakeCount={state.earthquakes.length}
+        firesFilter={state.firesFilter}
+        fireCount={state.fires.length}
+        gdeltFilter={state.gdeltFilter}
+        gdeltCount={state.gdeltEvents.length}
+        militaryFilter={state.militaryFilter}
+        militaryCount={state.militaryBases.length}
+        nuclearFilter={state.nuclearFilter}
+        nuclearCount={state.nuclearSites.length}
+        maritimeFilter={state.maritimeFilter}
+        vesselCount={state.vessels.length}
+        cyberFilter={state.cyberFilter}
+        threatCount={state.cyberThreats.length}
+        spaceWeatherFilter={state.spaceWeatherFilter}
+        kpIndex={state.kpIndex}
+        sidebarOpen={showSidebar}
       />
 
-      {/* Bottom bar: Timeline */}
+      {/* ═══ BOTTOM BAR: Timeline ═══ */}
       <Timeline
         currentTime={currentTime}
         onTimeChange={handleTimeChange}
@@ -345,15 +500,13 @@ export function App(): React.ReactElement {
         sidebarOpen={showSidebar}
       />
 
-      {/* Tooltips & remaining popups */}
+      {/* Floating overlays */}
       <AircraftTooltip
         aircraft={state.hoveredAircraft}
         screenX={state.hoverPos.x}
         screenY={state.hoverPos.y}
       />
       <CameraPlayer camera={state.selectedCamera} onClose={handleCloseCamera} />
-      <EventPopup event={state.selectedEvent} onClose={handleCloseEvent} />
-      <MetarPopup station={state.selectedMetar} onClose={handleCloseMetar} />
     </div>
   );
 }

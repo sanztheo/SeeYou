@@ -6,7 +6,7 @@ import {
   Math as CesiumMath,
   ClockStep,
   createOsmBuildingsAsync,
-  OpenStreetMapImageryProvider,
+  UrlTemplateImageryProvider,
 } from "cesium";
 import { hasValidToken } from "../../lib/cesium-config";
 import { AircraftLayer } from "../Aircraft/AircraftLayer";
@@ -112,27 +112,35 @@ interface GlobeProps {
   cables?: SubmarineCable[];
   landingPoints?: LandingPoint[];
   cablesFilter?: CablesFilter;
+  onSelectCable?: (cable: SubmarineCable) => void;
 
   earthquakes?: Earthquake[];
   seismicFilter?: SeismicFilter;
+  onSelectEarthquake?: (eq: Earthquake) => void;
 
   fires?: FireHotspot[];
   firesFilter?: FiresFilter;
+  onSelectFire?: (fire: FireHotspot) => void;
 
   gdeltEvents?: GdeltEvent[];
   gdeltFilter?: GdeltFilter;
+  onSelectGdeltEvent?: (evt: GdeltEvent) => void;
 
   militaryBases?: MilitaryBase[];
   militaryFilter?: MilitaryFilter;
+  onSelectMilitaryBase?: (base: MilitaryBase) => void;
 
   nuclearSites?: NuclearSite[];
   nuclearFilter?: NuclearFilter;
+  onSelectNuclearSite?: (site: NuclearSite) => void;
 
   vessels?: Vessel[];
   maritimeFilter?: MaritimeFilter;
+  onSelectVessel?: (vessel: Vessel) => void;
 
   cyberThreats?: CyberThreat[];
   cyberFilter?: CyberFilter;
+  onSelectCyberThreat?: (threat: CyberThreat) => void;
 
   aurora?: AuroraPoint[];
   kpIndex?: number;
@@ -182,20 +190,28 @@ export function Globe({
   cables,
   landingPoints,
   cablesFilter,
+  onSelectCable,
   earthquakes,
   seismicFilter,
+  onSelectEarthquake,
   fires,
   firesFilter,
+  onSelectFire,
   gdeltEvents,
   gdeltFilter,
+  onSelectGdeltEvent,
   militaryBases,
   militaryFilter,
+  onSelectMilitaryBase,
   nuclearSites,
   nuclearFilter,
+  onSelectNuclearSite,
   vessels,
   maritimeFilter,
+  onSelectVessel,
   cyberThreats,
   cyberFilter,
+  onSelectCyberThreat,
   aurora,
   kpIndex,
   spaceWeatherFilter,
@@ -240,8 +256,9 @@ export function Globe({
     if (!hasValidToken()) {
       viewer.imageryLayers.removeAll();
       viewer.imageryLayers.addImageryProvider(
-        new OpenStreetMapImageryProvider({
-          url: "https://tile.openstreetmap.org/",
+        new UrlTemplateImageryProvider({
+          url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          credit: "Esri, Maxar, Earthstar Geographics",
         }),
       );
     }
@@ -398,35 +415,60 @@ export function Globe({
           cables={cables}
           landingPoints={landingPoints ?? []}
           filter={cablesFilter}
+          onSelect={onSelectCable}
         />
       )}
 
       {seismicFilter?.enabled && earthquakes && earthquakes.length > 0 && (
-        <SeismicLayer earthquakes={earthquakes} filter={seismicFilter} />
+        <SeismicLayer
+          earthquakes={earthquakes}
+          filter={seismicFilter}
+          onSelect={onSelectEarthquake}
+        />
       )}
 
       {firesFilter?.enabled && fires && fires.length > 0 && (
-        <FireLayer fires={fires} filter={firesFilter} />
+        <FireLayer fires={fires} filter={firesFilter} onSelect={onSelectFire} />
       )}
 
       {gdeltFilter?.enabled && gdeltEvents && gdeltEvents.length > 0 && (
-        <GdeltLayer events={gdeltEvents} filter={gdeltFilter} />
+        <GdeltLayer
+          events={gdeltEvents}
+          filter={gdeltFilter}
+          onSelect={onSelectGdeltEvent}
+        />
       )}
 
       {militaryFilter?.enabled && militaryBases && militaryBases.length > 0 && (
-        <MilitaryBasesLayer bases={militaryBases} filter={militaryFilter} />
+        <MilitaryBasesLayer
+          bases={militaryBases}
+          filter={militaryFilter}
+          onSelect={onSelectMilitaryBase}
+        />
       )}
 
       {nuclearFilter?.enabled && nuclearSites && nuclearSites.length > 0 && (
-        <NuclearSitesLayer sites={nuclearSites} filter={nuclearFilter} />
+        <NuclearSitesLayer
+          sites={nuclearSites}
+          filter={nuclearFilter}
+          onSelect={onSelectNuclearSite}
+        />
       )}
 
       {maritimeFilter?.enabled && vessels && vessels.length > 0 && (
-        <MaritimeLayer vessels={vessels} filter={maritimeFilter} />
+        <MaritimeLayer
+          vessels={vessels}
+          filter={maritimeFilter}
+          onSelect={onSelectVessel}
+        />
       )}
 
       {cyberFilter?.enabled && cyberThreats && cyberThreats.length > 0 && (
-        <CyberThreatLayer threats={cyberThreats} filter={cyberFilter} />
+        <CyberThreatLayer
+          threats={cyberThreats}
+          filter={cyberFilter}
+          onSelect={onSelectCyberThreat}
+        />
       )}
 
       {spaceWeatherFilter?.enabled && aurora && aurora.length > 0 && (
