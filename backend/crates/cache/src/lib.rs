@@ -10,10 +10,10 @@ mod health;
 pub mod maritime;
 pub mod metar;
 pub mod pool;
-pub mod roads;
 pub mod satellites;
 pub mod seismic;
 pub mod space_weather;
+pub mod traffic;
 pub mod weather;
 
 pub use health::ping_redis;

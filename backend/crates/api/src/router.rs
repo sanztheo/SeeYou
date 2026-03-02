@@ -1,4 +1,4 @@
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::Router;
 
 pub fn router<S>() -> Router<S>
@@ -8,7 +8,6 @@ where
 {
     Router::new()
         .route("/health", get(super::health::health_check))
-        .route("/roads", get(super::roads::get_roads))
         .route("/cameras", get(super::cameras::list_cameras))
         .route("/cameras/proxy", get(super::cameras::proxy_camera))
         .route("/geocode", get(super::geocode::geocode))
@@ -23,4 +22,8 @@ where
         .route("/space-weather", get(super::space_weather::get_space_weather))
         .route("/military-bases", get(super::military_bases::get_military_bases))
         .route("/nuclear-sites", get(super::nuclear_sites::get_nuclear_sites))
+        .route("/traffic/tiles-url", get(super::tomtom::get_tiles_url))
+        .route("/traffic/flow", get(super::tomtom::get_flow))
+        .route("/traffic/incidents", get(super::tomtom::get_incidents))
+        .route("/traffic/route", post(super::tomtom::post_route))
 }
