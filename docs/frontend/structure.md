@@ -20,8 +20,8 @@ The frontend is a React 19 single-page application built with Vite 7, TypeScript
 ```
 frontend/src/
 ├── main.tsx                    Entry point — Cesium token init + React root
-├── App.tsx                     Root — assembles Globe, Sidebar, HUD, Popups
-├── index.css                   Tailwind v4 import + custom scrollbar
+├── App.tsx                     Root — assembles Globe, IconRail, SidePanel, HUD, DraggablePanel popups
+├── index.css                   Tailwind v4 import + HUD brackets, scanline overlay, drag cursors, animations
 │
 ├── lib/
 │   ├── cesium-config.ts        Cesium Ion token initialization
@@ -35,8 +35,17 @@ frontend/src/
 │   ├── weather.ts              WeatherPoint, WeatherGrid, RainViewerData
 │   ├── metar.ts                MetarStation, FlightCategory
 │   ├── events.ts               NaturalEvent, EventCategory
-│   ├── ws.ts                   WsMessage union type, ConnectionStatus
-│   └── env.d.ts                Vite ImportMetaEnv declaration
+│   ├── cables.ts              SubmarineCable, CablesFilter
+│   ├── seismic.ts             Earthquake, SeismicFilter
+│   ├── fires.ts               Fire, FiresFilter
+│   ├── gdelt.ts               GdeltEvent, GdeltFilter
+│   ├── military.ts            MilitaryBase, MilitaryFilter
+│   ├── nuclear.ts             NuclearSite, NuclearFilter
+│   ├── maritime.ts            Vessel, MaritimeFilter
+│   ├── cyber.ts               CyberThreat, CyberFilter
+│   ├── spaceWeather.ts        Aurora, SpaceWeatherFilter
+│   ├── ws.ts                  WsMessage union type, ConnectionStatus
+│   └── env.d.ts               Vite ImportMetaEnv declaration
 │
 ├── hooks/                      Custom state management hooks
 │   ├── useAppState.ts          Central orchestrator (455 lines)
@@ -73,7 +82,7 @@ frontend/src/
 │   ├── overpassWorker.ts       Web Worker for Overpass JSON parsing
 │   └── tleWorker.ts            Web Worker stub for TLE propagation
 │
-└── components/                 15 domain component groups (see next page)
+└── components/                 20+ domain component groups (see next page)
 ```
 
 ## Bootstrap Flow
@@ -85,21 +94,25 @@ frontend/src/
    - Passes the handler to `useWebSocket()` which auto-connects
    - Runs 4 `useEffect` side effects for on-demand data (cameras, weather, events, flight routes)
 3. **`App.tsx` render** — Mounts the component tree:
-   - `Globe` → all visualization layers
-   - `Sidebar` → all filter/control panels
-   - Conditionally: `SearchBar`, `Minimap`, `Timeline`, `AlertSystem`, `ConnectionStatus`
-   - Conditionally: `AircraftPopup`, `SatellitePopup`, `EventPopup`, `MetarPopup`
-   - Conditionally: `CameraPlayer` (when a camera is selected)
-   - Conditionally: `NvgHud` / `FlirHud` / `CrtHud` (based on active shader)
+   - `Globe` → all visualization layers (aircraft, satellites, weather, traffic, cameras, events, METAR, intelligence, cities)
+   - `IconRail` → 44px vertical icon bar (8 sections: AIR, SAT, TFC, CAM, WX, MET, EVT, INT) + connection status
+   - `SidePanel` → 260px slide-in panel with section-specific filters/controls
+   - `SearchBar` → unified search across all domains (aircraft, satellites, cameras, military, nuclear, cables, earthquakes, vessels, cities)
+   - Right panel column: `CameraInfo`, `AlertSystem`, detail popups in `DraggablePanel` wrappers, `Minimap`
+   - Bottom-left HUD: `CursorCoords`, `IntelligenceLegend`
+   - `Timeline` → bottom bar with UTC clock, LIVE indicator, time scrubber
+   - 14 detail popups: `AircraftPopup`, `SatellitePopup`, `EventPopup`, `MetarPopup`, `EarthquakePopup`, `FirePopup`, `CablePopup`, `MilitaryBasePopup`, `NuclearSitePopup`, `VesselPopup`, `CyberThreatPopup`, `GdeltPopup`, `SpaceWeatherPopup`
+   - `AircraftTooltip` (hover), `CameraPlayer` (selected camera)
 
 ## Styling Approach
 
 - **Tailwind CSS v4** via `@tailwindcss/vite` plugin — no `tailwind.config.js` needed
-- **Dark theme throughout**: `zinc-950` / `zinc-900` backgrounds
-- **Accent color**: `emerald-400` (`#34d399`)
-- **Font stack**: JetBrains Mono → SF Mono → Fira Code (monospace)
-- **Aesthetic**: Military/surveillance — uppercase tracking, monospace, subtle glow effects
-- All styles are inline Tailwind classes — no CSS modules or styled-components
+- **Dark theme throughout**: `black/95` / `black/92` with `backdrop-blur-xl` frosted glass panels
+- **Accent color**: `emerald-400` (`#34d399`) with `hud-glow` text shadow
+- **Font stack**: JetBrains Mono → SF Mono → Fira Code → Cascadia Code (monospace)
+- **Aesthetic**: Military/surveillance — uppercase tracking, monospace, HUD bracket decorations, scanline overlay, glow effects
+- **Custom CSS**: `index.css` defines `hud-bracket` corner decorations, `scanline-overlay` CRT effect, `panel-grain` texture, `draggable-wrap` cursor styles, slide-in animations
+- All component styles are inline Tailwind classes — no CSS modules or styled-components
 
 ## Build Configuration
 

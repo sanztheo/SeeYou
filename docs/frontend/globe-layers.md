@@ -1,6 +1,6 @@
 # 3D Globe & Visualization Layers
 
-The globe is the core of SeeYou's UI. It uses CesiumJS (via Resium) with 9 data visualization layers, each implemented as an imperative Cesium integration for maximum performance.
+The globe is the core of SeeYou's UI. It uses CesiumJS (via Resium) with 12 data visualization layers, each implemented as an imperative Cesium integration for maximum performance.
 
 ## Globe Component
 
@@ -150,6 +150,45 @@ Each billboard/label/point is added to a collection with an `id` property used f
 - Particles respect globe occlusion (hidden on far side via `Occluder.isPointVisible()`)
 - Speed and direction from Open-Meteo wind data
 
+**Temperature** (`TemperatureLayer`):
+- Renders global temperature as a color-mapped `ImageryLayer` with dual-provider fallback strategy
+- **Primary**: OpenWeatherMap tile API (`temp_new/{z}/{x}/{y}`) via `UrlTemplateImageryProvider` — probed at startup with a HEAD request
+- **Fallback**: Open-Meteo grid API (10° resolution, -80° to 80° lat) with client-side bilinear interpolation rendered to a 1024×512 canvas → `SingleTileImageryProvider`
+- Temperature color scale: 10 stops from -40°C (purple) through 0°C (teal) to 50°C (dark red), alpha 180/255
+- Opacity controlled via props, updated without layer re-creation
+- Cleanup removes the `ImageryLayer` and aborts in-flight fetches
+
+## Military Bases Layer
+
+**File**: `MilitaryBasesLayer.tsx`
+
+**Rendering** (Primitive collection):
+- `BillboardCollection` for diamond-shaped canvas icons with `id` = `mil::{name}::{country}`
+- Branch-based coloring via `BRANCH_COLORS`: air (`#60A5FA`), army (`#34D399`), naval (`#818CF8`), intelligence (`#F472B6`)
+- `createDiamondCanvas()` generates 32×32 diamond icons with white stroke, cached per color in a module-level `Map`
+- `NearFarScalar(1e5, 1.5, 1e7, 0.4)` + `DistanceDisplayCondition(0, 3e7)`
+- Filters by `filter.branches` set when non-empty
+
+**Interactions**:
+- `ScreenSpaceEventHandler` picks billboard by string `id` → lookup in local `Map<key, MilitaryBase>`
+- Click opens `MilitaryBasePopup`
+
+## Nuclear Sites Layer
+
+**File**: `NuclearSitesLayer.tsx`
+
+**Rendering** (Primitive collection):
+- `BillboardCollection` for radiation-symbol canvas icons with `id` = `nuc::{name}::{country}`
+- Type-based coloring via `TYPE_COLORS`: power (`#FBBF24`), weapons (red), enrichment (`#F97316`), reprocessing (`#A855F7`)
+- `createRadiationCanvas()` generates 32×32 circles with dark inner core, cached per color
+- `NearFarScalar(1e5, 1.5, 1e7, 0.4)` + `DistanceDisplayCondition(0, 3e7)`
+- Billboard size 18×18 (slightly larger than military diamonds at 16×16)
+- Filters by `filter.types` set when non-empty
+
+**Interactions**:
+- `ScreenSpaceEventHandler` picks billboard by string `id` → lookup in local `Map<key, NuclearSite>`
+- Click opens `NuclearSitePopup`
+
 ## METAR Layer
 
 **Files**: `MetarLayer.tsx`, `MetarPopup.tsx`
@@ -216,7 +255,10 @@ Each layer uses the narrowest primitive type for its data:
 | METAR | `BillboardCollection` | — | — |
 | Events | `BillboardCollection` | `PointPrimitiveCollection` | — |
 | City Labels | `LabelCollection` | `PointPrimitiveCollection` | — |
+| Military Bases | `BillboardCollection` | — | — |
+| Nuclear Sites | `BillboardCollection` | — | — |
 | Weather radar | — | — | `ImageryLayer` (tile-based, already optimal) |
+| Temperature | — | — | `ImageryLayer` (OWM tiles or single-tile heatmap) |
 | Wind particles | — | — | Canvas 2D (off-globe rendering) |
 
 Entity API is only retained where CesiumJS requires it: `clampToGround` polylines and `viewer.trackedEntity` camera lock.
@@ -236,7 +278,7 @@ scene.pick(screenPosition)
 
 | Technique | Where Used | Impact |
 |-----------|-----------|--------|
-| `BillboardCollection` / `LabelCollection` | 6 layers | ~500x fewer draw calls |
+| `BillboardCollection` / `LabelCollection` | 8 layers | ~500x fewer draw calls |
 | `PointPrimitiveCollection` | Traffic particles, events, cities | Direct position writes per frame |
 | Precomputed IDW wind grid | `WindParticleLayer` | O(1) lookup vs. O(N) per particle/frame |
 | Module-level `NearFarScalar` constants | All layers | Zero GC allocation per render |

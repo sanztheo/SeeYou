@@ -132,14 +132,33 @@ Each shader mode has a matching HUD component that renders a styled overlay on t
 
 ### CursorCoords (`CursorCoords.tsx`)
 
-Always-visible bottom-left overlay showing:
-- **LAT** — Mouse cursor latitude
-- **LON** — Mouse cursor longitude
-- **ALT** — Camera altitude above ground
+Bottom-left overlay showing cursor position. Accepts `sidebarOpen` prop to shift right when the sidebar panel is open (`left-[316px]`) or collapsed to rail only (`left-[56px]`).
+
+- **LAT** — Mouse cursor latitude (DDD.DDDD° N/S)
+- **LON** — Mouse cursor longitude (DDD.DDDD° E/W)
+- **ALT** — Terrain altitude at cursor (auto-formats to meters or km)
+
+### IntelligenceLegend (`IntelligenceLegend.tsx`)
+
+Bottom-left overlay directly above CursorCoords. Shows active intelligence layer indicators with live counts. Only renders when at least one intelligence layer is enabled.
+
+| Layer | Color | Shape | Filter |
+|-------|-------|-------|--------|
+| Cables | `#00E5FF` (cyan) | line | `cablesFilter` |
+| Seismes | `#EAB308` (yellow) | circle | `seismicFilter` |
+| Incendies | `#EF4444` (red) | circle | `firesFilter` |
+| GDELT | `#A78BFA` (violet) | circle | `gdeltFilter` |
+| Bases mil. | `#34D399` (emerald) | diamond | `militaryFilter` |
+| Nucleaire | `#FBBF24` (amber) | circle | `nuclearFilter` |
+| Navires | `#818CF8` (indigo) | triangle | `maritimeFilter` |
+| Cyber | `#F472B6` (pink) | circle | `cyberFilter` |
+| Aurora | `#22C55E` (green) | circle | `spaceWeatherFilter` |
+
+The Aurora item includes the current Kp index and is clickable (opens `SpaceWeatherPopup`). Each item shows a count badge in brackets (e.g. `[1.2k]`). Responds to `sidebarOpen` for horizontal positioning.
 
 ### CameraInfo (`CameraInfo.tsx`)
 
-Always-visible top-right overlay showing:
+Top-right overlay showing:
 - **ALT** — Camera altitude
 - **HDG** — Camera heading (degrees)
 - **PIT** — Camera pitch (degrees)

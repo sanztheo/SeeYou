@@ -87,13 +87,16 @@ export function WeatherControls({
           )}
 
           {filter.showTemperature && (
-            <SliderControl
-              label="Temp"
-              value={filter.temperatureOpacity}
-              onChange={(v) =>
-                onFilterChange({ ...filter, temperatureOpacity: v })
-              }
-            />
+            <>
+              <SliderControl
+                label="Temp"
+                value={filter.temperatureOpacity}
+                onChange={(v) =>
+                  onFilterChange({ ...filter, temperatureOpacity: v })
+                }
+              />
+              <TemperatureLegend />
+            </>
           )}
 
           {filter.showAirQuality && (
@@ -159,6 +162,45 @@ function SubToggle({
       </div>
       <span className="font-mono text-[10px]">{label}</span>
     </button>
+  );
+}
+
+function TemperatureLegend() {
+  const stops = [
+    { t: -40, r: 130, g: 22, b: 146 },
+    { t: -30, r: 30, g: 60, b: 180 },
+    { t: -20, r: 0, g: 120, b: 240 },
+    { t: -10, r: 0, g: 185, b: 255 },
+    { t: 0, r: 0, g: 220, b: 220 },
+    { t: 10, r: 80, g: 220, b: 80 },
+    { t: 20, r: 210, g: 230, b: 50 },
+    { t: 30, r: 255, g: 160, b: 0 },
+    { t: 40, r: 255, g: 50, b: 0 },
+    { t: 50, r: 180, g: 0, b: 40 },
+  ];
+  const gradient = stops
+    .map((s, i) => {
+      const pct = (i / (stops.length - 1)) * 100;
+      return `rgb(${s.r},${s.g},${s.b}) ${pct}%`;
+    })
+    .join(", ");
+
+  const labels = [-40, -20, 0, 20, 40];
+
+  return (
+    <div className="mt-1 mb-0.5">
+      <div
+        className="h-2 rounded-sm w-full"
+        style={{ background: `linear-gradient(to right, ${gradient})` }}
+      />
+      <div className="flex justify-between mt-0.5">
+        {labels.map((t) => (
+          <span key={t} className="font-mono text-[8px] text-zinc-500">
+            {t}°
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
