@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { Globe } from "./components/Globe/Globe";
-import { Sidebar } from "./components/Sidebar/Sidebar";
-import { ConnectionStatus } from "./components/ConnectionStatus/ConnectionStatus";
+import { IconRail, type SectionId } from "./components/Sidebar/IconRail";
+import { SidePanel } from "./components/Sidebar/SidePanel";
 import { AircraftCounter } from "./components/Sidebar/AircraftCounter";
 import { AircraftFilters } from "./components/Sidebar/AircraftFilters";
 import { AircraftPopup } from "./components/Aircraft/AircraftPopup";
@@ -34,6 +34,7 @@ import { SearchBar } from "./components/SearchBar/SearchBar";
 import { AlertSystem } from "./components/Alerts/AlertSystem";
 import { CursorCoords } from "./components/HUD/CursorCoords";
 import { CameraInfo } from "./components/HUD/CameraInfo";
+import { DraggablePanel } from "./components/DraggablePanel";
 import { useAppState } from "./hooks/useAppState";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import type { CameraState, CursorState } from "./hooks/useViewerCallbacks";
@@ -42,7 +43,9 @@ export function App(): React.ReactElement {
   const state = useAppState();
 
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [activeSection, setActiveSection] = useState<SectionId | null>(
+    "aircraft",
+  );
 
   const [cameraState, setCameraState] = useState<CameraState>({
     lat: 48.8566,
@@ -81,9 +84,15 @@ export function App(): React.ReactElement {
     }
   }, []);
 
-  const handleToggleSidebar = useCallback(() => setSidebarOpen((h) => !h), []);
-  const handleCollapseSidebar = useCallback(() => setSidebarOpen(false), []);
-  const handleExpandSidebar = useCallback(() => setSidebarOpen(true), []);
+  const handleToggleSection = useCallback(
+    (id: SectionId) => setActiveSection((prev) => (prev === id ? null : id)),
+    [],
+  );
+  const handleCloseSection = useCallback(() => setActiveSection(null), []);
+  const handleToggleSidebar = useCallback(
+    () => setActiveSection((prev) => (prev ? null : "aircraft")),
+    [],
+  );
   const handleFlyToCity = useCallback(
     (lat: number, lon: number, alt: number) =>
       state.setFlyToTarget({ lat, lon, alt }),
@@ -161,8 +170,28 @@ export function App(): React.ReactElement {
     () => state.setShowSpaceWeatherPopup(false),
     [state.setShowSpaceWeatherPopup],
   );
+  const handleOpenSpaceWeather = useCallback(
+    () => state.setShowSpaceWeatherPopup(true),
+    [state.setShowSpaceWeatherPopup],
+  );
 
-  const showSidebar = !isFullscreen && sidebarOpen;
+  const showRail = !isFullscreen;
+  const panelOpen = showRail && activeSection !== null;
+
+  const hasDetailPopup =
+    state.selectedAircraft ||
+    state.selectedSatellite ||
+    state.selectedEvent ||
+    state.selectedMetar ||
+    state.selectedEarthquake ||
+    state.selectedFire ||
+    state.selectedCable ||
+    state.selectedMilitaryBase ||
+    state.selectedNuclearSite ||
+    state.selectedVessel ||
+    state.selectedCyberThreat ||
+    state.selectedGdeltEvent ||
+    state.showSpaceWeatherPopup;
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-black scanline-overlay">
@@ -228,10 +257,18 @@ export function App(): React.ReactElement {
         onFlyComplete={handleFlyComplete}
       />
 
-      {/* Sidebar */}
-      {showSidebar && (
-        <Sidebar onCollapse={handleCollapseSidebar}>
-          <ConnectionStatus status={state.status} />
+      {/* Icon Rail (always visible unless fullscreen) */}
+      {showRail && (
+        <IconRail
+          activeSection={activeSection}
+          onToggle={handleToggleSection}
+          status={state.status}
+        />
+      )}
+
+      {/* Section panels */}
+      {panelOpen && activeSection === "aircraft" && (
+        <SidePanel title="Aircraft" onClose={handleCloseSection}>
           <AircraftCounter
             total={state.totalCount}
             military={state.militaryCount}
@@ -241,6 +278,10 @@ export function App(): React.ReactElement {
             filter={state.aircraftFilter}
             onFilterChange={state.setAircraftFilter}
           />
+        </SidePanel>
+      )}
+      {panelOpen && activeSection === "satellites" && (
+        <SidePanel title="Satellites" onClose={handleCloseSection}>
           <SatelliteCounter
             total={state.satelliteTotalCount}
             categoryCounts={state.satelliteCategoryCounts}
@@ -249,6 +290,10 @@ export function App(): React.ReactElement {
             filter={state.satelliteFilter}
             onFilterChange={state.setSatelliteFilter}
           />
+        </SidePanel>
+      )}
+      {panelOpen && activeSection === "traffic" && (
+        <SidePanel title="Traffic" onClose={handleCloseSection}>
           <TrafficControls
             filter={state.trafficFilter}
             onFilterChange={state.setTrafficFilter}
@@ -256,27 +301,47 @@ export function App(): React.ReactElement {
             roadCount={state.trafficRoadCount}
             totalRoads={state.trafficTotalRoads}
           />
+        </SidePanel>
+      )}
+      {panelOpen && activeSection === "cameras" && (
+        <SidePanel title="Cameras" onClose={handleCloseSection}>
           <CameraFilters
             filter={state.cameraFilter}
             cameras={state.cameras}
             progress={state.cameraProgress}
             onFilterChange={state.setCameraFilter}
           />
+        </SidePanel>
+      )}
+      {panelOpen && activeSection === "weather" && (
+        <SidePanel title="Weather" onClose={handleCloseSection}>
           <WeatherControls
             filter={state.weatherFilter}
             onFilterChange={state.setWeatherFilter}
             loading={state.weatherLoading}
           />
+        </SidePanel>
+      )}
+      {panelOpen && activeSection === "metar" && (
+        <SidePanel title="METAR" onClose={handleCloseSection}>
           <MetarFilters
             filter={state.metarFilter}
             stations={state.metarStations}
             onFilterChange={state.setMetarFilter}
           />
+        </SidePanel>
+      )}
+      {panelOpen && activeSection === "events" && (
+        <SidePanel title="Events" onClose={handleCloseSection}>
           <EventFilters
             filter={state.eventFilter}
             events={state.events}
             onFilterChange={state.setEventFilter}
           />
+        </SidePanel>
+      )}
+      {panelOpen && activeSection === "intel" && (
+        <SidePanel title="Intelligence" onClose={handleCloseSection}>
           <IntelligenceFilters
             cablesFilter={state.cablesFilter}
             onCablesFilterChange={state.setCablesFilter}
@@ -302,30 +367,7 @@ export function App(): React.ReactElement {
             threatCount={state.cyberThreats.length}
             kpIndex={state.kpIndex}
           />
-        </Sidebar>
-      )}
-
-      {/* Expand sidebar tab when collapsed */}
-      {!isFullscreen && !sidebarOpen && (
-        <button
-          onClick={handleExpandSidebar}
-          className="fixed top-2 left-2 z-30 flex h-8 w-8 items-center justify-center bg-black/80 text-emerald-800/60 backdrop-blur-md border border-emerald-900/30 hover:text-emerald-400 hover:border-emerald-500/40 transition-all hud-bracket"
-          aria-label="Open sidebar"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M9 5l7 7-7 7"
-            />
-          </svg>
-        </button>
+        </SidePanel>
       )}
 
       {/* Top bar: Search */}
@@ -347,7 +389,7 @@ export function App(): React.ReactElement {
         onSelectEarthquake={state.setSelectedEarthquake}
         onSelectVessel={state.setSelectedVessel}
         onFlyToCity={handleFlyToCity}
-        sidebarOpen={showSidebar}
+        sidebarOpen={panelOpen}
       />
 
       {/* ═══ RIGHT PANEL: unified detail column ═══ */}
@@ -369,88 +411,118 @@ export function App(): React.ReactElement {
           />
         </div>
 
-        {/* Scrollable detail popups */}
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden detail-panel pointer-events-auto flex flex-col gap-1.5">
+        {/* Scrollable detail popups — each is draggable */}
+        <div
+          className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden detail-panel flex flex-col gap-1.5 ${hasDetailPopup ? "pointer-events-auto" : "pointer-events-none"}`}
+        >
           {state.selectedAircraft && (
-            <AircraftPopup
-              aircraft={state.selectedAircraft}
-              onClose={handleCloseAircraft}
-              flightRoute={state.flightRoute}
-              routeLoading={state.routeLoading}
-              prediction={
-                state.predictions.get(state.selectedAircraft.icao) ?? null
-              }
-            />
+            <DraggablePanel>
+              <AircraftPopup
+                aircraft={state.selectedAircraft}
+                onClose={handleCloseAircraft}
+                flightRoute={state.flightRoute}
+                routeLoading={state.routeLoading}
+                prediction={
+                  state.predictions.get(state.selectedAircraft.icao) ?? null
+                }
+              />
+            </DraggablePanel>
           )}
           {state.selectedSatellite && (
-            <SatellitePopup
-              satellite={state.selectedSatellite}
-              onClose={handleCloseSatellite}
-            />
+            <DraggablePanel>
+              <SatellitePopup
+                satellite={state.selectedSatellite}
+                onClose={handleCloseSatellite}
+              />
+            </DraggablePanel>
           )}
           {state.selectedEvent && (
-            <EventPopup
-              event={state.selectedEvent}
-              onClose={handleCloseEvent}
-            />
+            <DraggablePanel>
+              <EventPopup
+                event={state.selectedEvent}
+                onClose={handleCloseEvent}
+              />
+            </DraggablePanel>
           )}
           {state.selectedMetar && (
-            <MetarPopup
-              station={state.selectedMetar}
-              onClose={handleCloseMetar}
-            />
+            <DraggablePanel>
+              <MetarPopup
+                station={state.selectedMetar}
+                onClose={handleCloseMetar}
+              />
+            </DraggablePanel>
           )}
           {state.selectedEarthquake && (
-            <EarthquakePopup
-              earthquake={state.selectedEarthquake}
-              onClose={handleCloseEarthquake}
-            />
+            <DraggablePanel>
+              <EarthquakePopup
+                earthquake={state.selectedEarthquake}
+                onClose={handleCloseEarthquake}
+              />
+            </DraggablePanel>
           )}
           {state.selectedFire && (
-            <FirePopup fire={state.selectedFire} onClose={handleCloseFire} />
+            <DraggablePanel>
+              <FirePopup fire={state.selectedFire} onClose={handleCloseFire} />
+            </DraggablePanel>
           )}
           {state.selectedCable && (
-            <CablePopup
-              cable={state.selectedCable}
-              onClose={handleCloseCable}
-            />
+            <DraggablePanel>
+              <CablePopup
+                cable={state.selectedCable}
+                onClose={handleCloseCable}
+              />
+            </DraggablePanel>
           )}
           {state.selectedMilitaryBase && (
-            <MilitaryBasePopup
-              base={state.selectedMilitaryBase}
-              onClose={handleCloseMilitaryBase}
-            />
+            <DraggablePanel>
+              <MilitaryBasePopup
+                base={state.selectedMilitaryBase}
+                onClose={handleCloseMilitaryBase}
+              />
+            </DraggablePanel>
           )}
           {state.selectedNuclearSite && (
-            <NuclearSitePopup
-              site={state.selectedNuclearSite}
-              onClose={handleCloseNuclearSite}
-            />
+            <DraggablePanel>
+              <NuclearSitePopup
+                site={state.selectedNuclearSite}
+                onClose={handleCloseNuclearSite}
+              />
+            </DraggablePanel>
           )}
           {state.selectedVessel && (
-            <VesselPopup
-              vessel={state.selectedVessel}
-              onClose={handleCloseVessel}
-            />
+            <DraggablePanel>
+              <VesselPopup
+                vessel={state.selectedVessel}
+                onClose={handleCloseVessel}
+              />
+            </DraggablePanel>
           )}
           {state.selectedCyberThreat && (
-            <CyberThreatPopup
-              threat={state.selectedCyberThreat}
-              onClose={handleCloseCyberThreat}
-            />
+            <DraggablePanel>
+              <CyberThreatPopup
+                threat={state.selectedCyberThreat}
+                onClose={handleCloseCyberThreat}
+              />
+            </DraggablePanel>
           )}
           {state.selectedGdeltEvent && (
-            <GdeltPopup
-              event={state.selectedGdeltEvent}
-              onClose={handleCloseGdeltEvent}
-            />
+            <DraggablePanel>
+              <GdeltPopup
+                event={state.selectedGdeltEvent}
+                onClose={handleCloseGdeltEvent}
+              />
+            </DraggablePanel>
           )}
-          <SpaceWeatherPopup
-            kpIndex={state.kpIndex}
-            alerts={state.spaceWeatherAlerts}
-            onClose={handleCloseSpaceWeather}
-            visible={state.showSpaceWeatherPopup}
-          />
+          {state.showSpaceWeatherPopup && (
+            <DraggablePanel>
+              <SpaceWeatherPopup
+                kpIndex={state.kpIndex}
+                alerts={state.spaceWeatherAlerts}
+                onClose={handleCloseSpaceWeather}
+                visible={state.showSpaceWeatherPopup}
+              />
+            </DraggablePanel>
+          )}
         </div>
 
         {/* Minimap at bottom of right panel */}
@@ -467,7 +539,7 @@ export function App(): React.ReactElement {
         lat={cursorState.lat}
         lon={cursorState.lon}
         altitude={cursorState.altitude}
-        sidebarOpen={showSidebar}
+        sidebarOpen={panelOpen}
       />
       <IntelligenceLegend
         cablesFilter={state.cablesFilter}
@@ -488,7 +560,9 @@ export function App(): React.ReactElement {
         threatCount={state.cyberThreats.length}
         spaceWeatherFilter={state.spaceWeatherFilter}
         kpIndex={state.kpIndex}
-        sidebarOpen={showSidebar}
+        alertCount={state.spaceWeatherAlerts.length}
+        sidebarOpen={panelOpen}
+        onClickSpaceWeather={handleOpenSpaceWeather}
       />
 
       {/* ═══ BOTTOM BAR: Timeline ═══ */}
@@ -497,7 +571,7 @@ export function App(): React.ReactElement {
         onTimeChange={handleTimeChange}
         isLive={isLive}
         onToggleLive={handleToggleLive}
-        sidebarOpen={showSidebar}
+        sidebarOpen={panelOpen}
       />
 
       {/* Floating overlays */}
