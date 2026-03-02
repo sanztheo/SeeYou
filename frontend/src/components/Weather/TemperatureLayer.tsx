@@ -1,0 +1,66 @@
+import { useEffect, useRef } from "react";
+import { useCesium } from "resium";
+import {
+  UrlTemplateImageryProvider,
+  WebMercatorTilingScheme,
+  Credit,
+  ImageryLayer,
+} from "cesium";
+
+const API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY as string | undefined;
+const TILING_SCHEME = new WebMercatorTilingScheme();
+const CREDIT = new Credit("OpenWeatherMap", false);
+
+interface TemperatureLayerProps {
+  opacity: number;
+}
+
+export function TemperatureLayer({ opacity }: TemperatureLayerProps): null {
+  const { viewer } = useCesium();
+  const layerRef = useRef<ImageryLayer | null>(null);
+
+  useEffect(() => {
+    if (!viewer || viewer.isDestroyed() || !API_KEY) return;
+
+    const provider = new UrlTemplateImageryProvider({
+      url: `https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=${API_KEY}`,
+      maximumLevel: 7,
+      tileWidth: 256,
+      tileHeight: 256,
+      tilingScheme: TILING_SCHEME,
+      credit: CREDIT,
+    });
+
+    const layer = viewer.imageryLayers.addImageryProvider(provider);
+    layer.alpha = opacity;
+    layerRef.current = layer;
+
+    return () => {
+      if (viewer.isDestroyed()) return;
+      try {
+        if (
+          layerRef.current &&
+          viewer.imageryLayers.contains(layerRef.current)
+        ) {
+          viewer.imageryLayers.remove(layerRef.current, true);
+        }
+      } catch {
+        // layer may have been removed externally
+      }
+      layerRef.current = null;
+    };
+  }, [viewer]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (
+      layerRef.current &&
+      viewer &&
+      !viewer.isDestroyed() &&
+      viewer.imageryLayers.contains(layerRef.current)
+    ) {
+      layerRef.current.alpha = opacity;
+    }
+  }, [viewer, opacity]);
+
+  return null;
+}
