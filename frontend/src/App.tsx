@@ -10,6 +10,7 @@ import { SatelliteCounter } from "./components/Sidebar/SatelliteCounter";
 import { SatelliteFilters } from "./components/Sidebar/SatelliteFilters";
 import { SatellitePopup } from "./components/Satellite/SatellitePopup";
 import { TrafficControls } from "./components/Sidebar/TrafficControls";
+import { RoutingPanel } from "./components/Sidebar/RoutingPanel";
 import { CameraFilters } from "./components/Sidebar/CameraFilters";
 import { WeatherControls } from "./components/Sidebar/WeatherControls";
 import { MetarFilters } from "./components/Sidebar/MetarFilters";
@@ -208,7 +209,6 @@ export function App(): React.ReactElement {
         satelliteFilter={state.satelliteFilter}
         onSelectSatellite={state.setSelectedSatellite}
         trafficFilter={state.trafficFilter}
-        onTrafficLoading={state.setTrafficLoadState}
         cameras={state.cameras}
         cameraFilter={state.cameraFilter}
         onSelectCamera={state.setSelectedCamera}
@@ -297,10 +297,8 @@ export function App(): React.ReactElement {
           <TrafficControls
             filter={state.trafficFilter}
             onFilterChange={state.setTrafficFilter}
-            loading={state.trafficLoading}
-            roadCount={state.trafficRoadCount}
-            totalRoads={state.trafficTotalRoads}
           />
+          {state.trafficFilter.enabled && <RoutingPanel />}
         </SidePanel>
       )}
       {panelOpen && activeSection === "cameras" && (

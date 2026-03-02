@@ -3,42 +3,18 @@ import type { TrafficFilter } from "../../types/traffic";
 interface TrafficControlsProps {
   filter: TrafficFilter;
   onFilterChange: (filter: TrafficFilter) => void;
-  loading?: boolean;
-  roadCount?: number;
-  totalRoads?: number;
 }
 
 export function TrafficControls({
   filter,
   onFilterChange,
-  loading = false,
-  roadCount = 0,
-  totalRoads = 0,
 }: TrafficControlsProps): React.ReactElement {
-  const pct = totalRoads > 0 ? Math.round((roadCount / totalRoads) * 100) : 0;
-
   return (
     <div className="px-4 py-3 border-b border-zinc-800/60">
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-            Traffic
-          </span>
-          {filter.enabled && roadCount > 0 && (
-            <span className="font-mono text-[9px] tabular-nums text-emerald-400">
-              {roadCount.toLocaleString()}
-              {loading && totalRoads > 0
-                ? `/${totalRoads.toLocaleString()}`
-                : ""}{" "}
-              roads
-            </span>
-          )}
-          {filter.enabled && loading && (
-            <span className="font-mono text-[9px] text-amber-400 animate-pulse">
-              loading…
-            </span>
-          )}
-        </div>
+        <span className="font-mono text-[10px] font-medium uppercase tracking-widest text-zinc-500">
+          Traffic
+        </span>
         <Toggle
           checked={filter.enabled}
           color="bg-emerald-500"
@@ -46,46 +22,83 @@ export function TrafficControls({
         />
       </div>
 
-      {filter.enabled && loading && (
-        <div className="mb-2">
-          <div className="h-1 w-full rounded-full bg-zinc-800 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-amber-500/70 transition-all duration-300"
-              style={{ width: totalRoads > 0 ? `${pct}%` : "50%" }}
-            />
+      {filter.enabled && (
+        <div className="space-y-3">
+          {/* TomTom layers */}
+          <div>
+            <SectionLabel text="Live layers" />
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1 mt-1">
+              <LayerToggle
+                label="Congestion"
+                color="bg-emerald-500"
+                checked={filter.showTilesOverlay}
+                onChange={(v) =>
+                  onFilterChange({ ...filter, showTilesOverlay: v })
+                }
+              />
+              <LayerToggle
+                label="Flow detail"
+                color="bg-sky-500"
+                checked={filter.showFlowSegments}
+                onChange={(v) =>
+                  onFilterChange({ ...filter, showFlowSegments: v })
+                }
+              />
+            </div>
+          </div>
+
+          {/* Incidents */}
+          <div>
+            <div className="flex items-center justify-between">
+              <SectionLabel text="Incidents" />
+              <Toggle
+                checked={filter.showIncidents}
+                color="bg-rose-500"
+                onChange={(v) =>
+                  onFilterChange({ ...filter, showIncidents: v })
+                }
+              />
+            </div>
+            {filter.showIncidents && (
+              <div className="grid grid-cols-3 gap-x-2 gap-y-1 mt-1">
+                <LayerToggle
+                  label="Accidents"
+                  color="bg-red-500"
+                  checked={filter.showAccidents}
+                  onChange={(v) =>
+                    onFilterChange({ ...filter, showAccidents: v })
+                  }
+                />
+                <LayerToggle
+                  label="Works"
+                  color="bg-orange-500"
+                  checked={filter.showRoadWorks}
+                  onChange={(v) =>
+                    onFilterChange({ ...filter, showRoadWorks: v })
+                  }
+                />
+                <LayerToggle
+                  label="Closures"
+                  color="bg-rose-700"
+                  checked={filter.showClosures}
+                  onChange={(v) =>
+                    onFilterChange({ ...filter, showClosures: v })
+                  }
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
-
-      {filter.enabled && (
-        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-          <RoadToggle
-            label="Motorway"
-            color="bg-amber-400"
-            checked={filter.showMotorway}
-            onChange={(v) => onFilterChange({ ...filter, showMotorway: v })}
-          />
-          <RoadToggle
-            label="Trunk"
-            color="bg-orange-500"
-            checked={filter.showTrunk}
-            onChange={(v) => onFilterChange({ ...filter, showTrunk: v })}
-          />
-          <RoadToggle
-            label="Primary"
-            color="bg-zinc-300"
-            checked={filter.showPrimary}
-            onChange={(v) => onFilterChange({ ...filter, showPrimary: v })}
-          />
-          <RoadToggle
-            label="Secondary"
-            color="bg-lime-400"
-            checked={filter.showSecondary}
-            onChange={(v) => onFilterChange({ ...filter, showSecondary: v })}
-          />
-        </div>
-      )}
     </div>
+  );
+}
+
+function SectionLabel({ text }: { text: string }) {
+  return (
+    <span className="font-mono text-[9px] uppercase tracking-wider text-zinc-600">
+      {text}
+    </span>
   );
 }
 
@@ -111,7 +124,7 @@ function Toggle({
   );
 }
 
-function RoadToggle({
+function LayerToggle({
   label,
   color,
   checked,

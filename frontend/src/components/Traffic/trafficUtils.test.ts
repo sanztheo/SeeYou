@@ -1,58 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { typeVisible, bboxKey, bboxContains } from "./trafficUtils";
-import type { TrafficFilter, BoundingBox } from "../../types/traffic";
-
-const BASE_FILTER: TrafficFilter = {
-  enabled: true,
-  showMotorway: true,
-  showTrunk: true,
-  showPrimary: true,
-  showSecondary: true,
-};
-
-describe("typeVisible", () => {
-  it("returns true for each enabled road type", () => {
-    expect(typeVisible(BASE_FILTER, "Motorway")).toBe(true);
-    expect(typeVisible(BASE_FILTER, "Trunk")).toBe(true);
-    expect(typeVisible(BASE_FILTER, "Primary")).toBe(true);
-    expect(typeVisible(BASE_FILTER, "Secondary")).toBe(true);
-  });
-
-  it("returns false when a specific type is disabled", () => {
-    expect(
-      typeVisible({ ...BASE_FILTER, showMotorway: false }, "Motorway"),
-    ).toBe(false);
-    expect(typeVisible({ ...BASE_FILTER, showTrunk: false }, "Trunk")).toBe(
-      false,
-    );
-    expect(typeVisible({ ...BASE_FILTER, showPrimary: false }, "Primary")).toBe(
-      false,
-    );
-    expect(
-      typeVisible({ ...BASE_FILTER, showSecondary: false }, "Secondary"),
-    ).toBe(false);
-  });
-
-  it("returns false for Tertiary when showTertiary is undefined", () => {
-    expect(typeVisible(BASE_FILTER, "Tertiary")).toBe(false);
-  });
-
-  it("returns true for Tertiary when showTertiary is true", () => {
-    expect(
-      typeVisible({ ...BASE_FILTER, showTertiary: true }, "Tertiary"),
-    ).toBe(true);
-  });
-
-  it("returns false for Tertiary when showTertiary is false", () => {
-    expect(
-      typeVisible({ ...BASE_FILTER, showTertiary: false }, "Tertiary"),
-    ).toBe(false);
-  });
-
-  it("returns false for unknown road types", () => {
-    expect(typeVisible(BASE_FILTER, "Unknown" as never)).toBe(false);
-  });
-});
+import { bboxKey, bboxContains } from "./trafficUtils";
+import type { BoundingBox } from "../../types/traffic";
 
 describe("bboxKey", () => {
   it("produces deterministic key with 2 decimal places", () => {

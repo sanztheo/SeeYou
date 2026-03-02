@@ -92,7 +92,6 @@ interface GlobeProps {
   onSelectSatellite?: (sat: SatellitePosition) => void;
 
   trafficFilter?: TrafficFilter;
-  onTrafficLoading?: (loading: boolean, count: number, total: number) => void;
 
   cameras?: Camera[];
   cameraFilter?: CameraFilter;
@@ -176,7 +175,6 @@ export function Globe({
   satelliteFilter,
   onSelectSatellite,
   trafficFilter,
-  onTrafficLoading,
   cameras,
   cameraFilter,
   onSelectCamera,
@@ -287,7 +285,7 @@ export function Globe({
         });
     }
 
-    setViewerReady(viewer);
+    queueMicrotask(() => setViewerReady(viewer));
 
     viewer.camera.percentageChanged = 0.05;
     const onChanged = () => {
@@ -362,12 +360,7 @@ export function Globe({
         />
       )}
 
-      {trafficFilter?.enabled && (
-        <TrafficLayer
-          filter={trafficFilter}
-          onLoadingChange={onTrafficLoading}
-        />
-      )}
+      {trafficFilter?.enabled && <TrafficLayer filter={trafficFilter} />}
 
       {cameraFilter?.enabled && cameras && (
         <CameraLayer

@@ -89,10 +89,6 @@ export interface AppState {
 
   trafficFilter: TrafficFilter;
   setTrafficFilter: (f: TrafficFilter) => void;
-  trafficLoading: boolean;
-  trafficRoadCount: number;
-  trafficTotalRoads: number;
-  setTrafficLoadState: (loading: boolean, count: number, total: number) => void;
 
   cameraFilter: CameraFilter;
   setCameraFilter: (f: CameraFilter) => void;
@@ -220,23 +216,13 @@ export function useAppState(): AppState {
 
   const [trafficFilter, setTrafficFilter] = useState<TrafficFilter>({
     enabled: false,
-    showMotorway: true,
-    showTrunk: true,
-    showPrimary: true,
-    showSecondary: false,
+    showTilesOverlay: true,
+    showFlowSegments: true,
+    showIncidents: true,
+    showAccidents: true,
+    showRoadWorks: true,
+    showClosures: true,
   });
-  const [trafficLoading, setTrafficLoading] = useState(false);
-  const [trafficRoadCount, setTrafficRoadCount] = useState(0);
-  const [trafficTotalRoads, setTrafficTotalRoads] = useState(0);
-
-  const setTrafficLoadState = useCallback(
-    (loading: boolean, count: number, total: number) => {
-      setTrafficLoading(loading);
-      setTrafficRoadCount(count);
-      setTrafficTotalRoads(total);
-    },
-    [],
-  );
 
   const [cameraFilter, setCameraFilter] = useState<CameraFilter>({
     enabled: false,
@@ -820,10 +806,6 @@ export function useAppState(): AppState {
 
     trafficFilter,
     setTrafficFilter,
-    trafficLoading,
-    trafficRoadCount,
-    trafficTotalRoads,
-    setTrafficLoadState,
 
     cameraFilter,
     setCameraFilter,
