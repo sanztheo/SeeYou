@@ -4,19 +4,19 @@ overview: Ajouter la comprehension visuelle (legende, labels), la recherche univ
 todos:
   - id: legend
     content: Creer IntelligenceLegend.tsx - legende flottante avec pastilles couleurs pour chaque couche active
-    status: pending
+    status: completed
   - id: search
     content: Etendre SearchBar.tsx avec recherche dans bases militaires, sites nucleaires, cables, seismes, navires
-    status: pending
+    status: completed
   - id: popups
     content: Creer les 9 composants popup de detail (EarthquakePopup, FirePopup, CablePopup, MilitaryBasePopup, NuclearSitePopup, VesselPopup, CyberThreatPopup, GdeltPopup, SpaceWeatherPopup)
-    status: pending
+    status: completed
   - id: picking
     content: Ajouter ScreenSpaceEventHandler + onSelect dans les 8 layers Cesium intelligence
-    status: pending
+    status: completed
   - id: wiring
     content: Connecter tout dans useAppState.ts, App.tsx, Globe.tsx (selected states, callbacks, props, rendu popups)
-    status: pending
+    status: completed
 isProject: false
 ---
 
@@ -100,7 +100,7 @@ Modifier chaque layer pour ajouter le picking Cesium :
 - `frontend/src/components/SearchBar/SearchBar.tsx` -- ajout des groupes intelligence
 - `frontend/src/hooks/useAppState.ts` -- ajout `selected`* states pour chaque domaine
 - `frontend/src/App.tsx` -- passage des nouvelles props, rendu des popups
-- `frontend/src/components/Globe/Globe.tsx` -- passage des `onSelect*` callbacks
+- `frontend/src/components/Globe/Globe.tsx` -- passage des `onSelect`* callbacks
 
 ## Fichiers crees
 
