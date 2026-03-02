@@ -32,19 +32,16 @@ export function SatellitePopup({
 
   return (
     <div
-      className={`w-72 backdrop-blur-sm border rounded-lg shadow-xl ${
-        isISS
-          ? "bg-gray-800/95 border-yellow-500/40 shadow-yellow-500/10"
-          : "bg-gray-800/95 border-gray-700/50"
+      className={`w-full backdrop-blur-md border shadow-[0_0_20px_rgba(0,0,0,0.5)] bg-black/90 ${
+        isISS ? "border-yellow-500/40" : "border-emerald-900/30"
       }`}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-gray-700/50">
+      <div className="flex items-center justify-between p-3 border-b border-emerald-900/20">
         <div className="flex items-center gap-2 min-w-0">
           {isISS && (
             <span className="shrink-0 w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
           )}
-          <span className="text-sm font-bold text-gray-100 truncate">
+          <span className="text-sm font-bold text-emerald-300 truncate">
             {satellite.name}
           </span>
           <span
@@ -55,7 +52,7 @@ export function SatellitePopup({
         </div>
         <button
           onClick={onClose}
-          className="shrink-0 p-1 rounded hover:bg-gray-700/50 text-gray-400 hover:text-gray-200 transition-colors"
+          className="shrink-0 p-1 hover:bg-emerald-900/20 text-emerald-800/60 hover:text-emerald-400 transition-colors"
           aria-label="Close"
         >
           <svg
@@ -87,7 +84,7 @@ export function SatellitePopup({
           value={`${satellite.velocity_km_s.toFixed(2)} km/s`}
         />
 
-        <div className="pt-1.5 mt-1.5 border-t border-gray-700/30 space-y-2">
+        <div className="pt-1.5 mt-1.5 border-t border-emerald-900/20 space-y-2">
           <Row label="Latitude" value={`${satellite.lat.toFixed(4)}°`} />
           <Row label="Longitude" value={`${satellite.lon.toFixed(4)}°`} />
         </div>
@@ -127,8 +124,8 @@ function Row({
 }): React.ReactElement {
   return (
     <div className="flex justify-between gap-2">
-      <span className="text-gray-400 shrink-0">{label}</span>
-      <span className="text-gray-100 font-mono text-right">{value}</span>
+      <span className="text-emerald-800/60 shrink-0">{label}</span>
+      <span className="text-emerald-300 font-mono text-right">{value}</span>
     </div>
   );
 }

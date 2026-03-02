@@ -23,20 +23,20 @@ export function SpaceWeatherPopup({
   if (visible === false) return null;
   const kpCol = kpColor(kpIndex);
   return (
-    <div className="w-72 backdrop-blur-sm border rounded-lg shadow-xl bg-gray-800/95 border-gray-700/50">
-      <div className="flex items-center justify-between p-3 border-b border-gray-700/50">
+    <div className="w-full backdrop-blur-md border border-emerald-900/30 shadow-[0_0_20px_rgba(0,0,0,0.5)] bg-black/90">
+      <div className="flex items-center justify-between p-3 border-b border-emerald-900/20">
         <div className="flex items-center gap-2 min-w-0">
           <span
             className="shrink-0 w-2 h-2 rounded-full"
             style={{ backgroundColor: kpCol }}
           />
-          <span className="text-sm font-bold text-gray-100 truncate">
+          <span className="text-sm font-bold text-emerald-300 truncate">
             Space Weather
           </span>
         </div>
         <button
           onClick={onClose}
-          className="shrink-0 p-1 rounded hover:bg-gray-700/50 text-gray-400 hover:text-gray-200 transition-colors"
+          className="shrink-0 p-1 rounded hover:bg-emerald-900/20 text-emerald-800/60 hover:text-emerald-400 transition-colors"
           aria-label="Close"
         >
           <svg
@@ -57,7 +57,7 @@ export function SpaceWeatherPopup({
       </div>
       <div className="p-3 space-y-2 text-xs">
         <div className="flex justify-between gap-2">
-          <span className="text-gray-400 shrink-0">Kp Index</span>
+          <span className="text-emerald-800/60 shrink-0">Kp Index</span>
           <span
             className="px-1.5 py-0.5 text-[10px] font-bold rounded font-mono"
             style={{
@@ -69,8 +69,8 @@ export function SpaceWeatherPopup({
           </span>
         </div>
         <div className="flex justify-between gap-2">
-          <span className="text-gray-400 shrink-0">Storm level</span>
-          <span className="text-gray-100 font-mono">
+          <span className="text-emerald-800/60 shrink-0">Storm level</span>
+          <span className="text-emerald-300 font-mono">
             {kpIndex >= 7
               ? "Severe (G3+)"
               : kpIndex >= 5
@@ -81,8 +81,8 @@ export function SpaceWeatherPopup({
           </span>
         </div>
         {alerts.length > 0 && (
-          <div className="pt-1.5 mt-1.5 border-t border-gray-700/30 space-y-2">
-            <span className="text-gray-400 text-[10px] font-mono">
+          <div className="pt-1.5 mt-1.5 border-t border-emerald-900/20 space-y-2">
+            <span className="text-emerald-800/60 text-[10px] font-mono">
               ACTIVE ALERTS ({alerts.length})
             </span>
             <div className="max-h-32 overflow-y-auto space-y-1.5">
@@ -91,10 +91,10 @@ export function SpaceWeatherPopup({
                   key={a.product_id}
                   className="rounded bg-gray-900/50 px-2 py-1.5 text-[10px]"
                 >
-                  <div className="text-gray-300 line-clamp-3 font-mono">
+                  <div className="text-emerald-300/80 line-clamp-3 font-mono">
                     {a.message.slice(0, 200)}
                   </div>
-                  <div className="text-gray-500 font-mono mt-0.5">
+                  <div className="text-emerald-800/50 font-mono mt-0.5">
                     {new Date(a.issue_time).toLocaleString()}
                   </div>
                 </div>

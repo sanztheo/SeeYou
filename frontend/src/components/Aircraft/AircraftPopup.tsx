@@ -53,11 +53,11 @@ export function AircraftPopup({
     : null;
 
   return (
-    <div className="w-72 bg-gray-800/95 backdrop-blur-sm border border-gray-700/50 rounded-lg shadow-xl">
+    <div className="w-full backdrop-blur-md border border-emerald-900/30 shadow-[0_0_20px_rgba(0,0,0,0.5)] bg-black/90">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-gray-700/50">
+      <div className="flex items-center justify-between p-3 border-b border-emerald-900/20">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-gray-100">
+          <span className="text-sm font-bold text-emerald-300">
             {aircraft.callsign ?? aircraft.icao}
           </span>
           {aircraft.is_military && (
@@ -73,7 +73,7 @@ export function AircraftPopup({
         </div>
         <button
           onClick={onClose}
-          className="p-1 rounded hover:bg-gray-700/50 text-gray-400 hover:text-gray-200 transition-colors"
+          className="p-1 rounded hover:bg-emerald-900/20 text-emerald-800/60 hover:text-emerald-400 transition-colors"
           aria-label="Close"
         >
           <svg
@@ -96,19 +96,21 @@ export function AircraftPopup({
       {/* Compact summary — always visible */}
       <div className="p-3 space-y-1.5 text-xs">
         <div className="flex justify-between">
-          <span className="text-gray-100 font-mono">
+          <span className="text-emerald-300 font-mono">
             {aircraft.on_ground
               ? "Ground"
               : `${altitudeFt.toLocaleString()} ft`}
           </span>
-          <span className="text-gray-100 font-mono">{speedKt} kt</span>
-          <span className="text-gray-100 font-mono">{heading}°</span>
+          <span className="text-emerald-300 font-mono">{speedKt} kt</span>
+          <span className="text-emerald-300 font-mono">{heading}°</span>
         </div>
 
         {aircraft.callsign && (
           <div className="text-xs">
             {routeLoading && (
-              <span className="text-gray-500 italic">Loading route...</span>
+              <span className="text-emerald-800/50 italic">
+                Loading route...
+              </span>
             )}
             {!routeLoading && routeSummary && (
               <span className="text-blue-400 font-mono font-medium">
@@ -116,7 +118,7 @@ export function AircraftPopup({
               </span>
             )}
             {!routeLoading && !flightRoute && (
-              <span className="text-gray-500 italic">No route</span>
+              <span className="text-emerald-800/50 italic">No route</span>
             )}
           </div>
         )}
@@ -125,7 +127,7 @@ export function AircraftPopup({
       {/* Expand / Collapse toggle */}
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-center gap-1 py-1.5 text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-700/30 transition-colors border-t border-gray-700/50"
+        className="w-full flex items-center justify-center gap-1 py-1.5 text-[10px] text-emerald-800/50 hover:text-emerald-400 hover:bg-emerald-900/20 transition-colors border-t border-emerald-900/20"
       >
         <span>{expanded ? "Moins" : "Détails"}</span>
         <svg
@@ -146,7 +148,7 @@ export function AircraftPopup({
 
       {/* Expanded detail section */}
       {expanded && (
-        <div className="p-3 pt-2 space-y-2 text-xs border-t border-gray-700/50">
+        <div className="p-3 pt-2 space-y-2 text-xs border-t border-emerald-900/20">
           <Row label="ICAO" value={aircraft.icao} />
           {aircraft.callsign && (
             <Row label="Callsign" value={aircraft.callsign} />
@@ -155,7 +157,7 @@ export function AircraftPopup({
             <Row label="Type" value={aircraft.aircraft_type} />
           )}
 
-          <div className="pt-1.5 mt-1.5 border-t border-gray-700/30 space-y-2">
+          <div className="pt-1.5 mt-1.5 border-t border-emerald-900/20 space-y-2">
             <Row
               label="Altitude"
               value={
@@ -177,7 +179,7 @@ export function AircraftPopup({
           </div>
 
           {flightRoute && (
-            <div className="pt-1.5 mt-1.5 border-t border-gray-700/30 space-y-2">
+            <div className="pt-1.5 mt-1.5 border-t border-emerald-900/20 space-y-2">
               <Row
                 label="DEP"
                 value={`${flightRoute.departure.iata} — ${flightRoute.departure.name}`}
@@ -213,7 +215,9 @@ export function AircraftPopup({
                 value={`${prediction.points.length > 0 ? Math.round(prediction.points[prediction.points.length - 1].dt_secs / 60) : 0} min`}
               />
               <div className="space-y-1">
-                <span className="text-gray-400 text-[10px]">Model weights</span>
+                <span className="text-emerald-800/60 text-[10px]">
+                  Model weights
+                </span>
                 <div className="flex gap-0.5 h-3 rounded overflow-hidden">
                   {prediction.model_probabilities.map((p, i) => (
                     <div
@@ -234,7 +238,7 @@ export function AircraftPopup({
                     />
                   ))}
                 </div>
-                <div className="flex justify-between text-[9px] text-gray-500 font-mono">
+                <div className="flex justify-between text-[9px] text-emerald-800/50 font-mono">
                   {prediction.model_probabilities.map((p, i) => (
                     <span key={MODEL_NAMES[i]}>
                       {MODEL_NAMES[i]} {(p * 100).toFixed(0)}%
@@ -260,11 +264,11 @@ function Row({
   return (
     <div className="flex justify-between gap-2">
       {label ? (
-        <span className="text-gray-400 shrink-0">{label}</span>
+        <span className="text-emerald-800/60 shrink-0">{label}</span>
       ) : (
         <span />
       )}
-      <span className="text-gray-100 font-mono text-right">{value}</span>
+      <span className="text-emerald-300 font-mono text-right">{value}</span>
     </div>
   );
 }
