@@ -136,34 +136,50 @@ export interface AppState {
   setCablesFilter: (f: CablesFilter) => void;
   cables: SubmarineCable[];
   landingPoints: LandingPoint[];
+  selectedCable: SubmarineCable | null;
+  setSelectedCable: (c: SubmarineCable | null) => void;
 
   seismicFilter: SeismicFilter;
   setSeismicFilter: (f: SeismicFilter) => void;
   earthquakes: Earthquake[];
+  selectedEarthquake: Earthquake | null;
+  setSelectedEarthquake: (e: Earthquake | null) => void;
 
   firesFilter: FiresFilter;
   setFiresFilter: (f: FiresFilter) => void;
   fires: FireHotspot[];
+  selectedFire: FireHotspot | null;
+  setSelectedFire: (f: FireHotspot | null) => void;
 
   gdeltFilter: GdeltFilter;
   setGdeltFilter: (f: GdeltFilter) => void;
   gdeltEvents: GdeltEvent[];
+  selectedGdeltEvent: GdeltEvent | null;
+  setSelectedGdeltEvent: (e: GdeltEvent | null) => void;
 
   militaryFilter: MilitaryFilter;
   setMilitaryFilter: (f: MilitaryFilter) => void;
   militaryBases: MilitaryBase[];
+  selectedMilitaryBase: MilitaryBase | null;
+  setSelectedMilitaryBase: (b: MilitaryBase | null) => void;
 
   nuclearFilter: NuclearFilter;
   setNuclearFilter: (f: NuclearFilter) => void;
   nuclearSites: NuclearSite[];
+  selectedNuclearSite: NuclearSite | null;
+  setSelectedNuclearSite: (s: NuclearSite | null) => void;
 
   maritimeFilter: MaritimeFilter;
   setMaritimeFilter: (f: MaritimeFilter) => void;
   vessels: Vessel[];
+  selectedVessel: Vessel | null;
+  setSelectedVessel: (v: Vessel | null) => void;
 
   cyberFilter: CyberFilter;
   setCyberFilter: (f: CyberFilter) => void;
   cyberThreats: CyberThreat[];
+  selectedCyberThreat: CyberThreat | null;
+  setSelectedCyberThreat: (t: CyberThreat | null) => void;
 
   spaceWeatherFilter: SpaceWeatherFilter;
   setSpaceWeatherFilter: (f: SpaceWeatherFilter) => void;
@@ -172,6 +188,9 @@ export interface AppState {
   spaceWeatherAlerts: SpaceWeatherAlert[];
 
   convergenceZones: ConvergenceZone[];
+
+  showSpaceWeatherPopup: boolean;
+  setShowSpaceWeatherPopup: (v: boolean) => void;
 }
 
 export function useAppState(): AppState {
@@ -278,47 +297,62 @@ export function useAppState(): AppState {
   });
   const [cables, setCables] = useState<SubmarineCable[]>([]);
   const [landingPoints, setLandingPoints] = useState<LandingPoint[]>([]);
+  const [selectedCable, setSelectedCable] = useState<SubmarineCable | null>(
+    null,
+  );
 
   const [seismicFilter, setSeismicFilter] = useState<SeismicFilter>({
     enabled: false,
     minMagnitude: 4.0,
   });
   const [earthquakes, setEarthquakes] = useState<Earthquake[]>([]);
+  const [selectedEarthquake, setSelectedEarthquake] =
+    useState<Earthquake | null>(null);
 
   const [firesFilter, setFiresFilter] = useState<FiresFilter>({
     enabled: false,
     minConfidence: "nominal",
   });
   const [fires, setFires] = useState<FireHotspot[]>([]);
+  const [selectedFire, setSelectedFire] = useState<FireHotspot | null>(null);
 
   const [gdeltFilter, setGdeltFilter] = useState<GdeltFilter>({
     enabled: false,
   });
   const [gdeltEvents, setGdeltEvents] = useState<GdeltEvent[]>([]);
+  const [selectedGdeltEvent, setSelectedGdeltEvent] =
+    useState<GdeltEvent | null>(null);
 
   const [militaryFilter, setMilitaryFilter] = useState<MilitaryFilter>({
     enabled: false,
     branches: new Set(),
   });
   const [militaryBases, setMilitaryBases] = useState<MilitaryBase[]>([]);
+  const [selectedMilitaryBase, setSelectedMilitaryBase] =
+    useState<MilitaryBase | null>(null);
 
   const [nuclearFilter, setNuclearFilter] = useState<NuclearFilter>({
     enabled: false,
     types: new Set(),
   });
   const [nuclearSites, setNuclearSites] = useState<NuclearSite[]>([]);
+  const [selectedNuclearSite, setSelectedNuclearSite] =
+    useState<NuclearSite | null>(null);
 
   const [maritimeFilter, setMaritimeFilter] = useState<MaritimeFilter>({
     enabled: false,
     sanctionedOnly: false,
   });
   const [vessels, setVessels] = useState<Vessel[]>([]);
+  const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
 
   const [cyberFilter, setCyberFilter] = useState<CyberFilter>({
     enabled: false,
     minConfidence: 50,
   });
   const [cyberThreats, setCyberThreats] = useState<CyberThreat[]>([]);
+  const [selectedCyberThreat, setSelectedCyberThreat] =
+    useState<CyberThreat | null>(null);
 
   const [spaceWeatherFilter, setSpaceWeatherFilter] =
     useState<SpaceWeatherFilter>({ enabled: false });
@@ -331,6 +365,8 @@ export function useAppState(): AppState {
   const [convergenceZones, setConvergenceZones] = useState<ConvergenceZone[]>(
     [],
   );
+
+  const [showSpaceWeatherPopup, setShowSpaceWeatherPopup] = useState(false);
 
   const handleHoverAircraft = useCallback(
     (ac: AircraftPosition | null, screenX: number, screenY: number): void => {
@@ -824,34 +860,50 @@ export function useAppState(): AppState {
     setCablesFilter,
     cables,
     landingPoints,
+    selectedCable,
+    setSelectedCable,
 
     seismicFilter,
     setSeismicFilter,
     earthquakes,
+    selectedEarthquake,
+    setSelectedEarthquake,
 
     firesFilter,
     setFiresFilter,
     fires,
+    selectedFire,
+    setSelectedFire,
 
     gdeltFilter,
     setGdeltFilter,
     gdeltEvents,
+    selectedGdeltEvent,
+    setSelectedGdeltEvent,
 
     militaryFilter,
     setMilitaryFilter,
     militaryBases,
+    selectedMilitaryBase,
+    setSelectedMilitaryBase,
 
     nuclearFilter,
     setNuclearFilter,
     nuclearSites,
+    selectedNuclearSite,
+    setSelectedNuclearSite,
 
     maritimeFilter,
     setMaritimeFilter,
     vessels,
+    selectedVessel,
+    setSelectedVessel,
 
     cyberFilter,
     setCyberFilter,
     cyberThreats,
+    selectedCyberThreat,
+    setSelectedCyberThreat,
 
     spaceWeatherFilter,
     setSpaceWeatherFilter,
@@ -860,5 +912,8 @@ export function useAppState(): AppState {
     spaceWeatherAlerts,
 
     convergenceZones,
+
+    showSpaceWeatherPopup,
+    setShowSpaceWeatherPopup,
   };
 }
