@@ -2,6 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AircraftPosition } from "../../types/aircraft";
 import type { SatellitePosition } from "../../types/satellite";
 import type { Camera } from "../../types/camera";
+import type { MilitaryBase } from "../../types/military";
+import type { NuclearSite } from "../../types/nuclear";
+import type { SubmarineCable } from "../../types/cables";
+import type { Earthquake } from "../../types/seismic";
+import type { Vessel } from "../../types/maritime";
 import {
   geocodeSearch,
   type GeocodeResult,
@@ -11,9 +16,19 @@ interface SearchBarProps {
   aircraft: Map<string, AircraftPosition>;
   satellites: Map<number, SatellitePosition>;
   cameras: Camera[];
+  militaryBases?: MilitaryBase[];
+  nuclearSites?: NuclearSite[];
+  cables?: SubmarineCable[];
+  earthquakes?: Earthquake[];
+  vessels?: Vessel[];
   onSelectAircraft?: (ac: AircraftPosition) => void;
   onSelectSatellite?: (sat: SatellitePosition) => void;
   onSelectCamera?: (cam: Camera) => void;
+  onSelectMilitary?: (base: MilitaryBase) => void;
+  onSelectNuclear?: (site: NuclearSite) => void;
+  onSelectCable?: (cable: SubmarineCable) => void;
+  onSelectEarthquake?: (eq: Earthquake) => void;
+  onSelectVessel?: (v: Vessel) => void;
   onFlyToCity?: (lat: number, lon: number, alt: number) => void;
   sidebarOpen?: boolean;
 }
@@ -29,9 +44,19 @@ export function SearchBar({
   aircraft,
   satellites,
   cameras,
+  militaryBases,
+  nuclearSites,
+  cables,
+  earthquakes,
+  vessels,
   onSelectAircraft,
   onSelectSatellite,
   onSelectCamera,
+  onSelectMilitary,
+  onSelectNuclear,
+  onSelectCable,
+  onSelectEarthquake,
+  onSelectVessel,
   onFlyToCity,
   sidebarOpen,
 }: SearchBarProps) {
@@ -46,7 +71,17 @@ export function SearchBar({
   const q = query.toLowerCase().trim();
 
   const localResults = useMemo(() => {
-    if (!q) return { ac: [], sat: [], cam: [] };
+    if (!q)
+      return {
+        ac: [] as AircraftPosition[],
+        sat: [] as SatellitePosition[],
+        cam: [] as Camera[],
+        mil: [] as MilitaryBase[],
+        nuc: [] as NuclearSite[],
+        cab: [] as SubmarineCable[],
+        eq: [] as Earthquake[],
+        ves: [] as Vessel[],
+      };
 
     const ac: AircraftPosition[] = [];
     for (const a of aircraft.values()) {
@@ -77,8 +112,70 @@ export function SearchBar({
         cam.push(c);
     }
 
-    return { ac, sat, cam };
-  }, [q, aircraft, satellites, cameras]);
+    const mil: MilitaryBase[] = [];
+    if (militaryBases) {
+      for (const b of militaryBases) {
+        if (mil.length >= MAX_PER_GROUP) break;
+        if (matches(b.name, q) || matches(b.country, q) || matches(b.branch, q))
+          mil.push(b);
+      }
+    }
+
+    const nuc: NuclearSite[] = [];
+    if (nuclearSites) {
+      for (const s of nuclearSites) {
+        if (nuc.length >= MAX_PER_GROUP) break;
+        if (matches(s.name, q) || matches(s.country, q) || matches(s.type, q))
+          nuc.push(s);
+      }
+    }
+
+    const cab: SubmarineCable[] = [];
+    if (cables) {
+      for (const c of cables) {
+        if (cab.length >= MAX_PER_GROUP) break;
+        if (matches(c.name, q) || matches(c.owners, q)) cab.push(c);
+      }
+    }
+
+    const eq: Earthquake[] = [];
+    if (earthquakes) {
+      for (const e of earthquakes) {
+        if (eq.length >= MAX_PER_GROUP) break;
+        if (
+          matches(e.title, q) ||
+          matches(String(e.magnitude), q) ||
+          (q === "tsunami" && e.tsunami)
+        )
+          eq.push(e);
+      }
+    }
+
+    const ves: Vessel[] = [];
+    if (vessels) {
+      for (const v of vessels) {
+        if (ves.length >= MAX_PER_GROUP) break;
+        if (
+          matches(v.mmsi, q) ||
+          matches(v.name, q) ||
+          matches(v.destination, q)
+        )
+          ves.push(v);
+      }
+    }
+
+    return { ac, sat, cam, mil, nuc, cab, eq, ves };
+  }, [
+    q,
+    aircraft,
+    satellites,
+    cameras,
+    militaryBases,
+    nuclearSites,
+    cables,
+    earthquakes,
+    vessels,
+  ]);
 
   useEffect(() => {
     if (!q || q.length < 2) {
@@ -118,6 +215,11 @@ export function SearchBar({
     localResults.ac.length +
       localResults.sat.length +
       localResults.cam.length +
+      localResults.mil.length +
+      localResults.nuc.length +
+      localResults.cab.length +
+      localResults.eq.length +
+      localResults.ves.length +
       geoResults.length >
     0;
 
@@ -169,6 +271,28 @@ export function SearchBar({
     [onSelectAircraft, onSelectSatellite, onSelectCamera],
   );
 
+  const selectIntel = useCallback(
+    (
+      type: "mil" | "nuc" | "cab" | "eq" | "ves",
+      item: MilitaryBase | NuclearSite | SubmarineCable | Earthquake | Vessel,
+    ) => {
+      setOpen(false);
+      setQuery("");
+      if (type === "mil") onSelectMilitary?.(item as MilitaryBase);
+      else if (type === "nuc") onSelectNuclear?.(item as NuclearSite);
+      else if (type === "cab") onSelectCable?.(item as SubmarineCable);
+      else if (type === "eq") onSelectEarthquake?.(item as Earthquake);
+      else if (type === "ves") onSelectVessel?.(item as Vessel);
+    },
+    [
+      onSelectMilitary,
+      onSelectNuclear,
+      onSelectCable,
+      onSelectEarthquake,
+      onSelectVessel,
+    ],
+  );
+
   const selectCity = useCallback(
     (result: GeocodeResult) => {
       setOpen(false);
@@ -206,7 +330,7 @@ export function SearchBar({
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Search aircraft, satellites, cities, cameras..."
+          placeholder="Search aircraft, satellites, cities, bases, cables..."
           className="w-full rounded-md border border-zinc-700/60 bg-zinc-900/80 py-1.5 pl-9 pr-14 font-mono text-[11px] text-zinc-200 placeholder-zinc-600 shadow-lg shadow-black/30 backdrop-blur-xl outline-none transition-colors focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
         />
         <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-zinc-700/50 bg-zinc-800/60 px-1.5 py-0.5 font-mono text-[9px] text-zinc-600">
@@ -278,6 +402,89 @@ export function SearchBar({
                   <span className="ml-auto text-zinc-600 text-[9px]">
                     {c.city}
                   </span>
+                </Row>
+              ))}
+            </Group>
+          )}
+          {localResults.mil.length > 0 && (
+            <Group label="MILITARY BASES" count={localResults.mil.length}>
+              {localResults.mil.map((b, i) => (
+                <Row
+                  key={`mil-${b.name}-${b.lat}-${b.lon}`}
+                  onClick={() => selectIntel("mil", b)}
+                >
+                  <span className="text-green-400 font-medium">{b.name}</span>
+                  <span className="text-zinc-600 text-[9px] ml-1.5">
+                    {b.branch}
+                  </span>
+                  <span className="ml-auto text-zinc-700 text-[9px]">
+                    {b.country}
+                  </span>
+                </Row>
+              ))}
+            </Group>
+          )}
+          {localResults.nuc.length > 0 && (
+            <Group label="NUCLEAR SITES" count={localResults.nuc.length}>
+              {localResults.nuc.map((s, i) => (
+                <Row
+                  key={`nuc-${s.name}-${s.lat}-${s.lon}`}
+                  onClick={() => selectIntel("nuc", s)}
+                >
+                  <span className="text-yellow-400 font-medium">{s.name}</span>
+                  <span className="text-zinc-600 text-[9px] ml-1.5">
+                    {s.type}
+                  </span>
+                  <span className="ml-auto text-zinc-700 text-[9px]">
+                    {s.country}
+                  </span>
+                </Row>
+              ))}
+            </Group>
+          )}
+          {localResults.cab.length > 0 && (
+            <Group label="SUBMARINE CABLES" count={localResults.cab.length}>
+              {localResults.cab.map((c) => (
+                <Row key={c.id} onClick={() => selectIntel("cab", c)}>
+                  <span className="text-sky-400 font-medium">{c.name}</span>
+                  {c.length_km != null && (
+                    <span className="ml-auto text-zinc-700 text-[9px]">
+                      {c.length_km.toLocaleString()} km
+                    </span>
+                  )}
+                </Row>
+              ))}
+            </Group>
+          )}
+          {localResults.eq.length > 0 && (
+            <Group label="EARTHQUAKES" count={localResults.eq.length}>
+              {localResults.eq.map((e) => (
+                <Row key={e.id} onClick={() => selectIntel("eq", e)}>
+                  <span className="text-yellow-300 font-medium">
+                    M{e.magnitude.toFixed(1)}
+                  </span>
+                  <span className="text-zinc-400 text-[9px] ml-1.5 truncate max-w-[180px]">
+                    {e.title}
+                  </span>
+                </Row>
+              ))}
+            </Group>
+          )}
+          {localResults.ves.length > 0 && (
+            <Group label="VESSELS" count={localResults.ves.length}>
+              {localResults.ves.map((v) => (
+                <Row key={v.mmsi} onClick={() => selectIntel("ves", v)}>
+                  <span className="text-indigo-400 font-medium">
+                    {v.name || v.mmsi}
+                  </span>
+                  <span className="text-zinc-600 text-[9px] ml-1.5">
+                    {v.vessel_type}
+                  </span>
+                  {v.flag && (
+                    <span className="ml-auto text-zinc-700 text-[9px]">
+                      {v.flag}
+                    </span>
+                  )}
                 </Row>
               ))}
             </Group>
