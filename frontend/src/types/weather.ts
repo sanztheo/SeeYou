@@ -19,8 +19,12 @@ export interface WeatherFilter {
   enabled: boolean;
   showRadar: boolean;
   showWind: boolean;
+  showTemperature: boolean;
+  showAirQuality: boolean;
   radarOpacity: number;
   windOpacity: number;
+  temperatureOpacity: number;
+  airQualityOpacity: number;
   animationSpeed: number;
 }
 
