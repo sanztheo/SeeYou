@@ -2,6 +2,10 @@
 
 # SEEYOU
 
+<img src="docs/seeyou-preview.png" alt="SeeYou — Real-time global intelligence platform" width="100%">
+
+<br>
+
 **Real-time global intelligence platform running in the browser.**
 
 Track aircraft, satellites, earthquakes, wildfires, cyber threats, naval vessels, military bases, nuclear sites, space debris, and more — all rendered on a 3D globe with military-grade shaders.
