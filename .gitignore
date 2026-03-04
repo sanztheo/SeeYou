@@ -23,3 +23,11 @@ Thumbs.db
 
 # Logs
 *.log
+
+# OMX
+.omx/
+
+# Local agent/Codex runtime files
+/.agents/
+/.codex/
+/AGENTS.md
