@@ -9,6 +9,7 @@ import {
   UrlTemplateImageryProvider,
 } from "cesium";
 import { hasValidToken } from "../../lib/cesium-config";
+import { getBasemapConfig } from "../../lib/basemapProviders";
 import { AircraftLayer } from "../Aircraft/AircraftLayer";
 import { SatelliteLayer } from "../Satellite/SatelliteLayer";
 import { TrafficLayer } from "../Traffic/TrafficLayer";
@@ -64,6 +65,8 @@ import type { Vessel, MaritimeFilter } from "../../types/maritime";
 import type { CyberThreat, CyberFilter } from "../../types/cyber";
 import type { AuroraPoint, SpaceWeatherFilter } from "../../types/spaceWeather";
 import type { ConvergenceZone } from "../Convergence/ConvergenceAlertLayer";
+import type { BasemapStyle } from "../../types/basemap";
+import { DEFAULT_BASEMAP_STYLE } from "../../types/basemap";
 
 const RAD2DEG = 180 / Math.PI;
 const EMPTY_PREDICTIONS = new Map<string, PredictedTrajectory>();
@@ -156,6 +159,7 @@ interface GlobeProps {
 
   flyToTarget?: { lat: number; lon: number; alt: number } | null;
   onFlyComplete?: () => void;
+  basemapStyle?: BasemapStyle;
 }
 
 const DEFAULT_AIRCRAFT_FILTER: AircraftFilter = {
@@ -221,6 +225,7 @@ export function Globe({
   onCursorMove,
   flyToTarget,
   onFlyComplete,
+  basemapStyle,
 }: GlobeProps): React.ReactElement {
   const viewerRef = useRef<ViewerRef>(null);
   const onViewportChangeRef = useRef(onViewportChange);
@@ -230,6 +235,21 @@ export function Globe({
   useEffect(() => {
     onViewportChangeRef.current = onViewportChange;
   }, [onViewportChange]);
+
+  const applyBasemap = useCallback(
+    (viewer: Viewer, style: BasemapStyle): void => {
+      const config = getBasemapConfig(style);
+      viewer.imageryLayers.removeAll();
+      viewer.imageryLayers.addImageryProvider(
+        new UrlTemplateImageryProvider({
+          url: config.url,
+          credit: config.credit,
+          subdomains: config.subdomains,
+        }),
+      );
+    },
+    [],
+  );
 
   const emitViewport = useCallback((viewer: Viewer): void => {
     const now = performance.now();
@@ -253,15 +273,7 @@ export function Globe({
     viewer.clock.clockStep = ClockStep.SYSTEM_CLOCK;
     viewer.clock.shouldAnimate = true;
 
-    if (!hasValidToken()) {
-      viewer.imageryLayers.removeAll();
-      viewer.imageryLayers.addImageryProvider(
-        new UrlTemplateImageryProvider({
-          url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-          credit: "Esri, Maxar, Earthstar Geographics",
-        }),
-      );
-    }
+    applyBasemap(viewer, DEFAULT_BASEMAP_STYLE);
 
     viewer.camera.flyTo({
       destination: Cartesian3.fromDegrees(2.3522, 48.8566, 2500),
@@ -299,7 +311,13 @@ export function Globe({
         viewer.camera.changed.removeEventListener(onChanged);
       }
     };
-  }, [emitViewport]);
+  }, [applyBasemap, emitViewport]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current?.cesiumElement;
+    if (!viewer || viewer.isDestroyed()) return;
+    applyBasemap(viewer, basemapStyle ?? DEFAULT_BASEMAP_STYLE);
+  }, [applyBasemap, basemapStyle]);
 
   useEffect(() => {
     if (!flyToTarget) return;

@@ -23,6 +23,8 @@ import type {
 import type { MetarFilter, MetarStation } from "../types/metar";
 import type { NaturalEvent, EventFilter } from "../types/events";
 import type { ShaderMode } from "../shaders/types";
+import type { BasemapStyle } from "../types/basemap";
+import { DEFAULT_BASEMAP_STYLE } from "../types/basemap";
 import type { WsMessage } from "../types/ws";
 import type { ConnectionStatus } from "../types/ws";
 import { fetchWeather } from "../services/weatherService";
@@ -126,6 +128,9 @@ export interface AppState {
 
   shaderMode: ShaderMode;
   setShaderMode: (m: ShaderMode) => void;
+
+  basemapStyle: BasemapStyle;
+  setBasemapStyle: (style: BasemapStyle) => void;
 
   // Intelligence layers
   cablesFilter: CablesFilter;
@@ -280,6 +285,9 @@ export function useAppState(): AppState {
   const [selectedEvent, setSelectedEvent] = useState<NaturalEvent | null>(null);
 
   const [shaderMode, setShaderMode] = useState<ShaderMode>("normal");
+  const [basemapStyle, setBasemapStyle] = useState<BasemapStyle>(
+    DEFAULT_BASEMAP_STYLE,
+  );
 
   // Intelligence state
   const [cablesFilter, setCablesFilter] = useState<CablesFilter>({
@@ -841,6 +849,8 @@ export function useAppState(): AppState {
 
     shaderMode,
     setShaderMode,
+    basemapStyle,
+    setBasemapStyle,
 
     cablesFilter,
     setCablesFilter,

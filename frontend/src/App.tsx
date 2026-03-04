@@ -13,6 +13,7 @@ import { TrafficControls } from "./components/Sidebar/TrafficControls";
 import { RoutingPanel } from "./components/Sidebar/RoutingPanel";
 import { CameraFilters } from "./components/Sidebar/CameraFilters";
 import { WeatherControls } from "./components/Sidebar/WeatherControls";
+import { BasemapControls } from "./components/Sidebar/BasemapControls";
 import { MetarFilters } from "./components/Sidebar/MetarFilters";
 import { MetarPopup } from "./components/Aviation/MetarPopup";
 import { EventFilters } from "./components/Sidebar/EventFilters";
@@ -255,6 +256,7 @@ export function App(): React.ReactElement {
         onCursorMove={setCursorState}
         flyToTarget={state.flyToTarget}
         onFlyComplete={handleFlyComplete}
+        basemapStyle={state.basemapStyle}
       />
 
       {/* Icon Rail (always visible unless fullscreen) */}
@@ -522,6 +524,17 @@ export function App(): React.ReactElement {
               />
             </DraggablePanel>
           )}
+        </div>
+
+        {/* Basemap dock (bottom-right) */}
+        <div className="pointer-events-auto shrink-0">
+          <div className="hud-bracket border border-emerald-900/30 bg-black/80 backdrop-blur-md panel-grain">
+            <BasemapControls
+              currentStyle={state.basemapStyle}
+              onStyleChange={state.setBasemapStyle}
+              compact={true}
+            />
+          </div>
         </div>
 
         {/* Minimap at bottom of right panel */}
