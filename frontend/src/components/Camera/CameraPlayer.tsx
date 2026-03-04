@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Hls from "hls.js";
 import type { Camera } from "../../types/camera";
 import { getProxyUrl } from "../../services/cameraService";
+import { compassLabel, type CameraViewInfo } from "./cameraView";
 
 const REFRESH_NORMAL_MS = 10_000;
 const REFRESH_FOCUSED_MS = 5_000;
@@ -11,7 +12,14 @@ const ZOOM_MAX = 5;
 
 interface CameraPlayerProps {
   camera: Camera | null;
+  viewInfo: CameraViewInfo | null;
   onClose: () => void;
+}
+
+function sourceLabel(source: CameraViewInfo["source"]): string {
+  if (source === "provider") return "fiable";
+  if (source === "parsed") return "parsé";
+  return "estimé";
 }
 
 function formatTimeAgo(ts: number): string {
@@ -23,6 +31,7 @@ function formatTimeAgo(ts: number): string {
 
 export function CameraPlayer({
   camera,
+  viewInfo,
   onClose,
 }: CameraPlayerProps): React.ReactElement | null {
   const [imgSrc, setImgSrc] = useState("");
@@ -30,6 +39,7 @@ export function CameraPlayer({
   const [position, setPosition] = useState({ x: 16, y: 16 });
   const dragOffset = useRef({ x: 0, y: 0 });
   const [imgError, setImgError] = useState(false);
+  const [deadStreamCached, setDeadStreamCached] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const [expanded, setExpanded] = useState(false);
@@ -39,6 +49,7 @@ export function CameraPlayer({
   const isPanning = useRef(false);
   const panStart = useRef({ x: 0, y: 0 });
   const panOffsetStart = useRef({ x: 0, y: 0 });
+  const activeCameraIdRef = useRef<string | undefined>(camera?.id);
 
   // Tick counter to force re-render for "Xs ago" label
   const [, setTick] = useState(0);
@@ -61,18 +72,50 @@ export function CameraPlayer({
   const refreshImage = useCallback((): void => {
     if (!camera) return;
     setImgError(false);
+    setDeadStreamCached(false);
     setImgSrc(buildSrc(camera));
     setLastSync(Date.now());
   }, [camera, buildSrc]);
 
+  const detectCachedDeadStream = useCallback(async (cam: Camera) => {
+    if (cam.stream_type !== "ImageRefresh") return;
+    const failedCameraId = cam.id;
+    try {
+      const res = await fetch(getProxyUrl(cam.stream_url), { cache: "no-store" });
+      if (activeCameraIdRef.current !== failedCameraId) return;
+      if (res.status !== 404) {
+        setDeadStreamCached(false);
+        return;
+      }
+      const body = (await res.text()).toLowerCase();
+      if (activeCameraIdRef.current !== failedCameraId) return;
+      setDeadStreamCached(body.includes("cached"));
+    } catch {
+      // Ignore probe failures
+    }
+  }, []);
+
+  const handleImageError = useCallback(() => {
+    if (!camera || camera.stream_type !== "ImageRefresh") {
+      setImgError(true);
+      return;
+    }
+    setImgError(true);
+    void detectCachedDeadStream(camera);
+  }, [camera, detectCachedDeadStream]);
+
   // Reset state on camera change (state-based tracking, no refs in render)
   const cameraId = camera?.id;
+  useEffect(() => {
+    activeCameraIdRef.current = cameraId;
+  }, [cameraId]);
   const [trackedCameraId, setTrackedCameraId] = useState<string | undefined>(
     undefined,
   );
   if (cameraId !== trackedCameraId) {
     setTrackedCameraId(cameraId);
     setImgError(false);
+    setDeadStreamCached(false);
     setExpanded(false);
     setZoom(1);
     setPanOffset({ x: 0, y: 0 });
@@ -91,12 +134,12 @@ export function CameraPlayer({
 
   // Auto-refresh interval: 1s when expanded, 10s otherwise
   useEffect(() => {
-    if (!camera || camera.stream_type !== "ImageRefresh") return;
+    if (!camera || camera.stream_type !== "ImageRefresh" || imgError) return;
 
     const interval = expanded ? REFRESH_FOCUSED_MS : REFRESH_NORMAL_MS;
     const id = setInterval(refreshImage, interval);
     return () => clearInterval(id);
-  }, [camera, expanded, refreshImage]);
+  }, [camera, expanded, refreshImage, imgError]);
 
   // HLS setup — load directly from CDN (not proxy) so hls.js can fetch segments
   useEffect(() => {
@@ -232,6 +275,12 @@ export function CameraPlayer({
 
   const isHls = camera.stream_type === "Hls";
   const widthClass = expanded ? "w-[640px]" : "w-80";
+  const headingText =
+    viewInfo != null
+      ? `${Math.round(viewInfo.headingDeg)}° ${compassLabel(viewInfo.headingDeg)}`
+      : null;
+  const fovText = viewInfo != null ? `${Math.round(viewInfo.fovDeg)}°` : null;
+  const confidenceText = viewInfo != null ? sourceLabel(viewInfo.source) : null;
 
   return (
     <div
@@ -247,9 +296,19 @@ export function CameraPlayer({
           <span
             className={`w-2 h-2 rounded-full flex-shrink-0 ${camera.is_online ? "bg-green-400" : "bg-red-400"}`}
           />
-          <span className="text-xs font-semibold text-gray-100 truncate font-mono">
-            {camera.name}
-          </span>
+          <div className="min-w-0">
+            <span className="text-xs font-semibold text-gray-100 truncate font-mono block">
+              {camera.name}
+            </span>
+            {viewInfo && (
+              <div className="flex items-center gap-1.5 font-mono text-[9px]">
+                <span className="text-cyan-300">DIR {headingText}</span>
+                <span className="text-zinc-600">|</span>
+                <span className="text-amber-300">FOV {fovText}</span>
+                <span className="text-zinc-500 uppercase">{confidenceText}</span>
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {/* Refresh button */}
@@ -367,22 +426,32 @@ export function CameraPlayer({
                 style={{ display: imgError ? "none" : undefined }}
               />
               {imgError && (
-                <span className="absolute inset-0 flex items-center justify-center text-xs text-red-400 font-mono">
-                  Stream unavailable
-                </span>
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-xs font-mono">
+                  <span className="text-red-400">Stream unavailable</span>
+                  {deadStreamCached && (
+                    <span className="px-2 py-0.5 rounded bg-red-500/20 border border-red-500/40 text-red-300">
+                      stream mort (cached)
+                    </span>
+                  )}
+                </div>
               )}
             </>
           ) : imgError ? (
-            <span className="absolute inset-0 flex items-center justify-center text-xs text-red-400 font-mono">
-              Stream unavailable
-            </span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-xs font-mono">
+              <span className="text-red-400">Stream unavailable</span>
+              {deadStreamCached && (
+                <span className="px-2 py-0.5 rounded bg-red-500/20 border border-red-500/40 text-red-300">
+                  stream mort (cached)
+                </span>
+              )}
+            </div>
           ) : (
             <img
               src={imgSrc}
               alt={camera.name}
               className="w-full h-full object-contain select-none"
               draggable={false}
-              onError={() => setImgError(true)}
+              onError={handleImageError}
             />
           )}
         </div>

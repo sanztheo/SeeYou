@@ -121,7 +121,7 @@ Each billboard/label/point is added to a collection with an `id` property used f
 
 ## Camera Layer
 
-**Files**: `CameraLayer.tsx`, `CameraPanel.tsx`, `CameraPlayer.tsx`, `cameraIcon.ts`
+**Files**: `CameraLayer.tsx`, `CameraFocusLayer.tsx`, `CameraPanel.tsx`, `CameraPlayer.tsx`, `cameraIcon.ts`, `cameraView.ts`
 
 **Rendering** (Primitive collection):
 - `BillboardCollection` for camera icons with `id` = camera UUID
@@ -131,7 +131,10 @@ Each billboard/label/point is added to a collection with an `id` property used f
 
 **Interactions**:
 - `ScreenSpaceEventHandler` picks billboard by `id` → opens `CameraPlayer`
-- `CameraPlayer` — draggable video player supporting HLS (via HLS.js), MJPEG, ImageRefresh
+- Camera selection (map/sidebar/search) triggers `flyTo` focus with heading/pitch aligned to camera orientation
+- `CameraFocusLayer` renders a single active view cone (polygon + centerline axis) for the selected camera
+- `cameraView.ts` resolves heading/FOV with priority: provider metadata → hint/name parsing → city-centroid fallback
+- `CameraPlayer` — draggable video player supporting HLS (via HLS.js), MJPEG, ImageRefresh, plus DIR/FOV metadata
 - All camera streams proxied through backend (`/cameras/proxy`) to bypass CORS
 
 ## Weather Layer

@@ -14,6 +14,7 @@ import { AircraftLayer } from "../Aircraft/AircraftLayer";
 import { SatelliteLayer } from "../Satellite/SatelliteLayer";
 import { TrafficLayer } from "../Traffic/TrafficLayer";
 import { CameraLayer } from "../Camera/CameraLayer";
+import { CameraFocusLayer } from "../Camera/CameraFocusLayer";
 import { CityLabelsLayer } from "../City/CityLabelsLayer";
 import { WeatherLayer } from "../Weather/WeatherLayer";
 import { WindParticleLayer } from "../Weather/WindParticleLayer";
@@ -43,6 +44,7 @@ import type { SatellitePosition, SatelliteFilter } from "../../types/satellite";
 import { DEFAULT_SATELLITE_FILTER } from "../../types/satellite";
 import type { TrafficFilter } from "../../types/traffic";
 import type { Camera, CameraFilter } from "../../types/camera";
+import type { CameraViewInfo } from "../Camera/cameraView";
 import type {
   WeatherPoint,
   WeatherFilter,
@@ -99,6 +101,8 @@ interface GlobeProps {
   cameras?: Camera[];
   cameraFilter?: CameraFilter;
   onSelectCamera?: (cam: Camera) => void;
+  selectedCamera?: Camera | null;
+  selectedCameraView?: CameraViewInfo | null;
 
   weatherPoints?: WeatherPoint[];
   weatherFilter?: WeatherFilter;
@@ -157,7 +161,14 @@ interface GlobeProps {
   onCameraChange?: (state: CameraState) => void;
   onCursorMove?: (state: CursorState) => void;
 
-  flyToTarget?: { lat: number; lon: number; alt: number } | null;
+  flyToTarget?: {
+    lat: number;
+    lon: number;
+    alt: number;
+    headingDeg?: number;
+    pitchDeg?: number;
+    durationSec?: number;
+  } | null;
   onFlyComplete?: () => void;
   basemapStyle?: BasemapStyle;
 }
@@ -182,6 +193,8 @@ export function Globe({
   cameras,
   cameraFilter,
   onSelectCamera,
+  selectedCamera,
+  selectedCameraView,
   weatherPoints,
   weatherFilter,
   rainViewerData,
@@ -331,11 +344,11 @@ export function Globe({
         flyToTarget.alt,
       ),
       orientation: {
-        heading: CesiumMath.toRadians(0),
-        pitch: CesiumMath.toRadians(-45),
+        heading: CesiumMath.toRadians(flyToTarget.headingDeg ?? 0),
+        pitch: CesiumMath.toRadians(flyToTarget.pitchDeg ?? -45),
         roll: 0,
       },
-      duration: 1.5,
+      duration: flyToTarget.durationSec ?? 1.5,
       complete: () => flyCompleteRef?.(),
       cancel: () => flyCompleteRef?.(),
     });
@@ -385,6 +398,13 @@ export function Globe({
           cameras={cameras}
           filter={cameraFilter}
           onSelect={onSelectCamera ?? NOOP_SELECT_CAMERA}
+        />
+      )}
+
+      {selectedCamera && selectedCameraView && (
+        <CameraFocusLayer
+          camera={selectedCamera}
+          view={selectedCameraView}
         />
       )}
 

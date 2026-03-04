@@ -11,7 +11,11 @@ import type {
   FlightRoute,
   PredictedTrajectory,
 } from "../types/aircraft";
-import type { SatellitePosition, SatelliteFilter } from "../types/satellite";
+import type {
+  SatellitePosition,
+  SatelliteFilter,
+  SatelliteCategory,
+} from "../types/satellite";
 import { DEFAULT_SATELLITE_FILTER } from "../types/satellite";
 import type { TrafficFilter } from "../types/traffic";
 import type { Camera, CameraFilter } from "../types/camera";
@@ -83,7 +87,7 @@ export interface AppState {
 
   satellites: Map<number, SatellitePosition>;
   satelliteTotalCount: number;
-  satelliteCategoryCounts: Record<string, number>;
+  satelliteCategoryCounts: Record<SatelliteCategory, number>;
   satelliteFilter: SatelliteFilter;
   setSatelliteFilter: (f: SatelliteFilter) => void;
   selectedSatellite: SatellitePosition | null;
@@ -121,9 +125,23 @@ export interface AppState {
   setViewportBbox: (bbox: BBox | null) => void;
   cameraProgress: CameraProgress;
 
-  flyToTarget: { lat: number; lon: number; alt: number } | null;
+  flyToTarget: {
+    lat: number;
+    lon: number;
+    alt: number;
+    headingDeg?: number;
+    pitchDeg?: number;
+    durationSec?: number;
+  } | null;
   setFlyToTarget: (
-    target: { lat: number; lon: number; alt: number } | null,
+    target: {
+      lat: number;
+      lon: number;
+      alt: number;
+      headingDeg?: number;
+      pitchDeg?: number;
+      durationSec?: number;
+    } | null,
   ) => void;
 
   shaderMode: ShaderMode;
@@ -249,6 +267,9 @@ export function useAppState(): AppState {
     lat: number;
     lon: number;
     alt: number;
+    headingDeg?: number;
+    pitchDeg?: number;
+    durationSec?: number;
   } | null>(null);
 
   const [weatherFilter, setWeatherFilter] = useState<WeatherFilter>({
@@ -459,9 +480,12 @@ export function useAppState(): AppState {
     setCameraProgress({ loaded: 0, total: 0, done: false });
 
     let retries = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
     const MAX_RETRIES = 8;
 
     const doFetch = (): void => {
+      if (ac.signal.aborted) return;
+
       fetchCamerasChunked(
         undefined,
         (cams, progress) => {
@@ -475,7 +499,7 @@ export function useAppState(): AppState {
         retries++;
         if (retries <= MAX_RETRIES && !ac.signal.aborted) {
           const delay = Math.min(retries * 3000, 15000);
-          setTimeout(doFetch, delay);
+          retryTimer = setTimeout(doFetch, delay);
         } else {
           setCameraProgress({ loaded: 0, total: 0, done: true });
         }
@@ -483,7 +507,10 @@ export function useAppState(): AppState {
     };
 
     doFetch();
-    return () => ac.abort();
+    return () => {
+      if (retryTimer) clearTimeout(retryTimer);
+      ac.abort();
+    };
   }, [cameraFilter.enabled]);
 
   useEffect(() => {

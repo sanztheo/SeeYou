@@ -29,12 +29,24 @@ export function useWebSocket(
   const [lastMessage, setLastMessage] = useState<WsMessage | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const attemptsRef = useRef(0);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const connectRef = useRef<() => void>();
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectRef = useRef<(() => void) | null>(null);
+  const shouldReconnectRef = useRef(true);
 
   useEffect(() => {
     const doConnect = (): void => {
-      if (wsRef.current) {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+
+      // Avoid closing a socket that is still CONNECTING: this creates noisy
+      // browser warnings ("closed before the connection is established").
+      if (
+        wsRef.current &&
+        wsRef.current.readyState !== WebSocket.CONNECTING &&
+        wsRef.current.readyState !== WebSocket.CLOSED
+      ) {
         wsRef.current.close();
       }
 
@@ -65,7 +77,10 @@ export function useWebSocket(
         setStatus("disconnected");
         wsRef.current = null;
 
-        if (attemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+        if (
+          shouldReconnectRef.current &&
+          attemptsRef.current < MAX_RECONNECT_ATTEMPTS
+        ) {
           const delay =
             RECONNECT_INTERVAL_MS * Math.pow(1.5, attemptsRef.current);
           attemptsRef.current += 1;
@@ -81,11 +96,17 @@ export function useWebSocket(
     };
 
     connectRef.current = doConnect;
+    shouldReconnectRef.current = true;
     doConnect();
 
     return (): void => {
-      clearTimeout(reconnectTimerRef.current);
+      shouldReconnectRef.current = false;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
       wsRef.current?.close();
+      wsRef.current = null;
     };
   }, []);
 

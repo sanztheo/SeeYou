@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Globe } from "./components/Globe/Globe";
 import { IconRail, type SectionId } from "./components/Sidebar/IconRail";
 import { SidePanel } from "./components/Sidebar/SidePanel";
@@ -30,6 +30,10 @@ import { GdeltPopup } from "./components/Gdelt/GdeltPopup";
 import { SpaceWeatherPopup } from "./components/SpaceWeather/SpaceWeatherPopup";
 import { IntelligenceLegend } from "./components/HUD/IntelligenceLegend";
 import { CameraPlayer } from "./components/Camera/CameraPlayer";
+import {
+  resolveCameraView,
+  type CameraViewInfo,
+} from "./components/Camera/cameraView";
 import { Minimap } from "./components/Minimap/Minimap";
 import { Timeline } from "./components/Timeline/Timeline";
 import { SearchBar } from "./components/SearchBar/SearchBar";
@@ -40,6 +44,7 @@ import { DraggablePanel } from "./components/DraggablePanel";
 import { useAppState } from "./hooks/useAppState";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import type { CameraState, CursorState } from "./hooks/useViewerCallbacks";
+import type { Camera } from "./types/camera";
 
 export function App(): React.ReactElement {
   const state = useAppState();
@@ -104,6 +109,27 @@ export function App(): React.ReactElement {
     () => state.setFlyToTarget(null),
     [state.setFlyToTarget],
   );
+
+  const handleSelectCamera = useCallback(
+    (cam: Camera) => {
+      const view = resolveCameraView(cam, state.cameras);
+      state.setSelectedCamera(cam);
+      state.setFlyToTarget({
+        lat: cam.lat,
+        lon: cam.lon,
+        alt: 1500,
+        headingDeg: view.headingDeg,
+        pitchDeg: -32,
+        durationSec: 1.15,
+      });
+    },
+    [state.cameras, state.setSelectedCamera, state.setFlyToTarget],
+  );
+
+  const selectedCameraView: CameraViewInfo | null = useMemo(() => {
+    if (!state.selectedCamera) return null;
+    return resolveCameraView(state.selectedCamera, state.cameras);
+  }, [state.selectedCamera, state.cameras]);
 
   useKeyboardShortcuts({
     onToggleFullscreen: handleToggleFullscreen,
@@ -212,7 +238,9 @@ export function App(): React.ReactElement {
         trafficFilter={state.trafficFilter}
         cameras={state.cameras}
         cameraFilter={state.cameraFilter}
-        onSelectCamera={state.setSelectedCamera}
+        onSelectCamera={handleSelectCamera}
+        selectedCamera={state.selectedCamera}
+        selectedCameraView={selectedCameraView}
         weatherPoints={state.weatherPoints}
         weatherFilter={state.weatherFilter}
         rainViewerData={state.rainViewerData}
@@ -310,7 +338,7 @@ export function App(): React.ReactElement {
             cameras={state.cameras}
             progress={state.cameraProgress}
             onFilterChange={state.setCameraFilter}
-            onSelect={state.setSelectedCamera}
+            onSelect={handleSelectCamera}
           />
         </SidePanel>
       )}
@@ -383,7 +411,7 @@ export function App(): React.ReactElement {
         vessels={state.vessels}
         onSelectAircraft={state.setSelectedAircraft}
         onSelectSatellite={state.setSelectedSatellite}
-        onSelectCamera={state.setSelectedCamera}
+        onSelectCamera={handleSelectCamera}
         onSelectMilitary={state.setSelectedMilitaryBase}
         onSelectNuclear={state.setSelectedNuclearSite}
         onSelectCable={state.setSelectedCable}
@@ -592,7 +620,11 @@ export function App(): React.ReactElement {
         screenX={state.hoverPos.x}
         screenY={state.hoverPos.y}
       />
-      <CameraPlayer camera={state.selectedCamera} onClose={handleCloseCamera} />
+      <CameraPlayer
+        camera={state.selectedCamera}
+        viewInfo={selectedCameraView}
+        onClose={handleCloseCamera}
+      />
     </div>
   );
 }

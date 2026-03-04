@@ -112,7 +112,8 @@ describe("CameraFilters", () => {
         onFilterChange={() => {}}
       />,
     );
-    expect(screen.getByText(/3 online \/ 4 total/)).toBeInTheDocument();
+    expect(screen.getByText(/4 cameras/)).toBeInTheDocument();
+    expect(screen.getByText(/4 live/)).toBeInTheDocument();
   });
 
   it("shows source filter chips with cyan styling", () => {

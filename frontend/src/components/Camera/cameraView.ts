@@ -70,14 +70,14 @@ export function parseHeadingFromHint(hint: string): number | null {
   if (!raw) return null;
 
   const upper = raw.toUpperCase();
-  if (upper.includes("NORTHBOUND")) return 0;
-  if (upper.includes("EASTBOUND")) return 90;
-  if (upper.includes("SOUTHBOUND")) return 180;
-  if (upper.includes("WESTBOUND")) return 270;
   if (upper.includes("NORTHEAST")) return 45;
   if (upper.includes("SOUTHEAST")) return 135;
   if (upper.includes("SOUTHWEST")) return 225;
   if (upper.includes("NORTHWEST")) return 315;
+  if (upper.includes("NORTHBOUND")) return 0;
+  if (upper.includes("EASTBOUND")) return 90;
+  if (upper.includes("SOUTHBOUND")) return 180;
+  if (upper.includes("WESTBOUND")) return 270;
 
   const clean = upper.replace(/[^A-Z0-9]+/g, " ");
   for (const token of clean.split(/\s+/)) {
