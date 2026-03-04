@@ -10,6 +10,7 @@ use crate::providers::fetch_all_cameras;
 pub async fn run_camera_tracker(
     client: reqwest::Client,
     redis_pool: RedisPool,
+    pg_pool: Option<db::PgPool>,
     poll_interval: Duration,
 ) {
     tracing::info!(
@@ -27,6 +28,12 @@ pub async fn run_camera_tracker(
             "fetched cameras from providers"
         );
 
+        // Publish provider payload quickly so /cameras can serve data even while
+        // deep health checks are still running.
+        if let Err(e) = cache::cameras::set_cameras(&redis_pool, &cameras).await {
+            tracing::warn!(error = %e, "failed to cache cameras (pre-health)");
+        }
+
         let cameras = check_batch_health(&client, cameras).await;
 
         let online = cameras.iter().filter(|c| c.is_online).count();
@@ -35,6 +42,29 @@ pub async fn run_camera_tracker(
 
         if let Err(e) = cache::cameras::set_cameras(&redis_pool, &cameras).await {
             tracing::warn!(error = %e, "failed to cache cameras");
+        }
+
+        if let Some(pg_pool) = &pg_pool {
+            let last_seen = chrono::Utc::now();
+            let rows: Vec<db::models::CameraRow> = cameras
+                .iter()
+                .map(|c| db::models::CameraRow {
+                    id: c.id.clone(),
+                    name: c.name.clone(),
+                    lat: c.lat,
+                    lon: c.lon,
+                    stream_type: format!("{:?}", c.stream_type),
+                    source: c.source.clone(),
+                    is_online: c.is_online,
+                    last_seen,
+                    city: Some(c.city.clone()),
+                    country: Some(c.country.clone()),
+                })
+                .collect();
+
+            if let Err(e) = db::cameras::upsert_cameras(pg_pool, &rows).await {
+                tracing::warn!(error = %e, count = rows.len(), "failed to persist cameras");
+            }
         }
 
         tokio::time::sleep(poll_interval).await;

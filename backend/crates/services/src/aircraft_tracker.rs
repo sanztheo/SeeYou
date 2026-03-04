@@ -18,6 +18,7 @@ const WS_CHUNK_SIZE: usize = 2_000;
 pub async fn run_aircraft_tracker(
     client: reqwest::Client,
     redis_pool: RedisPool,
+    pg_pool: Option<db::PgPool>,
     broadcaster: Broadcaster,
     poll_interval: Duration,
 ) {
@@ -32,8 +33,7 @@ pub async fn run_aircraft_tracker(
         let mut merged: HashMap<String, Aircraft> = HashMap::new();
 
         // Fetch civil + military aircraft from regional grid (concurrent)
-        let (all_regional, regions_total, regions_failed) =
-            adsb::fetch_all_regions(&client).await;
+        let (all_regional, regions_total, regions_failed) = adsb::fetch_all_regions(&client).await;
 
         tracing::info!(
             count = all_regional.len(),
@@ -75,6 +75,30 @@ pub async fn run_aircraft_tracker(
 
         if let Err(e) = cache::aircraft::set_aircraft(&redis_pool, &aircraft).await {
             tracing::warn!("failed to cache aircraft: {e}");
+        }
+
+        if let Some(pg_pool) = &pg_pool {
+            let observed_at = chrono::Utc::now();
+            let rows: Vec<db::models::AircraftPositionRow> = aircraft
+                .iter()
+                .map(|a| db::models::AircraftPositionRow {
+                    observed_at,
+                    icao: a.icao.clone(),
+                    callsign: a.callsign.clone(),
+                    lat: a.lat,
+                    lon: a.lon,
+                    altitude_m: a.altitude_m,
+                    speed_ms: a.speed_ms,
+                    heading_deg: a.heading,
+                    vertical_rate_ms: Some(a.vertical_rate_ms),
+                    on_ground: a.on_ground,
+                    is_military: a.is_military,
+                })
+                .collect();
+
+            if let Err(e) = db::aircraft::insert_positions(pg_pool, &rows).await {
+                tracing::warn!(error = %e, count = rows.len(), "failed to persist aircraft positions");
+            }
         }
 
         // ── IMM-EKF prediction for military aircraft ────────────

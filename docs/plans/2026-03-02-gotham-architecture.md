@@ -295,29 +295,29 @@ frontend/src/
 
 Objectif : les données sont persistées dans Postgres en plus de Redis. Le live ne change pas.
 
-- [ ] Ajouter Postgres (timescale/timescaledb-ha:pg16) au docker-compose
-- [ ] Ajouter PostGIS : `CREATE EXTENSION postgis;`
-- [ ] Ajouter TimescaleDB : `CREATE EXTENSION timescaledb;`
-- [ ] Créer le crate `db/` dans le workspace avec sqlx
-- [ ] Migration : table `aircraft_positions` (icao, callsign, lat, lon, altitude, speed, heading, timestamp)
-- [ ] Migration : convertir `aircraft_positions` en TimescaleDB hypertable
-- [ ] Migration : index PostGIS sur `aircraft_positions` (geometry point)
-- [ ] Migration : table `cameras` (id, name, lat, lon, stream_type, source, is_online, last_seen)
-- [ ] Migration : table `traffic_segments` (segment_id, road_name, lat, lon, speed_ratio, delay_min, severity, timestamp)
-- [ ] Migration : convertir `traffic_segments` en TimescaleDB hypertable
-- [ ] Migration : table `weather_readings` (station_id, city, lat, lon, temp, wind, visibility, conditions, timestamp)
-- [ ] Migration : convertir `weather_readings` en TimescaleDB hypertable
-- [ ] Migration : table `events` (id, type, lat, lon, severity, description, timestamp)
-- [ ] Implémenter `db::aircraft::insert_positions()` — batch INSERT
-- [ ] Implémenter `db::cameras::upsert_camera()` — ON CONFLICT UPDATE
-- [ ] Implémenter `db::traffic::insert_segments()` — batch INSERT
-- [ ] Implémenter `db::weather::insert_readings()` — batch INSERT
-- [ ] Implémenter `db::events::insert_events()` — batch INSERT
-- [ ] Ajouter `PgPool` à `AppState` dans le backend Axum
-- [ ] Dual-write dans chaque service : écrire Redis ET Postgres
-- [ ] Configurer TimescaleDB compression policy (> 7 jours)
-- [ ] Configurer TimescaleDB retention policy (> 90 jours)
-- [ ] Ajouter DATABASE_URL au .env.example
+- [x] Ajouter Postgres (timescale/timescaledb-ha:pg16) au docker-compose
+- [x] Ajouter PostGIS : `CREATE EXTENSION postgis;`
+- [x] Ajouter TimescaleDB : `CREATE EXTENSION timescaledb;`
+- [x] Créer le crate `db/` dans le workspace avec sqlx
+- [x] Migration : table `aircraft_positions` (icao, callsign, lat, lon, altitude, speed, heading, timestamp)
+- [x] Migration : convertir `aircraft_positions` en TimescaleDB hypertable
+- [x] Migration : index PostGIS sur `aircraft_positions` (geometry point)
+- [x] Migration : table `cameras` (id, name, lat, lon, stream_type, source, is_online, last_seen)
+- [x] Migration : table `traffic_segments` (segment_id, road_name, lat, lon, speed_ratio, delay_min, severity, timestamp)
+- [x] Migration : convertir `traffic_segments` en TimescaleDB hypertable
+- [x] Migration : table `weather_readings` (station_id, city, lat, lon, temp, wind, visibility, conditions, timestamp)
+- [x] Migration : convertir `weather_readings` en TimescaleDB hypertable
+- [x] Migration : table `events` (id, type, lat, lon, severity, description, timestamp)
+- [x] Implémenter `db::aircraft::insert_positions()` — batch INSERT
+- [x] Implémenter `db::cameras::upsert_camera()` — ON CONFLICT UPDATE
+- [x] Implémenter `db::traffic::insert_segments()` — batch INSERT
+- [x] Implémenter `db::weather::insert_readings()` — batch INSERT
+- [x] Implémenter `db::events::insert_events()` — batch INSERT
+- [x] Ajouter `PgPool` à `AppState` dans le backend Axum
+- [x] Dual-write dans chaque service : écrire Redis ET Postgres
+- [x] Configurer TimescaleDB compression policy (> 7 jours)
+- [x] Configurer TimescaleDB retention policy (> 90 jours)
+- [x] Ajouter DATABASE_URL au .env.example
 - [ ] Test : le frontend marche exactement comme avant
 - [ ] Test : redémarrer le backend → données toujours dans Postgres
 - [ ] Test : `SELECT count(*) FROM aircraft_positions;` croît dans le temps

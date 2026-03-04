@@ -1,7 +1,9 @@
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::Json;
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use sha1::{Digest, Sha1};
 use tracing::{debug, error, warn};
 
 use cache::RedisPool;
@@ -93,6 +95,7 @@ pub struct FlowResponse {
 
 pub async fn get_flow(
     State(pool): State<RedisPool>,
+    State(pg_pool): State<Option<db::PgPool>>,
     Query(q): Query<BboxQuery>,
 ) -> Result<Json<FlowResponse>, StatusCode> {
     validate_bbox(&q)?;
@@ -102,8 +105,13 @@ pub async fn get_flow(
         StatusCode::SERVICE_UNAVAILABLE
     })?;
 
-    let cache_key = format!("tomtom:flow:{:.2}:{:.2}:{:.2}:{:.2}", q.south, q.west, q.north, q.east);
-    if let Ok(Some(cached)) = cache::traffic::get_cached::<Vec<FlowSegment>>(&pool, &cache_key).await {
+    let cache_key = format!(
+        "tomtom:flow:{:.2}:{:.2}:{:.2}:{:.2}",
+        q.south, q.west, q.north, q.east
+    );
+    if let Ok(Some(cached)) =
+        cache::traffic::get_cached::<Vec<FlowSegment>>(&pool, &cache_key).await
+    {
         debug!(count = cached.len(), "serving flow segments from cache");
         return Ok(Json(FlowResponse { segments: cached }));
     }
@@ -113,6 +121,14 @@ pub async fn get_flow(
             if let Err(e) = cache::traffic::set_cached(&pool, &cache_key, &segments, 120).await {
                 error!(error = %e, "failed to cache flow segments");
             }
+
+            if let Some(pg_pool) = &pg_pool {
+                let rows = flow_segments_to_rows(&segments);
+                if let Err(e) = db::traffic::insert_segments(pg_pool, &rows).await {
+                    warn!(error = %e, count = rows.len(), "failed to persist traffic flow segments");
+                }
+            }
+
             debug!(count = segments.len(), "fetched flow segments from TomTom");
             Ok(Json(FlowResponse { segments }))
         }
@@ -175,9 +191,7 @@ fn parse_flow_segment(json: &serde_json::Value) -> Option<FlowSegment> {
     let coords: Vec<[f64; 2]> = coords_obj
         .as_array()?
         .iter()
-        .filter_map(|c| {
-            Some([c.get("longitude")?.as_f64()?, c.get("latitude")?.as_f64()?])
-        })
+        .filter_map(|c| Some([c.get("longitude")?.as_f64()?, c.get("latitude")?.as_f64()?]))
         .collect();
 
     if coords.len() < 2 {
@@ -191,8 +205,65 @@ fn parse_flow_segment(json: &serde_json::Value) -> Option<FlowSegment> {
         current_travel_time: data.get("currentTravelTime")?.as_f64().unwrap_or(0.0),
         free_flow_travel_time: data.get("freeFlowTravelTime")?.as_f64().unwrap_or(0.0),
         confidence: data.get("confidence")?.as_f64().unwrap_or(0.0),
-        road_closure: data.get("roadClosure").and_then(|v| v.as_bool()).unwrap_or(false),
+        road_closure: data
+            .get("roadClosure")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
     })
+}
+
+fn flow_segments_to_rows(segments: &[FlowSegment]) -> Vec<db::models::TrafficSegmentRow> {
+    let observed_at = Utc::now();
+
+    segments
+        .iter()
+        .filter_map(|seg| {
+            let first = seg.coordinates.first()?;
+            let speed_ratio = if seg.free_flow_speed > 0.0 {
+                seg.current_speed / seg.free_flow_speed
+            } else {
+                1.0
+            };
+            let delay_sec = (seg.current_travel_time - seg.free_flow_travel_time).max(0.0);
+
+            Some(db::models::TrafficSegmentRow {
+                observed_at,
+                segment_id: flow_segment_id(seg),
+                road_name: None,
+                lat: first[1],
+                lon: first[0],
+                speed_ratio,
+                delay_min: delay_sec / 60.0,
+                severity: flow_severity(speed_ratio),
+            })
+        })
+        .collect()
+}
+
+fn flow_segment_id(seg: &FlowSegment) -> String {
+    let mut hasher = Sha1::new();
+    for [lon, lat] in &seg.coordinates {
+        hasher.update(format!("{lon:.5},{lat:.5};"));
+    }
+    hasher.update(format!(
+        "{:.2}:{:.2}:{:.2}:{:.2}:{}",
+        seg.current_speed,
+        seg.free_flow_speed,
+        seg.current_travel_time,
+        seg.free_flow_travel_time,
+        seg.road_closure
+    ));
+    format!("{:x}", hasher.finalize())
+}
+
+fn flow_severity(speed_ratio: f64) -> i16 {
+    if speed_ratio > 0.8 {
+        1
+    } else if speed_ratio > 0.4 {
+        2
+    } else {
+        3
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -230,8 +301,13 @@ pub async fn get_incidents(
         StatusCode::SERVICE_UNAVAILABLE
     })?;
 
-    let cache_key = format!("tomtom:incidents:{:.2}:{:.2}:{:.2}:{:.2}", q.south, q.west, q.north, q.east);
-    if let Ok(Some(cached)) = cache::traffic::get_cached::<Vec<TrafficIncident>>(&pool, &cache_key).await {
+    let cache_key = format!(
+        "tomtom:incidents:{:.2}:{:.2}:{:.2}:{:.2}",
+        q.south, q.west, q.north, q.east
+    );
+    if let Ok(Some(cached)) =
+        cache::traffic::get_cached::<Vec<TrafficIncident>>(&pool, &cache_key).await
+    {
         debug!(count = cached.len(), "serving incidents from cache");
         return Ok(Json(IncidentsResponse { incidents: cached }));
     }
@@ -310,7 +386,10 @@ fn parse_incidents(json: &serde_json::Value) -> Vec<TrafficIncident> {
             continue;
         };
 
-        let icon_cat = props.get("iconCategory").and_then(|v| v.as_u64()).unwrap_or(0);
+        let icon_cat = props
+            .get("iconCategory")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
         let incident_type = match icon_cat {
             0 => "Unknown",
             1 => "Accident",
@@ -350,8 +429,16 @@ fn parse_incidents(json: &serde_json::Value) -> Vec<TrafficIncident> {
             id: format!("inc_{i}"),
             incident_type: incident_type.to_string(),
             severity: severity as u8,
-            from_street: props.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            to_street: props.get("to").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            from_street: props
+                .get("from")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            to_street: props
+                .get("to")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             description,
             delay_seconds: props.get("delay").and_then(|v| v.as_i64()).unwrap_or(0),
             length_meters: props.get("length").and_then(|v| v.as_f64()).unwrap_or(0.0),
@@ -419,9 +506,7 @@ pub struct RouteResponse {
     pub routes: Vec<RouteResult>,
 }
 
-pub async fn post_route(
-    Json(body): Json<RouteRequest>,
-) -> Result<Json<RouteResponse>, StatusCode> {
+pub async fn post_route(Json(body): Json<RouteRequest>) -> Result<Json<RouteResponse>, StatusCode> {
     let key = tomtom_api_key().ok_or_else(|| {
         warn!("TOMTOM_API_KEY not set");
         StatusCode::SERVICE_UNAVAILABLE
@@ -443,7 +528,11 @@ async fn fetch_route(api_key: &str, req: &RouteRequest) -> anyhow::Result<Vec<Ro
     let client = reqwest::Client::new();
     let [origin_lat, origin_lon] = req.origin;
     let [dest_lat, dest_lon] = req.destination;
-    let max_alternatives = if req.alternatives.unwrap_or(false) { 2 } else { 0 };
+    let max_alternatives = if req.alternatives.unwrap_or(false) {
+        2
+    } else {
+        0
+    };
 
     let url = format!(
         "https://api.tomtom.com/routing/1/calculateRoute/{origin_lat},{origin_lon}:{dest_lat},{dest_lon}/json?key={api_key}&traffic=true&travelMode=car&routeType=fastest&maxAlternatives={max_alternatives}&instructionsType=text&language=en-US"
@@ -496,10 +585,10 @@ fn parse_routes(json: &serde_json::Value) -> Vec<RouteResult> {
             for leg in legs {
                 if let Some(leg_points) = leg.get("points").and_then(|v| v.as_array()) {
                     for pt in leg_points {
-                        if let (Some(lat), Some(lon)) =
-                            (pt.get("latitude").and_then(|v| v.as_f64()),
-                             pt.get("longitude").and_then(|v| v.as_f64()))
-                        {
+                        if let (Some(lat), Some(lon)) = (
+                            pt.get("latitude").and_then(|v| v.as_f64()),
+                            pt.get("longitude").and_then(|v| v.as_f64()),
+                        ) {
                             points.push(RoutePoint { lat, lon });
                         }
                     }
@@ -554,4 +643,54 @@ fn parse_routes(json: &serde_json::Value) -> Vec<RouteResult> {
     }
 
     results
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flow_severity_thresholds() {
+        assert_eq!(flow_severity(0.95), 1);
+        assert_eq!(flow_severity(0.6), 2);
+        assert_eq!(flow_severity(0.2), 3);
+    }
+
+    #[test]
+    fn flow_segment_id_is_stable() {
+        let seg = FlowSegment {
+            coordinates: vec![[2.3522, 48.8566], [2.3600, 48.8600]],
+            current_speed: 30.0,
+            free_flow_speed: 50.0,
+            current_travel_time: 120.0,
+            free_flow_travel_time: 60.0,
+            confidence: 0.8,
+            road_closure: false,
+        };
+
+        let a = flow_segment_id(&seg);
+        let b = flow_segment_id(&seg);
+        assert_eq!(a, b);
+        assert_eq!(a.len(), 40);
+    }
+
+    #[test]
+    fn flow_segments_to_rows_maps_first_coordinate() {
+        let seg = FlowSegment {
+            coordinates: vec![[10.0, 20.0], [11.0, 21.0]],
+            current_speed: 40.0,
+            free_flow_speed: 80.0,
+            current_travel_time: 180.0,
+            free_flow_travel_time: 60.0,
+            confidence: 1.0,
+            road_closure: false,
+        };
+
+        let rows = flow_segments_to_rows(&[seg]);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].lon, 10.0);
+        assert_eq!(rows[0].lat, 20.0);
+        assert!((rows[0].speed_ratio - 0.5).abs() < f64::EPSILON);
+        assert!((rows[0].delay_min - 2.0).abs() < f64::EPSILON);
+    }
 }

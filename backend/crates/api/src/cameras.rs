@@ -61,8 +61,8 @@ pub async fn list_cameras(
 
 /// GET /cameras/proxy?url=<encoded_url> - proxy a camera stream to avoid CORS.
 pub async fn proxy_camera(
+    State(client): State<reqwest::Client>,
     Query(query): Query<ProxyQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let client = reqwest::Client::new();
     cameras::proxy::proxy_camera_stream(&query.url, &client).await
 }

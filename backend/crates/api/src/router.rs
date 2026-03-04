@@ -5,6 +5,8 @@ pub fn router<S>() -> Router<S>
 where
     S: Clone + Send + Sync + 'static,
     cache::RedisPool: axum::extract::FromRef<S>,
+    Option<db::PgPool>: axum::extract::FromRef<S>,
+    reqwest::Client: axum::extract::FromRef<S>,
 {
     Router::new()
         .route("/health", get(super::health::health_check))
@@ -19,9 +21,18 @@ where
         .route("/gdelt", get(super::gdelt::get_gdelt))
         .route("/maritime", get(super::maritime::get_maritime))
         .route("/cyber", get(super::cyber::get_cyber))
-        .route("/space-weather", get(super::space_weather::get_space_weather))
-        .route("/military-bases", get(super::military_bases::get_military_bases))
-        .route("/nuclear-sites", get(super::nuclear_sites::get_nuclear_sites))
+        .route(
+            "/space-weather",
+            get(super::space_weather::get_space_weather),
+        )
+        .route(
+            "/military-bases",
+            get(super::military_bases::get_military_bases),
+        )
+        .route(
+            "/nuclear-sites",
+            get(super::nuclear_sites::get_nuclear_sites),
+        )
         .route("/traffic/tiles-url", get(super::tomtom::get_tiles_url))
         .route("/traffic/flow", get(super::tomtom::get_flow))
         .route("/traffic/incidents", get(super::tomtom::get_incidents))

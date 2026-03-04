@@ -19,6 +19,7 @@ pub struct Config {
     pub host: String,
     pub port: u16,
     pub redis_url: String,
+    pub database_url: Option<String>,
     pub poll_interval_secs: u64,
     pub camera_poll_interval_secs: u64,
     pub satellite_poll_interval_secs: u64,
@@ -53,24 +54,62 @@ impl Config {
             .unwrap_or(DEFAULT_PORT);
 
         let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| DEFAULT_REDIS_URL.into());
+        let database_url = std::env::var("DATABASE_URL").ok();
 
         Ok(Self {
             host,
             port,
             redis_url,
+            database_url,
             poll_interval_secs: parse_env_u64("POLL_INTERVAL_SECS", DEFAULT_POLL_INTERVAL_SECS)?,
-            camera_poll_interval_secs: parse_env_u64("CAMERA_POLL_INTERVAL_SECS", DEFAULT_CAMERA_POLL_INTERVAL_SECS)?,
-            satellite_poll_interval_secs: parse_env_u64("SATELLITE_POLL_INTERVAL_SECS", DEFAULT_SATELLITE_POLL_INTERVAL_SECS)?,
-            metar_poll_interval_secs: parse_env_u64("METAR_POLL_INTERVAL_SECS", DEFAULT_METAR_POLL_INTERVAL_SECS)?,
-            weather_poll_interval_secs: parse_env_u64("WEATHER_POLL_INTERVAL_SECS", DEFAULT_WEATHER_POLL_INTERVAL_SECS)?,
-            events_poll_interval_secs: parse_env_u64("EVENTS_POLL_INTERVAL_SECS", DEFAULT_EVENTS_POLL_INTERVAL_SECS)?,
-            seismic_poll_interval_secs: parse_env_u64("SEISMIC_POLL_INTERVAL_SECS", DEFAULT_SEISMIC_POLL_INTERVAL_SECS)?,
-            fires_poll_interval_secs: parse_env_u64("FIRES_POLL_INTERVAL_SECS", DEFAULT_FIRES_POLL_INTERVAL_SECS)?,
-            cables_poll_interval_secs: parse_env_u64("CABLES_POLL_INTERVAL_SECS", DEFAULT_CABLES_POLL_INTERVAL_SECS)?,
-            gdelt_poll_interval_secs: parse_env_u64("GDELT_POLL_INTERVAL_SECS", DEFAULT_GDELT_POLL_INTERVAL_SECS)?,
-            maritime_poll_interval_secs: parse_env_u64("MARITIME_POLL_INTERVAL_SECS", DEFAULT_MARITIME_POLL_INTERVAL_SECS)?,
-            cyber_poll_interval_secs: parse_env_u64("CYBER_POLL_INTERVAL_SECS", DEFAULT_CYBER_POLL_INTERVAL_SECS)?,
-            space_weather_poll_interval_secs: parse_env_u64("SPACE_WEATHER_POLL_INTERVAL_SECS", DEFAULT_SPACE_WEATHER_POLL_INTERVAL_SECS)?,
+            camera_poll_interval_secs: parse_env_u64(
+                "CAMERA_POLL_INTERVAL_SECS",
+                DEFAULT_CAMERA_POLL_INTERVAL_SECS,
+            )?,
+            satellite_poll_interval_secs: parse_env_u64(
+                "SATELLITE_POLL_INTERVAL_SECS",
+                DEFAULT_SATELLITE_POLL_INTERVAL_SECS,
+            )?,
+            metar_poll_interval_secs: parse_env_u64(
+                "METAR_POLL_INTERVAL_SECS",
+                DEFAULT_METAR_POLL_INTERVAL_SECS,
+            )?,
+            weather_poll_interval_secs: parse_env_u64(
+                "WEATHER_POLL_INTERVAL_SECS",
+                DEFAULT_WEATHER_POLL_INTERVAL_SECS,
+            )?,
+            events_poll_interval_secs: parse_env_u64(
+                "EVENTS_POLL_INTERVAL_SECS",
+                DEFAULT_EVENTS_POLL_INTERVAL_SECS,
+            )?,
+            seismic_poll_interval_secs: parse_env_u64(
+                "SEISMIC_POLL_INTERVAL_SECS",
+                DEFAULT_SEISMIC_POLL_INTERVAL_SECS,
+            )?,
+            fires_poll_interval_secs: parse_env_u64(
+                "FIRES_POLL_INTERVAL_SECS",
+                DEFAULT_FIRES_POLL_INTERVAL_SECS,
+            )?,
+            cables_poll_interval_secs: parse_env_u64(
+                "CABLES_POLL_INTERVAL_SECS",
+                DEFAULT_CABLES_POLL_INTERVAL_SECS,
+            )?,
+            gdelt_poll_interval_secs: parse_env_u64(
+                "GDELT_POLL_INTERVAL_SECS",
+                DEFAULT_GDELT_POLL_INTERVAL_SECS,
+            )?,
+            maritime_poll_interval_secs: parse_env_u64(
+                "MARITIME_POLL_INTERVAL_SECS",
+                DEFAULT_MARITIME_POLL_INTERVAL_SECS,
+            )?,
+            cyber_poll_interval_secs: parse_env_u64(
+                "CYBER_POLL_INTERVAL_SECS",
+                DEFAULT_CYBER_POLL_INTERVAL_SECS,
+            )?,
+            space_weather_poll_interval_secs: parse_env_u64(
+                "SPACE_WEATHER_POLL_INTERVAL_SECS",
+                DEFAULT_SPACE_WEATHER_POLL_INTERVAL_SECS,
+            )?,
         })
     }
 }
