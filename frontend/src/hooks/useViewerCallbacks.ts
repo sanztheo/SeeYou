@@ -5,6 +5,7 @@ import {
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   defined,
+  type Cartesian2,
 } from "cesium";
 import type { Viewer } from "cesium";
 
@@ -65,7 +66,7 @@ export function useViewerCallbacks(
 
     const handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction(
-      (movement: { endPosition: { x: number; y: number } }) => {
+      (movement: { endPosition: Cartesian2 }) => {
         const now = performance.now();
         if (now - lastMouse < THROTTLE_MS) return;
         lastMouse = now;

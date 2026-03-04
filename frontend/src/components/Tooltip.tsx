@@ -30,18 +30,23 @@ export function Tooltip({
   delay = 200,
 }: TooltipProps): React.ReactElement {
   const [visible, setVisible] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const show = useCallback(() => {
     timer.current = setTimeout(() => setVisible(true), delay);
   }, [delay]);
 
   const hide = useCallback(() => {
-    clearTimeout(timer.current);
+    if (timer.current) clearTimeout(timer.current);
     setVisible(false);
   }, []);
 
-  useEffect(() => () => clearTimeout(timer.current), []);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   return (
     <div

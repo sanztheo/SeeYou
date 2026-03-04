@@ -3,7 +3,6 @@ import { useCesium } from "resium";
 import {
   BillboardCollection,
   Cartesian3,
-  Color,
   NearFarScalar,
   VerticalOrigin,
 } from "cesium";

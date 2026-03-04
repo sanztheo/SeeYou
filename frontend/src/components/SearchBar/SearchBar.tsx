@@ -68,7 +68,7 @@ export function SearchBar({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const geoAbortRef = useRef<AbortController | null>(null);
-  const geoTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const geoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const q = query.toLowerCase().trim();
 
   const localResults = useMemo(() => {

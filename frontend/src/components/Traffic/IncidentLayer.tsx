@@ -71,8 +71,8 @@ export function IncidentLayer({ filter }: IncidentLayerProps): null {
   const { viewer } = useCesium();
   const dsRef = useRef<CustomDataSource | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const refreshRef = useRef<ReturnType<typeof setInterval>>();
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const refreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastBboxRef = useRef<string>("");
   const rawIncidentsRef = useRef<TrafficIncident[]>([]);
 

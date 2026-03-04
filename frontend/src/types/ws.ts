@@ -3,7 +3,6 @@ import type { MetarStation } from "./metar";
 import type { SatellitePosition } from "./satellite";
 import type { Earthquake } from "./seismic";
 import type { GdeltEvent } from "./gdelt";
-import type { Vessel } from "./maritime";
 import type { AuroraPoint, SpaceWeatherAlert } from "./spaceWeather";
 
 export type WsMessageType =
