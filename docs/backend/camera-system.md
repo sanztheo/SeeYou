@@ -92,6 +92,10 @@ pub struct Camera {
     pub stream_url: String,      // Direct stream URL
     pub stream_type: StreamType, // Mjpeg | ImageRefresh | Hls
     pub is_online: bool,         // Health check result
+    pub view_heading_deg: Option<f64>,      // Optional orientation in degrees
+    pub view_fov_deg: Option<f64>,          // Optional field-of-view angle
+    pub view_heading_source: Option<CameraViewSource>, // provider | parsed | estimated
+    pub view_hint: Option<String>,          // Raw provider orientation text
 }
 
 pub enum StreamType {
@@ -99,7 +103,22 @@ pub enum StreamType {
     ImageRefresh,
     Hls,
 }
+
+pub enum CameraViewSource {
+    Provider,
+    Parsed,
+    Estimated,
+}
 ```
+
+### Orientation Enrichment
+
+The tracker enriches camera orientation where possible:
+- **Provider-native direction** (`provider`): explicit fields (e.g. OTC `direction`, Caltrans `location.direction`)
+- **Parsed direction** (`parsed`): inferred from provider hints/name strings
+- **Estimated direction** (`estimated`): reserved for downstream frontend fallback when no reliable heading exists
+
+`view_fov_deg` uses source-specific defaults and is clamped to a safe display range.
 
 ## Health Checking
 

@@ -1,8 +1,12 @@
 use std::time::Duration;
 
+use futures_util::stream::{self, StreamExt};
+
 use crate::types::Camera;
 
-const HEALTH_CHECK_TIMEOUT: Duration = Duration::from_secs(5);
+const HEALTH_CHECK_TIMEOUT: Duration = Duration::from_secs(2);
+const HEALTH_CHECK_CONCURRENCY: usize = 24;
+const HEALTH_CHECK_SAMPLE_SIZE: usize = 1_500;
 
 /// Check if a camera URL is reachable. Tries HEAD first, falls back to
 /// a range-limited GET (many servers reject HEAD but accept GET).
@@ -38,27 +42,37 @@ pub async fn check_camera_health(client: &reqwest::Client, camera: &Camera) -> b
     }
 }
 
-/// Check every camera concurrently and set `is_online` accordingly.
+/// Health-check a bounded sample of cameras and set `is_online` accordingly.
 pub async fn check_batch_health(client: &reqwest::Client, cameras: Vec<Camera>) -> Vec<Camera> {
-    let handles: Vec<_> = cameras
-        .into_iter()
+    let mut to_check = Vec::with_capacity(cameras.len().min(HEALTH_CHECK_SAMPLE_SIZE));
+    let mut passthrough =
+        Vec::with_capacity(cameras.len().saturating_sub(HEALTH_CHECK_SAMPLE_SIZE));
+
+    for (idx, cam) in cameras.into_iter().enumerate() {
+        if idx < HEALTH_CHECK_SAMPLE_SIZE {
+            to_check.push(cam);
+        } else {
+            passthrough.push(cam);
+        }
+    }
+
+    let mut checked: Vec<Camera> = stream::iter(to_check.into_iter())
         .map(|cam| {
-            let c = client.clone();
-            tokio::spawn(async move {
-                let online = check_camera_health(&c, &cam).await;
+            let client = client.clone();
+            async move {
+                let online = check_camera_health(&client, &cam).await;
                 Camera {
                     is_online: online,
                     ..cam
                 }
-            })
+            }
         })
-        .collect();
+        .buffer_unordered(HEALTH_CHECK_CONCURRENCY)
+        .collect()
+        .await;
 
-    let mut result = Vec::with_capacity(handles.len());
-    for handle in handles {
-        if let Ok(cam) = handle.await {
-            result.push(cam);
-        }
-    }
-    result
+    // Keep provider-reported status for the rest of the dataset; this avoids
+    // exhausting file descriptors on machines with low `ulimit -n`.
+    checked.extend(passthrough);
+    checked
 }

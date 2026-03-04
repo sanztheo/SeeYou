@@ -14,14 +14,38 @@ struct District {
 }
 
 const DISTRICTS: &[District] = &[
-    District { num: "03", city: "Sacramento" },
-    District { num: "04", city: "San Francisco" },
-    District { num: "05", city: "San Luis Obispo" },
-    District { num: "06", city: "Fresno" },
-    District { num: "07", city: "Los Angeles" },
-    District { num: "08", city: "San Bernardino" },
-    District { num: "11", city: "San Diego" },
-    District { num: "12", city: "Orange County" },
+    District {
+        num: "03",
+        city: "Sacramento",
+    },
+    District {
+        num: "04",
+        city: "San Francisco",
+    },
+    District {
+        num: "05",
+        city: "San Luis Obispo",
+    },
+    District {
+        num: "06",
+        city: "Fresno",
+    },
+    District {
+        num: "07",
+        city: "Los Angeles",
+    },
+    District {
+        num: "08",
+        city: "San Bernardino",
+    },
+    District {
+        num: "11",
+        city: "San Diego",
+    },
+    District {
+        num: "12",
+        city: "Orange County",
+    },
 ];
 
 fn district_url(num: &str) -> String {
@@ -72,12 +96,17 @@ struct CaltransImage {
     static_urls: CaltransStaticData,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum CaltransStaticData {
     One(CaltransStatic),
-    #[default]
     Many(Vec<CaltransStatic>),
+}
+
+impl Default for CaltransStaticData {
+    fn default() -> Self {
+        Self::Many(Vec::new())
+    }
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -115,16 +144,13 @@ fn parse_cctv_list(cctvs: Vec<CaltransCctv>, city: &str) -> Vec<Camera> {
             let (stream_url, stream_type) = if let Some(url) = static_url {
                 (url, StreamType::ImageRefresh)
             } else {
-                (
-                    cctv.image_data.streaming_video_url.clone(),
-                    StreamType::Hls,
-                )
+                (cctv.image_data.streaming_video_url.clone(), StreamType::Hls)
             };
 
             let district = &cctv.location.district;
             let source = "caltrans".to_string();
-            let view_hint = (!cctv.location.direction.is_empty())
-                .then(|| cctv.location.direction.clone());
+            let view_hint =
+                (!cctv.location.direction.is_empty()).then(|| cctv.location.direction.clone());
             let view_heading_deg = parse_heading_from_hint(&cctv.location.direction);
             Some(Camera {
                 id: format!("caltrans-d{}-{}", district, cctv.index),
@@ -168,7 +194,9 @@ fn parse_response(text: &str) -> Result<Vec<CaltransCctv>> {
                 }
             }
 
-            if let Ok(parsed) = serde_json::from_value::<Vec<CaltransCctv>>(Value::Array(data.clone())) {
+            if let Ok(parsed) =
+                serde_json::from_value::<Vec<CaltransCctv>>(Value::Array(data.clone()))
+            {
                 if !parsed.is_empty() {
                     return Ok(parsed);
                 }
@@ -189,10 +217,7 @@ fn parse_response(text: &str) -> Result<Vec<CaltransCctv>> {
     Err(anyhow::anyhow!("unsupported Caltrans response format"))
 }
 
-async fn fetch_district(
-    client: &reqwest::Client,
-    district: &District,
-) -> Result<Vec<Camera>> {
+async fn fetch_district(client: &reqwest::Client, district: &District) -> Result<Vec<Camera>> {
     let url = district_url(district.num);
     let text = client
         .get(&url)

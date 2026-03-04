@@ -114,7 +114,11 @@ Returns all cached cameras, optionally filtered by bounding box.
       "source": "tfl",
       "stream_url": "https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/...",
       "stream_type": "ImageRefresh",
-      "is_online": true
+      "is_online": true,
+      "view_heading_deg": 180.0,
+      "view_fov_deg": 42.0,
+      "view_heading_source": "provider",
+      "view_hint": "South (Main Road)"
     }
   ],
   "total": 5234
@@ -122,6 +126,12 @@ Returns all cached cameras, optionally filtered by bounding box.
 ```
 
 **Stream Types**: `Mjpeg`, `ImageRefresh`, `Hls`
+
+**Optional View Metadata**:
+- `view_heading_deg`: camera orientation in degrees (0° = north, 90° = east).
+- `view_fov_deg`: estimated or provider field-of-view angle in degrees.
+- `view_heading_source`: `provider` | `parsed` | `estimated`.
+- `view_hint`: raw provider hint used for orientation extraction.
 
 ### Camera Proxy
 

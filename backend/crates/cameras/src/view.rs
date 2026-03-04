@@ -6,11 +6,7 @@ pub fn clamp_fov_deg(fov_deg: f64) -> f64 {
 /// Default field-of-view by provider family.
 pub fn default_fov_for_source(source: &str) -> f64 {
     let s = source.to_ascii_lowercase();
-    if s == "caltrans"
-        || s == "nycdot"
-        || s == "tfl"
-        || s.starts_with("otcmap")
-    {
+    if s == "caltrans" || s == "nycdot" || s == "tfl" || s.starts_with("otcmap") {
         return 42.0;
     }
     if s == "mcp.camera" {
@@ -45,18 +41,6 @@ pub fn parse_heading_from_hint(hint: &str) -> Option<f64> {
     }
 
     let upper = trimmed.to_ascii_uppercase();
-    if upper.contains("NORTHBOUND") {
-        return Some(0.0);
-    }
-    if upper.contains("EASTBOUND") {
-        return Some(90.0);
-    }
-    if upper.contains("SOUTHBOUND") {
-        return Some(180.0);
-    }
-    if upper.contains("WESTBOUND") {
-        return Some(270.0);
-    }
     if upper.contains("NORTHEAST") {
         return Some(45.0);
     }
@@ -68,6 +52,18 @@ pub fn parse_heading_from_hint(hint: &str) -> Option<f64> {
     }
     if upper.contains("NORTHWEST") {
         return Some(315.0);
+    }
+    if upper.contains("NORTHBOUND") {
+        return Some(0.0);
+    }
+    if upper.contains("EASTBOUND") {
+        return Some(90.0);
+    }
+    if upper.contains("SOUTHBOUND") {
+        return Some(180.0);
+    }
+    if upper.contains("WESTBOUND") {
+        return Some(270.0);
     }
 
     let mut clean = String::with_capacity(upper.len());
@@ -96,7 +92,10 @@ mod tests {
     fn parse_cardinal_words() {
         assert_eq!(parse_heading_from_hint("West"), Some(270.0));
         assert_eq!(parse_heading_from_hint("East Facing"), Some(90.0));
-        assert_eq!(parse_heading_from_hint("South (Earls Court Road)"), Some(180.0));
+        assert_eq!(
+            parse_heading_from_hint("South (Earls Court Road)"),
+            Some(180.0)
+        );
         assert_eq!(parse_heading_from_hint("Zoom north - Lansdowne"), Some(0.0));
     }
 
