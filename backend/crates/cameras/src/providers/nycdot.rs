@@ -4,7 +4,8 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::types::{Camera, StreamType};
+use crate::types::{Camera, CameraViewSource, StreamType};
+use crate::view::{clamp_fov_deg, default_fov_for_source, parse_heading_from_hint};
 
 use super::CameraProvider;
 
@@ -26,6 +27,8 @@ struct NycCamera {
     image_url: String,
     #[serde(default)]
     is_online: bool,
+    #[serde(default, alias = "direction", alias = "view", alias = "orientation")]
+    direction: String,
 }
 
 fn build_image_url(cam: &NycCamera) -> String {
@@ -43,6 +46,17 @@ fn parse_nyc_cameras(raw: Vec<NycCamera>) -> Vec<Camera> {
         .filter(|c| c.latitude.abs() > 0.01 && c.longitude.abs() > 0.01)
         .map(|c| {
             let stream_url = build_image_url(&c);
+            let source = "nycdot".to_string();
+            let heading_from_direction = parse_heading_from_hint(&c.direction);
+            let heading_from_name = parse_heading_from_hint(&c.name);
+            let view_heading_deg = heading_from_direction.or(heading_from_name);
+            let view_heading_source = if heading_from_direction.is_some() {
+                Some(CameraViewSource::Provider)
+            } else if heading_from_name.is_some() {
+                Some(CameraViewSource::Parsed)
+            } else {
+                None
+            };
             Camera {
                 id: format!("nyc-{}", c.id),
                 name: c.name,
@@ -50,10 +64,14 @@ fn parse_nyc_cameras(raw: Vec<NycCamera>) -> Vec<Camera> {
                 lon: c.longitude,
                 city: "New York".into(),
                 country: "US".into(),
-                source: "nycdot".into(),
+                source: source.clone(),
                 stream_url,
                 stream_type: StreamType::ImageRefresh,
                 is_online: c.is_online,
+                view_heading_deg,
+                view_fov_deg: Some(clamp_fov_deg(default_fov_for_source(&source))),
+                view_heading_source,
+                view_hint: (!c.direction.is_empty()).then_some(c.direction),
             }
         })
         .collect()

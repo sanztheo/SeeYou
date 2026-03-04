@@ -4,7 +4,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::types::{Camera, StreamType};
+use crate::types::{Camera, CameraViewSource, StreamType};
+use crate::view::{clamp_fov_deg, default_fov_for_source, parse_heading_from_hint};
 
 use super::CameraProvider;
 
@@ -65,6 +66,8 @@ async fn fetch_paris(client: &reqwest::Client) -> Vec<Camera> {
             if geo.lat.abs() < 0.01 || r.url.is_empty() {
                 return None;
             }
+            let source = "paris_opendata".to_string();
+            let view_heading_deg = parse_heading_from_hint(&r.nom);
             Some(Camera {
                 id: format!("paris-{:.5}-{:.5}", geo.lat, geo.lon),
                 name: r.nom,
@@ -72,10 +75,14 @@ async fn fetch_paris(client: &reqwest::Client) -> Vec<Camera> {
                 lon: geo.lon,
                 city: "Paris".into(),
                 country: "FR".into(),
-                source: "paris_opendata".into(),
+                source: source.clone(),
                 stream_url: r.url,
                 stream_type: StreamType::ImageRefresh,
                 is_online: true,
+                view_heading_deg,
+                view_fov_deg: Some(clamp_fov_deg(default_fov_for_source(&source))),
+                view_heading_source: view_heading_deg.map(|_| CameraViewSource::Parsed),
+                view_hint: None,
             })
         })
         .collect()
@@ -136,17 +143,25 @@ fn worldwide_cameras() -> Vec<Camera> {
     ];
 
     cams.into_iter()
-        .map(|(id, name, city, country, lat, lon, url, st)| Camera {
-            id: id.to_string(),
-            name: name.to_string(),
-            lat,
-            lon,
-            city: city.to_string(),
-            country: country.to_string(),
-            source: "generic".into(),
-            stream_url: url.to_string(),
-            stream_type: st,
-            is_online: true,
+        .map(|(id, name, city, country, lat, lon, url, st)| {
+            let source = "generic".to_string();
+            let view_heading_deg = parse_heading_from_hint(name);
+            Camera {
+                id: id.to_string(),
+                name: name.to_string(),
+                lat,
+                lon,
+                city: city.to_string(),
+                country: country.to_string(),
+                source: source.clone(),
+                stream_url: url.to_string(),
+                stream_type: st,
+                is_online: true,
+                view_heading_deg,
+                view_fov_deg: Some(clamp_fov_deg(default_fov_for_source(&source))),
+                view_heading_source: view_heading_deg.map(|_| CameraViewSource::Parsed),
+                view_hint: None,
+            }
         })
         .collect()
 }

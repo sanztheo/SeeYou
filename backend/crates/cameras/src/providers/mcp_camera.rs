@@ -4,7 +4,8 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::types::{Camera, StreamType};
+use crate::types::{Camera, CameraViewSource, StreamType};
+use crate::view::{clamp_fov_deg, default_fov_for_source, parse_heading_from_hint};
 
 use super::CameraProvider;
 
@@ -40,6 +41,8 @@ struct McpCamera {
     state: Option<String>,
     #[serde(default)]
     status: Option<String>,
+    #[serde(default, alias = "direction", alias = "view", alias = "orientation")]
+    heading_hint: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -121,6 +124,25 @@ fn parse_mcp_cameras(raw: Vec<McpCamera>) -> Vec<Camera> {
             } else {
                 cam.name
             };
+            let source = "mcp.camera".to_string();
+            let hint = cam
+                .heading_hint
+                .as_deref()
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(String::from);
+            let heading_from_hint = hint
+                .as_deref()
+                .and_then(parse_heading_from_hint);
+            let heading_from_name = parse_heading_from_hint(&name);
+            let view_heading_deg = heading_from_hint.or(heading_from_name);
+            let view_heading_source = if heading_from_hint.is_some() {
+                Some(CameraViewSource::Provider)
+            } else if heading_from_name.is_some() {
+                Some(CameraViewSource::Parsed)
+            } else {
+                None
+            };
 
             Some(Camera {
                 id,
@@ -129,10 +151,14 @@ fn parse_mcp_cameras(raw: Vec<McpCamera>) -> Vec<Camera> {
                 lon,
                 city,
                 country: "US".into(),
-                source: "mcp.camera".into(),
+                source: source.clone(),
                 stream_url,
                 stream_type: StreamType::ImageRefresh,
                 is_online: online,
+                view_heading_deg,
+                view_fov_deg: Some(clamp_fov_deg(default_fov_for_source(&source))),
+                view_heading_source,
+                view_hint: hint,
             })
         })
         .collect()
