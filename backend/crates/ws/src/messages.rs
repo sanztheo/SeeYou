@@ -127,11 +127,17 @@ pub struct MetarStation {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum WsMessage {
-    Connected { client_id: String },
+    Connected {
+        client_id: String,
+    },
     Ping,
     Pong,
-    Error { message: String },
-    AircraftUpdate { aircraft: Vec<AircraftPosition> },
+    Error {
+        message: String,
+    },
+    AircraftUpdate {
+        aircraft: Vec<AircraftPosition>,
+    },
     /// Chunked aircraft delivery — avoids multi-MB single frames.
     AircraftBatch {
         aircraft: Vec<AircraftPosition>,

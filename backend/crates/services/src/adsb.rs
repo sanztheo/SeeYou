@@ -22,16 +22,16 @@ const REGION_TIMEOUT: Duration = Duration::from_secs(15);
 /// the vast majority of global civil aviation traffic.
 const GRID_POINTS: &[(f64, f64)] = &[
     // ── Europe ────────────────────────────────────────
-    (48.0, 2.0),    // France
-    (51.5, -1.0),   // UK
-    (52.0, 13.0),   // Germany
-    (41.0, 12.0),   // Italy
-    (40.0, -4.0),   // Spain
-    (60.0, 15.0),   // Scandinavia
-    (55.0, 25.0),   // Eastern Europe / Baltics
-    (45.0, 30.0),   // Turkey / Black Sea
-    (38.0, 24.0),   // Greece / East Med
-    (47.0, 8.0),    // Switzerland / Central Europe
+    (48.0, 2.0),  // France
+    (51.5, -1.0), // UK
+    (52.0, 13.0), // Germany
+    (41.0, 12.0), // Italy
+    (40.0, -4.0), // Spain
+    (60.0, 15.0), // Scandinavia
+    (55.0, 25.0), // Eastern Europe / Baltics
+    (45.0, 30.0), // Turkey / Black Sea
+    (38.0, 24.0), // Greece / East Med
+    (47.0, 8.0),  // Switzerland / Central Europe
     // ── North America ─────────────────────────────────
     (42.0, -74.0),  // US Northeast
     (34.0, -84.0),  // US Southeast
@@ -45,27 +45,27 @@ const GRID_POINTS: &[(f64, f64)] = &[
     (51.0, -114.0), // Canada West (Calgary)
     (20.0, -100.0), // Mexico
     // ── Asia ──────────────────────────────────────────
-    (35.0, 140.0),  // Japan
-    (37.0, 127.0),  // Korea
-    (31.0, 121.0),  // China East (Shanghai)
-    (40.0, 116.0),  // China North (Beijing)
-    (23.0, 113.0),  // China South (Guangdong)
-    (13.0, 100.0),  // Southeast Asia (Bangkok)
-    (1.3, 104.0),   // Singapore
-    (28.0, 77.0),   // India North (Delhi)
-    (13.0, 80.0),   // India South (Chennai)
+    (35.0, 140.0), // Japan
+    (37.0, 127.0), // Korea
+    (31.0, 121.0), // China East (Shanghai)
+    (40.0, 116.0), // China North (Beijing)
+    (23.0, 113.0), // China South (Guangdong)
+    (13.0, 100.0), // Southeast Asia (Bangkok)
+    (1.3, 104.0),  // Singapore
+    (28.0, 77.0),  // India North (Delhi)
+    (13.0, 80.0),  // India South (Chennai)
     // ── Middle East ───────────────────────────────────
-    (25.0, 55.0),   // UAE / Gulf
-    (33.0, 44.0),   // Iraq / Levant
+    (25.0, 55.0), // UAE / Gulf
+    (33.0, 44.0), // Iraq / Levant
     // ── South America ─────────────────────────────────
     (-23.0, -47.0), // Brazil (São Paulo)
     (-34.0, -58.0), // Argentina (Buenos Aires)
     (-5.0, -35.0),  // Brazil North
     // ── Africa ────────────────────────────────────────
-    (34.0, -7.0),   // Morocco
-    (-26.0, 28.0),  // South Africa
-    (6.0, 3.0),     // Nigeria / West Africa
-    (0.0, 37.0),    // East Africa (Kenya)
+    (34.0, -7.0),  // Morocco
+    (-26.0, 28.0), // South Africa
+    (6.0, 3.0),    // Nigeria / West Africa
+    (0.0, 37.0),   // East Africa (Kenya)
     // ── Oceania ───────────────────────────────────────
     (-34.0, 151.0), // Australia (Sydney)
     (-37.0, 175.0), // New Zealand
@@ -128,8 +128,8 @@ impl AdsbAircraft {
         };
 
         let callsign = self.flight.map(|s| s.trim().to_string());
-        let is_military = force_military
-            || self.db_flags.map(|flags| flags & 1 != 0).unwrap_or(false);
+        let is_military =
+            force_military || self.db_flags.map(|flags| flags & 1 != 0).unwrap_or(false);
 
         Some(Aircraft {
             icao,
@@ -172,14 +172,8 @@ async fn fetch_region(
     lat: f64,
     lon: f64,
 ) -> Result<Vec<Aircraft>, AdsbError> {
-    let url = format!(
-        "{ADSB_BASE_URL}/lat/{lat}/lon/{lon}/dist/{REGION_RADIUS_NM}"
-    );
-    let response = client
-        .get(&url)
-        .timeout(REGION_TIMEOUT)
-        .send()
-        .await?;
+    let url = format!("{ADSB_BASE_URL}/lat/{lat}/lon/{lon}/dist/{REGION_RADIUS_NM}");
+    let response = client.get(&url).timeout(REGION_TIMEOUT).send().await?;
 
     let status = response.status();
     if !status.is_success() {
@@ -197,9 +191,7 @@ async fn fetch_region(
 
 /// Fetch all aircraft globally by querying a grid of regional endpoints
 /// concurrently, then deduplicating by ICAO hex.
-pub async fn fetch_all_regions(
-    client: &reqwest::Client,
-) -> (Vec<Aircraft>, usize, usize) {
+pub async fn fetch_all_regions(client: &reqwest::Client) -> (Vec<Aircraft>, usize, usize) {
     let handles: Vec<tokio::task::JoinHandle<(f64, f64, Result<Vec<Aircraft>, AdsbError>)>> =
         GRID_POINTS
             .iter()
@@ -219,12 +211,7 @@ pub async fn fetch_all_regions(
     for handle in handles {
         match handle.await {
             Ok((lat, lon, Ok(aircraft))) => {
-                tracing::debug!(
-                    lat,
-                    lon,
-                    count = aircraft.len(),
-                    "region query OK"
-                );
+                tracing::debug!(lat, lon, count = aircraft.len(), "region query OK");
                 for ac in aircraft {
                     merged.insert(ac.icao.clone(), ac);
                 }

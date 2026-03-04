@@ -40,11 +40,7 @@ struct GeoJsonGeometry {
 pub async fn fetch_events(client: &reqwest::Client) -> anyhow::Result<Vec<GdeltEvent>> {
     let resp: GeoJsonResponse = client
         .get(GDELT_GEO_URL)
-        .query(&[
-            ("query", "*"),
-            ("format", "GeoJSON"),
-            ("maxpoints", "500"),
-        ])
+        .query(&[("query", "*"), ("format", "GeoJSON"), ("maxpoints", "500")])
         .timeout(REQUEST_TIMEOUT)
         .send()
         .await

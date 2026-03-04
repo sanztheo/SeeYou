@@ -95,8 +95,7 @@ impl CameraProvider for OtcMapProvider {
             .await
             .context("OTC Map body read failed")?;
 
-        let states: StateMap =
-            serde_json::from_str(&body).context("OTC Map JSON parse failed")?;
+        let states: StateMap = serde_json::from_str(&body).context("OTC Map JSON parse failed")?;
 
         let cameras = parse_states(&states);
 

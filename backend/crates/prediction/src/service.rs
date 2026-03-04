@@ -60,7 +60,10 @@ impl PredictionService {
     }
 
     /// Feed a batch of aircraft and get predictions for all tracked military aircraft.
-    pub fn process_batch(&mut self, measurements: &[AircraftMeasurement]) -> Vec<PredictedTrajectory> {
+    pub fn process_batch(
+        &mut self,
+        measurements: &[AircraftMeasurement],
+    ) -> Vec<PredictedTrajectory> {
         let now = Instant::now();
         let t = self.now_secs();
 
@@ -97,12 +100,7 @@ impl PredictionService {
         state.last_seen = now;
 
         // Convert geodetic to ENU relative to the aircraft's ENU origin
-        let (x_enu, y_enu) = latlon_to_enu(
-            m.lat,
-            m.lon,
-            state.origin_lat,
-            state.origin_lon,
-        );
+        let (x_enu, y_enu) = latlon_to_enu(m.lat, m.lon, state.origin_lat, state.origin_lon);
 
         let heading_rad = m.heading_deg.to_radians();
         let vx = m.speed_ms * heading_rad.sin();

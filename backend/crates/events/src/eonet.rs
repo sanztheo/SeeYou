@@ -38,9 +38,7 @@ struct EonetSource {
     url: String,
 }
 
-pub async fn fetch_active_events(
-    client: &reqwest::Client,
-) -> anyhow::Result<Vec<NaturalEvent>> {
+pub async fn fetch_active_events(client: &reqwest::Client) -> anyhow::Result<Vec<NaturalEvent>> {
     let resp: EonetResponse = client
         .get(EONET_URL)
         .query(&[("status", "open"), ("limit", "100")])
@@ -73,7 +71,10 @@ pub async fn fetch_active_events(
                 .map(|c| EventCategory::from_eonet_id(&c.id))
                 .unwrap_or(EventCategory::Other);
 
-            let source_url = e.sources.as_ref().and_then(|s| s.first().map(|s| s.url.clone()));
+            let source_url = e
+                .sources
+                .as_ref()
+                .and_then(|s| s.first().map(|s| s.url.clone()));
 
             Some(NaturalEvent {
                 id: e.id,
@@ -104,7 +105,9 @@ mod tests {
         EonetEvent {
             id: id.to_string(),
             title: title.to_string(),
-            categories: vec![EonetCategory { id: category_id.to_string() }],
+            categories: vec![EonetCategory {
+                id: category_id.to_string(),
+            }],
             geometry,
             sources: source_url.map(|u| vec![EonetSource { url: u.to_string() }]),
         }
@@ -118,7 +121,9 @@ mod tests {
     }
 
     fn parse_eonet_events(eonet_events: Vec<EonetEvent>) -> Vec<NaturalEvent> {
-        let resp = EonetResponse { events: eonet_events };
+        let resp = EonetResponse {
+            events: eonet_events,
+        };
         resp.events
             .into_iter()
             .filter_map(|e| {
@@ -133,8 +138,10 @@ mod tests {
                     .first()
                     .map(|c| EventCategory::from_eonet_id(&c.id))
                     .unwrap_or(EventCategory::Other);
-                let source_url =
-                    e.sources.as_ref().and_then(|s| s.first().map(|s| s.url.clone()));
+                let source_url = e
+                    .sources
+                    .as_ref()
+                    .and_then(|s| s.first().map(|s| s.url.clone()));
                 Some(NaturalEvent {
                     id: e.id,
                     title: e.title,
@@ -178,8 +185,14 @@ mod tests {
         )]);
 
         assert_eq!(events.len(), 1);
-        assert!((events[0].lat - 34.05).abs() < f64::EPSILON, "lat should be 34.05");
-        assert!((events[0].lon - (-118.24)).abs() < f64::EPSILON, "lon should be -118.24");
+        assert!(
+            (events[0].lat - 34.05).abs() < f64::EPSILON,
+            "lat should be 34.05"
+        );
+        assert!(
+            (events[0].lon - (-118.24)).abs() < f64::EPSILON,
+            "lon should be -118.24"
+        );
     }
 
     #[test]
@@ -197,8 +210,14 @@ mod tests {
         )]);
 
         assert_eq!(events.len(), 1);
-        assert!((events[0].lon - 12.0).abs() < f64::EPSILON, "should use last geometry lon");
-        assert!((events[0].lat - 22.0).abs() < f64::EPSILON, "should use last geometry lat");
+        assert!(
+            (events[0].lon - 12.0).abs() < f64::EPSILON,
+            "should use last geometry lon"
+        );
+        assert!(
+            (events[0].lat - 22.0).abs() < f64::EPSILON,
+            "should use last geometry lat"
+        );
         assert_eq!(events[0].date, "2026-01-03T00:00:00Z");
     }
 
@@ -212,7 +231,10 @@ mod tests {
             None,
         )]);
 
-        assert!(events.is_empty(), "events with empty geometry should be filtered");
+        assert!(
+            events.is_empty(),
+            "events with empty geometry should be filtered"
+        );
     }
 
     #[test]
@@ -220,7 +242,9 @@ mod tests {
         let event = EonetEvent {
             id: "E4".to_string(),
             title: "Bad Coords".to_string(),
-            categories: vec![EonetCategory { id: "floods".to_string() }],
+            categories: vec![EonetCategory {
+                id: "floods".to_string(),
+            }],
             geometry: vec![EonetGeometry {
                 date: "2026-01-01T00:00:00Z".to_string(),
                 coordinates: vec![10.0],
@@ -229,15 +253,36 @@ mod tests {
         };
 
         let events = parse_eonet_events(vec![event]);
-        assert!(events.is_empty(), "events with < 2 coordinates should be filtered");
+        assert!(
+            events.is_empty(),
+            "events with < 2 coordinates should be filtered"
+        );
     }
 
     #[test]
     fn category_mapping_from_eonet() {
         let events = parse_eonet_events(vec![
-            make_eonet_event("E5", "A", "wildfires", vec![make_geometry(0.0, 0.0, "2026-01-01T00:00:00Z")], None),
-            make_eonet_event("E6", "B", "earthquakes", vec![make_geometry(1.0, 1.0, "2026-01-01T00:00:00Z")], None),
-            make_eonet_event("E7", "C", "unknownType", vec![make_geometry(2.0, 2.0, "2026-01-01T00:00:00Z")], None),
+            make_eonet_event(
+                "E5",
+                "A",
+                "wildfires",
+                vec![make_geometry(0.0, 0.0, "2026-01-01T00:00:00Z")],
+                None,
+            ),
+            make_eonet_event(
+                "E6",
+                "B",
+                "earthquakes",
+                vec![make_geometry(1.0, 1.0, "2026-01-01T00:00:00Z")],
+                None,
+            ),
+            make_eonet_event(
+                "E7",
+                "C",
+                "unknownType",
+                vec![make_geometry(2.0, 2.0, "2026-01-01T00:00:00Z")],
+                None,
+            ),
         ]);
 
         assert_eq!(events.len(), 3);
@@ -255,7 +300,10 @@ mod tests {
             vec![make_geometry(0.0, 0.0, "2026-01-01T00:00:00Z")],
             Some("https://example.com/flood"),
         )]);
-        assert_eq!(with_source[0].source_url.as_deref(), Some("https://example.com/flood"));
+        assert_eq!(
+            with_source[0].source_url.as_deref(),
+            Some("https://example.com/flood")
+        );
 
         let without_source = parse_eonet_events(vec![make_eonet_event(
             "E9",
@@ -313,7 +361,10 @@ mod tests {
         assert_eq!(events.len(), 2);
 
         assert_eq!(events[0].id, "EONET_6732");
-        assert!((events[0].lon - (-119.3)).abs() < f64::EPSILON, "should use latest geometry");
+        assert!(
+            (events[0].lon - (-119.3)).abs() < f64::EPSILON,
+            "should use latest geometry"
+        );
         assert!((events[0].lat - 34.4).abs() < f64::EPSILON);
         assert_eq!(events[0].category, EventCategory::Wildfires);
         assert!(events[0].source_url.is_some());

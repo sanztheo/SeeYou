@@ -131,9 +131,7 @@ fn parse_mcp_cameras(raw: Vec<McpCamera>) -> Vec<Camera> {
                 .map(str::trim)
                 .filter(|v| !v.is_empty())
                 .map(String::from);
-            let heading_from_hint = hint
-                .as_deref()
-                .and_then(parse_heading_from_hint);
+            let heading_from_hint = hint.as_deref().and_then(parse_heading_from_hint);
             let heading_from_name = parse_heading_from_hint(&name);
             let view_heading_deg = heading_from_hint.or(heading_from_name);
             let view_heading_source = if heading_from_hint.is_some() {
@@ -176,10 +174,7 @@ impl CameraProvider for McpCameraProvider {
             .error_for_status()
             .context("mcp.camera returned error status")?;
 
-        let raw: Vec<McpCamera> = resp
-            .json()
-            .await
-            .context("mcp.camera JSON parse failed")?;
+        let raw: Vec<McpCamera> = resp.json().await.context("mcp.camera JSON parse failed")?;
 
         Ok(parse_mcp_cameras(raw))
     }

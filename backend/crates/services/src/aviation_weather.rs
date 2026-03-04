@@ -44,9 +44,7 @@ fn parse_wind_dir(val: &serde_json::Value) -> Option<u16> {
     }
 }
 
-pub async fn fetch_metar_stations(
-    client: &reqwest::Client,
-) -> anyhow::Result<Vec<MetarStation>> {
+pub async fn fetch_metar_stations(client: &reqwest::Client) -> anyhow::Result<Vec<MetarStation>> {
     let raw: Vec<ApiMetar> = client
         .get(METAR_URL)
         .timeout(REQUEST_TIMEOUT)

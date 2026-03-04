@@ -85,9 +85,7 @@ pub async fn fetch_tle_group(
 
 /// Fetch all TLE groups concurrently, same pattern as `adsb::fetch_all_regions`.
 /// Returns `(data, total_groups, failed_groups)`.
-pub async fn fetch_all_tle(
-    client: &reqwest::Client,
-) -> (Vec<TleData>, usize, usize) {
+pub async fn fetch_all_tle(client: &reqwest::Client) -> (Vec<TleData>, usize, usize) {
     let handles: Vec<_> = TLE_GROUPS
         .iter()
         .map(|&(group, category)| {

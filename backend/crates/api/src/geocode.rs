@@ -144,7 +144,13 @@ mod tests {
         let lat: f64 = place.lat.parse().unwrap();
         let lon: f64 = place.lon.parse().unwrap();
         let name = place.name.clone().unwrap_or_else(|| {
-            place.display_name.split(',').next().unwrap_or("").trim().to_string()
+            place
+                .display_name
+                .split(',')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string()
         });
 
         assert_eq!(name, "Paris");
@@ -163,7 +169,13 @@ mod tests {
         };
 
         let name = place.name.unwrap_or_else(|| {
-            place.display_name.split(',').next().unwrap_or("").trim().to_string()
+            place
+                .display_name
+                .split(',')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string()
         });
 
         assert_eq!(name, "Berlin");
@@ -192,7 +204,10 @@ mod tests {
         let queries = ["", " ", "a", " a "];
         for q in queries {
             let trimmed = q.trim().to_string();
-            assert!(trimmed.len() < 2, "Expected '{q}' to be < 2 chars after trim");
+            assert!(
+                trimmed.len() < 2,
+                "Expected '{q}' to be < 2 chars after trim"
+            );
         }
     }
 

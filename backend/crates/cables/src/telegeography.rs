@@ -74,7 +74,10 @@ pub async fn fetch_cables(client: &reqwest::Client) -> anyhow::Result<Vec<Submar
                     .unwrap_or("Unknown")
                     .to_string(),
                 length_km: props.get("length_km").and_then(|v| v.as_f64()),
-                owners: props.get("owners").and_then(|v| v.as_str()).map(String::from),
+                owners: props
+                    .get("owners")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
                 year: props.get("year").and_then(|v| v.as_str()).map(String::from),
                 coordinates,
             })
@@ -84,9 +87,7 @@ pub async fn fetch_cables(client: &reqwest::Client) -> anyhow::Result<Vec<Submar
     Ok(cables)
 }
 
-pub async fn fetch_landing_points(
-    client: &reqwest::Client,
-) -> anyhow::Result<Vec<LandingPoint>> {
+pub async fn fetch_landing_points(client: &reqwest::Client) -> anyhow::Result<Vec<LandingPoint>> {
     let resp: GeoJsonCollection = client
         .get(LANDING_URL)
         .timeout(REQUEST_TIMEOUT)

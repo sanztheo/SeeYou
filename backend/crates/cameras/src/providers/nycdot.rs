@@ -35,10 +35,7 @@ fn build_image_url(cam: &NycCamera) -> String {
     if !cam.image_url.is_empty() {
         return cam.image_url.clone();
     }
-    format!(
-        "https://webcams.nyctmc.org/api/cameras/{}/image",
-        cam.id
-    )
+    format!("https://webcams.nyctmc.org/api/cameras/{}/image", cam.id)
 }
 
 fn parse_nyc_cameras(raw: Vec<NycCamera>) -> Vec<Camera> {
@@ -91,10 +88,7 @@ impl CameraProvider for NycdotProvider {
             .error_for_status()
             .context("NYC DOT returned error status")?;
 
-        let cams: Vec<NycCamera> = resp
-            .json()
-            .await
-            .context("NYC DOT JSON parse failed")?;
+        let cams: Vec<NycCamera> = resp.json().await.context("NYC DOT JSON parse failed")?;
 
         Ok(parse_nyc_cameras(cams))
     }

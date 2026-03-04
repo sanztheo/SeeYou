@@ -15,14 +15,14 @@ const CURRENT_PARAMS: &str =
 /// ~40 points spread across the globe: (lat, lon).
 static GRID: &[(f64, f64)] = &[
     // Europe
-    (51.51, -0.13),   // London
-    (48.86, 2.35),    // Paris
-    (52.52, 13.41),   // Berlin
-    (40.42, -3.70),   // Madrid
-    (41.90, 12.50),   // Rome
-    (59.33, 18.07),   // Stockholm
-    (55.76, 37.62),   // Moscow
-    (41.01, 28.98),   // Istanbul
+    (51.51, -0.13), // London
+    (48.86, 2.35),  // Paris
+    (52.52, 13.41), // Berlin
+    (40.42, -3.70), // Madrid
+    (41.90, 12.50), // Rome
+    (59.33, 18.07), // Stockholm
+    (55.76, 37.62), // Moscow
+    (41.01, 28.98), // Istanbul
     // North America
     (40.71, -74.01),  // New York
     (34.05, -118.24), // Los Angeles
@@ -33,24 +33,24 @@ static GRID: &[(f64, f64)] = &[
     (47.61, -122.33), // Seattle
     (39.74, -104.99), // Denver
     // Asia
-    (35.68, 139.69),  // Tokyo
-    (39.91, 116.39),  // Beijing
-    (31.23, 121.47),  // Shanghai
-    (19.08, 72.88),   // Mumbai
-    (13.76, 100.50),  // Bangkok
-    (1.35, 103.82),   // Singapore
-    (37.57, 126.98),  // Seoul
-    (22.32, 114.17),  // Hong Kong
+    (35.68, 139.69), // Tokyo
+    (39.91, 116.39), // Beijing
+    (31.23, 121.47), // Shanghai
+    (19.08, 72.88),  // Mumbai
+    (13.76, 100.50), // Bangkok
+    (1.35, 103.82),  // Singapore
+    (37.57, 126.98), // Seoul
+    (22.32, 114.17), // Hong Kong
     // Middle East
-    (25.20, 55.27),   // Dubai
-    (24.71, 46.67),   // Riyadh
-    (35.69, 51.39),   // Tehran
-    (30.04, 31.24),   // Cairo
+    (25.20, 55.27), // Dubai
+    (24.71, 46.67), // Riyadh
+    (35.69, 51.39), // Tehran
+    (30.04, 31.24), // Cairo
     // Africa
-    (6.52, 3.38),     // Lagos
-    (-1.29, 36.82),   // Nairobi
-    (-26.20, 28.05),  // Johannesburg
-    (33.57, -7.59),   // Casablanca
+    (6.52, 3.38),    // Lagos
+    (-1.29, 36.82),  // Nairobi
+    (-26.20, 28.05), // Johannesburg
+    (33.57, -7.59),  // Casablanca
     // South America
     (-23.55, -46.63), // São Paulo
     (-34.60, -58.38), // Buenos Aires
@@ -88,15 +88,19 @@ struct CurrentWeather {
     wind_direction_10m: f64,
 }
 
-pub async fn fetch_weather_grid(
-    client: &reqwest::Client,
-) -> anyhow::Result<Vec<WeatherPoint>> {
-    let lats: String = GRID.iter().map(|(lat, _)| lat.to_string()).collect::<Vec<_>>().join(",");
-    let lons: String = GRID.iter().map(|(_, lon)| lon.to_string()).collect::<Vec<_>>().join(",");
+pub async fn fetch_weather_grid(client: &reqwest::Client) -> anyhow::Result<Vec<WeatherPoint>> {
+    let lats: String = GRID
+        .iter()
+        .map(|(lat, _)| lat.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let lons: String = GRID
+        .iter()
+        .map(|(_, lon)| lon.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
 
-    let url = format!(
-        "{API_URL}?latitude={lats}&longitude={lons}&current={CURRENT_PARAMS}"
-    );
+    let url = format!("{API_URL}?latitude={lats}&longitude={lons}&current={CURRENT_PARAMS}");
 
     let items: Vec<OpenMeteoItem> = client
         .get(&url)
@@ -145,7 +149,11 @@ mod tests {
 
     #[test]
     fn grid_has_sufficient_coverage() {
-        assert!(GRID.len() >= 30, "grid should have at least 30 points, got {}", GRID.len());
+        assert!(
+            GRID.len() >= 30,
+            "grid should have at least 30 points, got {}",
+            GRID.len()
+        );
     }
 
     #[test]

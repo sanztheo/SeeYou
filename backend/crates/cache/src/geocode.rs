@@ -24,7 +24,8 @@ pub async fn get_geocode(pool: &RedisPool, query: &str) -> Result<Option<String>
 pub async fn set_geocode(pool: &RedisPool, query: &str, json: &str) -> Result<(), CacheError> {
     let key = geocode_key(query);
     let mut conn = pool.get().await?;
-    conn.set_ex::<_, _, ()>(&key, json, GEOCODE_TTL_SECS).await?;
+    conn.set_ex::<_, _, ()>(&key, json, GEOCODE_TTL_SECS)
+        .await?;
     Ok(())
 }
 

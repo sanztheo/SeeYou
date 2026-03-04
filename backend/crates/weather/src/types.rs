@@ -105,7 +105,10 @@ mod tests {
     fn weather_point_missing_field_errors() {
         let json = r#"{"lat":40.0,"lon":-74.0}"#;
         let result = serde_json::from_str::<WeatherPoint>(json);
-        assert!(result.is_err(), "missing fields should cause deserialization error");
+        assert!(
+            result.is_err(),
+            "missing fields should cause deserialization error"
+        );
     }
 
     #[test]

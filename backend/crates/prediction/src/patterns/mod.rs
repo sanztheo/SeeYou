@@ -23,14 +23,9 @@ pub enum MilitaryPattern {
         wp2_lon: f64,
     },
     /// Straight-line transit (ferry / deployment).
-    Transit {
-        heading_deg: f64,
-    },
+    Transit { heading_deg: f64 },
     /// Holding in a small area (low net displacement).
-    Holding {
-        center_lat: f64,
-        center_lon: f64,
-    },
+    Holding { center_lat: f64, center_lon: f64 },
 }
 
 /// Minimum history duration (seconds) before pattern detection kicks in.

@@ -27,13 +27,13 @@ fn default_transition_matrix() -> [[f64; NUM_MODELS]; NUM_MODELS] {
 /// Default initial covariance (generous — lets the filter converge fast).
 fn default_initial_covariance() -> StateMat {
     StateMat::from_diagonal(&state_vec(
-        500.0_f64.powi(2),  // x
-        500.0_f64.powi(2),  // y
-        50.0_f64.powi(2),   // vx
-        50.0_f64.powi(2),   // vy
-        200.0_f64.powi(2),  // z
-        10.0_f64.powi(2),   // vz
-        0.1_f64.powi(2),    // omega
+        500.0_f64.powi(2), // x
+        500.0_f64.powi(2), // y
+        50.0_f64.powi(2),  // vx
+        50.0_f64.powi(2),  // vy
+        200.0_f64.powi(2), // z
+        10.0_f64.powi(2),  // vz
+        0.1_f64.powi(2),   // omega
     ))
 }
 

@@ -48,27 +48,63 @@ mod tests {
 
     #[test]
     fn event_category_from_known_ids() {
-        assert_eq!(EventCategory::from_eonet_id("wildfires"), EventCategory::Wildfires);
-        assert_eq!(EventCategory::from_eonet_id("severeStorms"), EventCategory::SevereStorms);
-        assert_eq!(EventCategory::from_eonet_id("volcanoes"), EventCategory::Volcanoes);
-        assert_eq!(EventCategory::from_eonet_id("earthquakes"), EventCategory::Earthquakes);
-        assert_eq!(EventCategory::from_eonet_id("floods"), EventCategory::Floods);
-        assert_eq!(EventCategory::from_eonet_id("seaLakeIce"), EventCategory::SeaAndLakeIce);
+        assert_eq!(
+            EventCategory::from_eonet_id("wildfires"),
+            EventCategory::Wildfires
+        );
+        assert_eq!(
+            EventCategory::from_eonet_id("severeStorms"),
+            EventCategory::SevereStorms
+        );
+        assert_eq!(
+            EventCategory::from_eonet_id("volcanoes"),
+            EventCategory::Volcanoes
+        );
+        assert_eq!(
+            EventCategory::from_eonet_id("earthquakes"),
+            EventCategory::Earthquakes
+        );
+        assert_eq!(
+            EventCategory::from_eonet_id("floods"),
+            EventCategory::Floods
+        );
+        assert_eq!(
+            EventCategory::from_eonet_id("seaLakeIce"),
+            EventCategory::SeaAndLakeIce
+        );
     }
 
     #[test]
     fn event_category_unknown_defaults_to_other() {
-        assert_eq!(EventCategory::from_eonet_id("unknown"), EventCategory::Other);
+        assert_eq!(
+            EventCategory::from_eonet_id("unknown"),
+            EventCategory::Other
+        );
         assert_eq!(EventCategory::from_eonet_id(""), EventCategory::Other);
-        assert_eq!(EventCategory::from_eonet_id("newCategory2026"), EventCategory::Other);
-        assert_eq!(EventCategory::from_eonet_id("Wildfires"), EventCategory::Other);
+        assert_eq!(
+            EventCategory::from_eonet_id("newCategory2026"),
+            EventCategory::Other
+        );
+        assert_eq!(
+            EventCategory::from_eonet_id("Wildfires"),
+            EventCategory::Other
+        );
     }
 
     #[test]
     fn event_category_is_case_sensitive() {
-        assert_ne!(EventCategory::from_eonet_id("Wildfires"), EventCategory::Wildfires);
-        assert_ne!(EventCategory::from_eonet_id("FLOODS"), EventCategory::Floods);
-        assert_ne!(EventCategory::from_eonet_id("SevereStorms"), EventCategory::SevereStorms);
+        assert_ne!(
+            EventCategory::from_eonet_id("Wildfires"),
+            EventCategory::Wildfires
+        );
+        assert_ne!(
+            EventCategory::from_eonet_id("FLOODS"),
+            EventCategory::Floods
+        );
+        assert_ne!(
+            EventCategory::from_eonet_id("SevereStorms"),
+            EventCategory::SevereStorms
+        );
     }
 
     fn sample_event() -> NaturalEvent {
@@ -94,7 +130,10 @@ mod tests {
         assert!((decoded.lat - 34.05).abs() < f64::EPSILON);
         assert!((decoded.lon - (-118.24)).abs() < f64::EPSILON);
         assert_eq!(decoded.date, "2026-02-28T12:00:00Z");
-        assert_eq!(decoded.source_url.as_deref(), Some("https://example.com/event/1234"));
+        assert_eq!(
+            decoded.source_url.as_deref(),
+            Some("https://example.com/event/1234")
+        );
     }
 
     #[test]
@@ -167,6 +206,10 @@ mod tests {
         assert_eq!(set.len(), 7);
 
         set.insert(EventCategory::Wildfires);
-        assert_eq!(set.len(), 7, "duplicate insert should not increase set size");
+        assert_eq!(
+            set.len(),
+            7,
+            "duplicate insert should not increase set size"
+        );
     }
 }
