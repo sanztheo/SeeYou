@@ -9,6 +9,7 @@ import type { Earthquake } from "../../types/seismic";
 import type { Vessel } from "../../types/maritime";
 import {
   geocodeSearch,
+  geocodeFlyToAltitude,
   type GeocodeResult,
 } from "../../services/geocodeService";
 
@@ -293,11 +294,15 @@ export function SearchBar({
     ],
   );
 
-  const selectCity = useCallback(
+  const selectPlace = useCallback(
     (result: GeocodeResult) => {
       setOpen(false);
       setQuery("");
-      onFlyToCity?.(result.lat, result.lon, 50000);
+      onFlyToCity?.(
+        result.lat,
+        result.lon,
+        geocodeFlyToAltitude(result.place_type),
+      );
     },
     [onFlyToCity],
   );
@@ -323,7 +328,7 @@ export function SearchBar({
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          placeholder="query // aircraft, satellites, SIGINT, geo..."
+          placeholder="query // aircraft, satellites, address, place, geo..."
           className="w-full border border-emerald-900/40 bg-black/85 py-1.5 pl-8 pr-14 font-mono text-[11px] text-emerald-300 placeholder-emerald-800/50 shadow-[0_0_20px_rgba(34,197,94,0.06)] backdrop-blur-xl outline-none transition-all focus:border-emerald-500/40 focus:shadow-[0_0_24px_rgba(34,197,94,0.12)] caret-emerald-400"
         />
         <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 border border-emerald-900/30 bg-emerald-950/30 px-1.5 py-0.5 font-mono text-[9px] text-emerald-700/60">
@@ -334,11 +339,11 @@ export function SearchBar({
       {open && q && (hasResults || geoLoading) && (
         <div className="mt-0.5 max-h-72 overflow-y-auto border border-emerald-900/30 bg-black/95 shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-xl">
           {geoResults.length > 0 && (
-            <Group label="CITIES" count={geoResults.length}>
+            <Group label="PLACES & ADDRESSES" count={geoResults.length}>
               {geoResults.map((r, i) => (
                 <Row
                   key={`${r.lat}-${r.lon}-${i}`}
-                  onClick={() => selectCity(r)}
+                  onClick={() => selectPlace(r)}
                 >
                   <span className="text-violet-400 font-medium">{r.name}</span>
                   <span className="ml-auto text-zinc-600 text-[9px] truncate max-w-[160px]">
@@ -351,7 +356,7 @@ export function SearchBar({
           {geoLoading && geoResults.length === 0 && (
             <div className="px-3 py-2">
               <span className="font-mono text-[9px] text-zinc-600 animate-pulse">
-                Searching cities...
+                Searching places...
               </span>
             </div>
           )}

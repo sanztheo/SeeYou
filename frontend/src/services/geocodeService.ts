@@ -45,3 +45,39 @@ export async function geocodeSearch(
   cacheSet(key, data.results);
   return data.results;
 }
+
+export function geocodeFlyToAltitude(placeType: string): number {
+  const normalized = placeType.trim().toLowerCase();
+  if (
+    normalized === "house" ||
+    normalized === "building" ||
+    normalized === "residential" ||
+    normalized === "commercial" ||
+    normalized === "amenity"
+  ) {
+    return 1200;
+  }
+  if (
+    normalized === "road" ||
+    normalized === "street" ||
+    normalized === "pedestrian" ||
+    normalized === "service" ||
+    normalized === "path"
+  ) {
+    return 2500;
+  }
+  if (
+    normalized === "suburb" ||
+    normalized === "neighbourhood" ||
+    normalized === "quarter"
+  ) {
+    return 6000;
+  }
+  if (normalized === "village" || normalized === "hamlet" || normalized === "town") {
+    return 18000;
+  }
+  if (normalized === "country" || normalized === "state" || normalized === "province") {
+    return 120000;
+  }
+  return 50000;
+}

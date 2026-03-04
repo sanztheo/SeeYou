@@ -117,4 +117,17 @@ describe("geocodeService", () => {
     const result = await geocodeSearch("Unknown");
     expect(result).toEqual([]);
   });
+
+  it("uses close zoom altitude for address-like results", async () => {
+    const { geocodeFlyToAltitude } = await import("./geocodeService");
+    expect(geocodeFlyToAltitude("house")).toBe(1200);
+    expect(geocodeFlyToAltitude("building")).toBe(1200);
+    expect(geocodeFlyToAltitude("road")).toBe(2500);
+  });
+
+  it("uses wider zoom altitude for city-like results", async () => {
+    const { geocodeFlyToAltitude } = await import("./geocodeService");
+    expect(geocodeFlyToAltitude("city")).toBe(50000);
+    expect(geocodeFlyToAltitude("country")).toBe(120000);
+  });
 });
