@@ -10,29 +10,8 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Deserialize)]
 struct AisResponse {
-    features: Vec<AisFeature>,
-}
-
-#[derive(Deserialize)]
-struct AisFeature {
-    mmsi: u64,
-    geometry: AisGeometry,
-    properties: AisProperties,
-}
-
-#[derive(Deserialize)]
-struct AisGeometry {
-    coordinates: Vec<f64>,
-}
-
-#[derive(Deserialize)]
-struct AisProperties {
-    mmsi: u64,
-    sog: Option<f64>,
-    cog: Option<f64>,
-    heading: Option<u16>,
-    #[serde(alias = "navStat")]
-    nav_stat: Option<u8>,
+    #[serde(default)]
+    features: Vec<serde_json::Value>,
 }
 
 fn nav_stat_type(code: u8) -> &'static str {
@@ -46,6 +25,26 @@ fn nav_stat_type(code: u8) -> &'static str {
         8 => "sailing",
         _ => "other",
     }
+}
+
+fn parse_f64ish(val: &serde_json::Value) -> Option<f64> {
+    match val {
+        serde_json::Value::Number(n) => n.as_f64(),
+        serde_json::Value::String(s) => s.trim().parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+fn parse_u64ish(val: &serde_json::Value) -> Option<u64> {
+    match val {
+        serde_json::Value::Number(n) => n.as_u64(),
+        serde_json::Value::String(s) => s.trim().parse::<u64>().ok(),
+        _ => None,
+    }
+}
+
+fn parse_u8ish(val: &serde_json::Value) -> Option<u8> {
+    parse_u64ish(val).and_then(|v| u8::try_from(v).ok())
 }
 
 pub async fn fetch_vessels(client: &reqwest::Client) -> anyhow::Result<Vec<Vessel>> {
@@ -68,25 +67,36 @@ pub async fn fetch_vessels(client: &reqwest::Client) -> anyhow::Result<Vec<Vesse
         .features
         .into_iter()
         .filter_map(|f| {
-            let coords = &f.geometry.coordinates;
+            let feature = f.as_object()?;
+            let geometry = feature.get("geometry")?.as_object()?;
+            let coords = geometry.get("coordinates")?.as_array()?;
+            let props = feature.get("properties")?.as_object()?;
+
             if coords.len() < 2 {
                 return None;
             }
+            let lon = parse_f64ish(&coords[0])?;
+            let lat = parse_f64ish(&coords[1])?;
+            let mmsi = props.get("mmsi").and_then(parse_u64ish)?;
+            let nav_stat = props
+                .get("navStat")
+                .or_else(|| props.get("nav_stat"))
+                .and_then(parse_u8ish);
+            let speed_knots = props.get("sog").and_then(parse_f64ish);
+            let heading = props
+                .get("heading")
+                .and_then(parse_f64ish)
+                .or_else(|| props.get("cog").and_then(parse_f64ish));
 
             Some(Vessel {
-                mmsi: f.properties.mmsi.to_string(),
+                mmsi: mmsi.to_string(),
                 name: None,
                 imo: None,
-                vessel_type: f
-                    .properties
-                    .nav_stat
-                    .map(nav_stat_type)
-                    .unwrap_or("unknown")
-                    .to_string(),
-                lon: coords[0],
-                lat: coords[1],
-                speed_knots: f.properties.sog,
-                heading: f.properties.heading.map(|h| h as f64).or(f.properties.cog),
+                vessel_type: nav_stat.map(nav_stat_type).unwrap_or("unknown").to_string(),
+                lon,
+                lat,
+                speed_knots,
+                heading,
                 destination: None,
                 flag: None,
                 is_sanctioned: false,

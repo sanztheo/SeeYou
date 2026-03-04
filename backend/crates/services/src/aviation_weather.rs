@@ -14,22 +14,24 @@ const STATUTE_MILES_TO_METERS: f64 = 1609.34;
 struct ApiMetar {
     #[serde(rename = "icaoId")]
     icao_id: String,
-    lat: f64,
-    lon: f64,
     #[serde(default)]
-    temp: Option<f64>,
+    lat: Option<f64>,
     #[serde(default)]
-    dewp: Option<f64>,
+    lon: Option<f64>,
+    #[serde(default)]
+    temp: Option<serde_json::Value>,
+    #[serde(default)]
+    dewp: Option<serde_json::Value>,
     #[serde(default)]
     wdir: Option<serde_json::Value>,
     #[serde(default)]
-    wspd: Option<u16>,
+    wspd: Option<serde_json::Value>,
     #[serde(default)]
-    wgst: Option<u16>,
+    wgst: Option<serde_json::Value>,
     #[serde(default)]
-    visib: Option<f64>,
+    visib: Option<serde_json::Value>,
     #[serde(default)]
-    ceil: Option<u32>,
+    ceil: Option<serde_json::Value>,
     #[serde(default)]
     fltcat: Option<String>,
     #[serde(default, rename = "rawOb")]
@@ -40,6 +42,66 @@ fn parse_wind_dir(val: &serde_json::Value) -> Option<u16> {
     match val {
         serde_json::Value::Number(n) => n.as_u64().map(|v| v as u16),
         serde_json::Value::String(s) => s.parse::<u16>().ok(),
+        _ => None,
+    }
+}
+
+fn parse_f64ish(val: &serde_json::Value) -> Option<f64> {
+    match val {
+        serde_json::Value::Number(n) => n.as_f64(),
+        serde_json::Value::String(s) => s.trim().parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+fn parse_u16ish(val: &serde_json::Value) -> Option<u16> {
+    match val {
+        serde_json::Value::Number(n) => n.as_u64().and_then(|v| u16::try_from(v).ok()),
+        serde_json::Value::String(s) => s.trim().parse::<u16>().ok(),
+        _ => None,
+    }
+}
+
+fn parse_u32ish(val: &serde_json::Value) -> Option<u32> {
+    match val {
+        serde_json::Value::Number(n) => n.as_u64().and_then(|v| u32::try_from(v).ok()),
+        serde_json::Value::String(s) => s.trim().parse::<u32>().ok(),
+        _ => None,
+    }
+}
+
+fn parse_fraction(text: &str) -> Option<f64> {
+    let (num, den) = text.split_once('/')?;
+    let num = num.trim().parse::<f64>().ok()?;
+    let den = den.trim().parse::<f64>().ok()?;
+    if den == 0.0 {
+        return None;
+    }
+    Some(num / den)
+}
+
+fn parse_visibility_miles(text: &str) -> Option<f64> {
+    let cleaned = text.trim().trim_end_matches('+');
+    if cleaned.is_empty() {
+        return None;
+    }
+    if let Ok(v) = cleaned.parse::<f64>() {
+        return Some(v);
+    }
+    if cleaned.contains('/') {
+        if let Some((whole, frac)) = cleaned.split_once(' ') {
+            let whole = whole.trim().parse::<f64>().ok()?;
+            return Some(whole + parse_fraction(frac)?);
+        }
+        return parse_fraction(cleaned);
+    }
+    None
+}
+
+fn parse_visibility(val: &serde_json::Value) -> Option<f64> {
+    match val {
+        serde_json::Value::Number(n) => n.as_f64(),
+        serde_json::Value::String(s) => parse_visibility_miles(s),
         _ => None,
     }
 }
@@ -59,20 +121,31 @@ pub async fn fetch_metar_stations(client: &reqwest::Client) -> anyhow::Result<Ve
 
     let stations = raw
         .into_iter()
-        .filter(|m| !m.icao_id.is_empty())
-        .map(|m| MetarStation {
-            station_id: m.icao_id,
-            lat: m.lat,
-            lon: m.lon,
-            temp_c: m.temp,
-            dewpoint_c: m.dewp,
-            wind_dir_deg: m.wdir.as_ref().and_then(parse_wind_dir),
-            wind_speed_kt: m.wspd,
-            wind_gust_kt: m.wgst,
-            visibility_m: m.visib.map(|v| v * STATUTE_MILES_TO_METERS),
-            ceiling_ft: m.ceil.map(|c| c * 100),
-            flight_category: m.fltcat.unwrap_or_else(|| "UNK".to_string()),
-            raw_metar: m.raw_ob.unwrap_or_default(),
+        .filter_map(|m| {
+            if m.icao_id.is_empty() {
+                return None;
+            }
+            let lat = m.lat?;
+            let lon = m.lon?;
+
+            Some(MetarStation {
+                station_id: m.icao_id,
+                lat,
+                lon,
+                temp_c: m.temp.as_ref().and_then(parse_f64ish),
+                dewpoint_c: m.dewp.as_ref().and_then(parse_f64ish),
+                wind_dir_deg: m.wdir.as_ref().and_then(parse_wind_dir),
+                wind_speed_kt: m.wspd.as_ref().and_then(parse_u16ish),
+                wind_gust_kt: m.wgst.as_ref().and_then(parse_u16ish),
+                visibility_m: m
+                    .visib
+                    .as_ref()
+                    .and_then(parse_visibility)
+                    .map(|v| v * STATUTE_MILES_TO_METERS),
+                ceiling_ft: m.ceil.as_ref().and_then(parse_u32ish).map(|c| c * 100),
+                flight_category: m.fltcat.unwrap_or_else(|| "UNK".to_string()),
+                raw_metar: m.raw_ob.unwrap_or_default(),
+            })
         })
         .collect();
 
@@ -139,6 +212,18 @@ mod tests {
     }
 
     #[test]
+    fn parse_visibility_plus_suffix() {
+        let val = serde_json::json!("6+");
+        assert_eq!(parse_visibility(&val), Some(6.0));
+    }
+
+    #[test]
+    fn parse_visibility_fraction() {
+        let val = serde_json::json!("1 1/2");
+        assert_eq!(parse_visibility(&val), Some(1.5));
+    }
+
+    #[test]
     fn api_response_full_fields() {
         let json = r#"[{
             "icaoId": "KJFK",
@@ -158,12 +243,12 @@ mod tests {
         assert_eq!(parsed.len(), 1);
         let m = &parsed[0];
         assert_eq!(m.icao_id, "KJFK");
-        assert_eq!(m.temp, Some(15.0));
-        assert_eq!(m.dewp, Some(10.0));
-        assert_eq!(m.wspd, Some(10));
-        assert_eq!(m.wgst, Some(20));
-        assert!((m.visib.unwrap() - 10.0).abs() < 0.01);
-        assert_eq!(m.ceil, Some(50));
+        assert_eq!(m.temp.as_ref().and_then(parse_f64ish), Some(15.0));
+        assert_eq!(m.dewp.as_ref().and_then(parse_f64ish), Some(10.0));
+        assert_eq!(m.wspd.as_ref().and_then(parse_u16ish), Some(10));
+        assert_eq!(m.wgst.as_ref().and_then(parse_u16ish), Some(20));
+        assert_eq!(m.visib.as_ref().and_then(parse_visibility), Some(10.0));
+        assert_eq!(m.ceil.as_ref().and_then(parse_u32ish), Some(50));
         assert_eq!(m.fltcat.as_deref(), Some("VFR"));
     }
 
@@ -196,13 +281,13 @@ mod tests {
         let parsed: Vec<ApiMetar> = serde_json::from_str(json).unwrap();
         let m = &parsed[0];
         assert_eq!(m.icao_id, "KXYZ");
-        assert_eq!(m.temp, None);
-        assert_eq!(m.dewp, None);
+        assert_eq!(m.temp.as_ref().and_then(parse_f64ish), None);
+        assert_eq!(m.dewp.as_ref().and_then(parse_f64ish), None);
         assert_eq!(m.wdir, None);
-        assert_eq!(m.wspd, None);
-        assert_eq!(m.wgst, None);
-        assert_eq!(m.visib, None);
-        assert_eq!(m.ceil, None);
+        assert_eq!(m.wspd.as_ref().and_then(parse_u16ish), None);
+        assert_eq!(m.wgst.as_ref().and_then(parse_u16ish), None);
+        assert_eq!(m.visib.as_ref().and_then(parse_visibility), None);
+        assert_eq!(m.ceil.as_ref().and_then(parse_u32ish), None);
     }
 
     #[test]
@@ -226,15 +311,19 @@ mod tests {
             .filter(|m| !m.icao_id.is_empty())
             .map(|m| MetarStation {
                 station_id: m.icao_id,
-                lat: m.lat,
-                lon: m.lon,
-                temp_c: m.temp,
-                dewpoint_c: m.dewp,
+                lat: m.lat.unwrap_or_default(),
+                lon: m.lon.unwrap_or_default(),
+                temp_c: m.temp.as_ref().and_then(parse_f64ish),
+                dewpoint_c: m.dewp.as_ref().and_then(parse_f64ish),
                 wind_dir_deg: m.wdir.as_ref().and_then(parse_wind_dir),
-                wind_speed_kt: m.wspd,
-                wind_gust_kt: m.wgst,
-                visibility_m: m.visib.map(|v| v * STATUTE_MILES_TO_METERS),
-                ceiling_ft: m.ceil.map(|c| c * 100),
+                wind_speed_kt: m.wspd.as_ref().and_then(parse_u16ish),
+                wind_gust_kt: m.wgst.as_ref().and_then(parse_u16ish),
+                visibility_m: m
+                    .visib
+                    .as_ref()
+                    .and_then(parse_visibility)
+                    .map(|v| v * STATUTE_MILES_TO_METERS),
+                ceiling_ft: m.ceil.as_ref().and_then(parse_u32ish).map(|c| c * 100),
                 flight_category: m.fltcat.unwrap_or_else(|| "UNK".to_string()),
                 raw_metar: m.raw_ob.unwrap_or_default(),
             })
@@ -250,5 +339,43 @@ mod tests {
         let m = &parsed[0];
         let category = m.fltcat.clone().unwrap_or_else(|| "UNK".to_string());
         assert_eq!(category, "UNK");
+    }
+
+    #[test]
+    fn missing_lat_lon_filtered_out() {
+        let json = r#"[
+            {"icaoId": "KNO1", "lat": null, "lon": -73.0},
+            {"icaoId": "KNO2", "lat": 40.0, "lon": null},
+            {"icaoId": "KOK", "lat": 40.0, "lon": -73.0}
+        ]"#;
+        let parsed: Vec<ApiMetar> = serde_json::from_str(json).unwrap();
+        let stations: Vec<MetarStation> = parsed
+            .into_iter()
+            .filter_map(|m| {
+                if m.icao_id.is_empty() {
+                    return None;
+                }
+                Some(MetarStation {
+                    station_id: m.icao_id,
+                    lat: m.lat?,
+                    lon: m.lon?,
+                    temp_c: m.temp.as_ref().and_then(parse_f64ish),
+                    dewpoint_c: m.dewp.as_ref().and_then(parse_f64ish),
+                    wind_dir_deg: m.wdir.as_ref().and_then(parse_wind_dir),
+                    wind_speed_kt: m.wspd.as_ref().and_then(parse_u16ish),
+                    wind_gust_kt: m.wgst.as_ref().and_then(parse_u16ish),
+                    visibility_m: m
+                        .visib
+                        .as_ref()
+                        .and_then(parse_visibility)
+                        .map(|v| v * STATUTE_MILES_TO_METERS),
+                    ceiling_ft: m.ceil.as_ref().and_then(parse_u32ish).map(|c| c * 100),
+                    flight_category: m.fltcat.unwrap_or_else(|| "UNK".to_string()),
+                    raw_metar: m.raw_ob.unwrap_or_default(),
+                })
+            })
+            .collect();
+        assert_eq!(stations.len(), 1);
+        assert_eq!(stations[0].station_id, "KOK");
     }
 }

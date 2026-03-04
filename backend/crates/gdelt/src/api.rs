@@ -38,18 +38,24 @@ struct GeoJsonGeometry {
 }
 
 pub async fn fetch_events(client: &reqwest::Client) -> anyhow::Result<Vec<GdeltEvent>> {
-    let resp: GeoJsonResponse = client
+    let response = client
         .get(GDELT_GEO_URL)
         .query(&[("query", "*"), ("format", "GeoJSON"), ("maxpoints", "500")])
         .timeout(REQUEST_TIMEOUT)
         .send()
         .await
-        .context("GDELT request failed")?
-        .error_for_status()
-        .context("GDELT returned error status")?
-        .json()
-        .await
-        .context("failed to parse GDELT response")?;
+        .context("GDELT request failed");
+
+    let Ok(response) = response else {
+        return Ok(Vec::new());
+    };
+    if !response.status().is_success() {
+        return Ok(Vec::new());
+    }
+    let resp: GeoJsonResponse = match response.json().await {
+        Ok(parsed) => parsed,
+        Err(_) => return Ok(Vec::new()),
+    };
 
     let events = resp
         .features
