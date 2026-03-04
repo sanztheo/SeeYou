@@ -11,5 +11,22 @@ services:
       timeout: 5s
       retries: 3
 
+  postgres:
+    image: pgvector/pgvector:pg17
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: seeyou
+      POSTGRES_USER: seeyou
+      POSTGRES_PASSWORD: seeyou_dev
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seeyou -d seeyou"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   redis-data:
+  pgdata:

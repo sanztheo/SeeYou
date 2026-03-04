@@ -16,3 +16,4 @@ futures-util.workspace = true
 cache = { path = "../cache" }
 ws = { path = "../ws" }
 prediction = { path = "../prediction" }
+db = { path = "../db" }

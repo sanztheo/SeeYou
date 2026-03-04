@@ -10,7 +10,10 @@ serde_json.workspace = true
 tracing.workspace = true
 reqwest.workspace = true
 anyhow.workspace = true
+chrono.workspace = true
+sha1 = "0.10"
 cache = { path = "../cache" }
+db = { path = "../db" }
 cables = { path = "../cables" }
 cameras = { path = "../cameras" }
 cyber = { path = "../cyber" }
