@@ -1,0 +1,2105 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "north-america",
+        "name": "North America",
+        "zone_type": "region"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -170,
+              15
+            ],
+            [
+              -170,
+              75
+            ],
+            [
+              -50,
+              75
+            ],
+            [
+              -50,
+              15
+            ],
+            [
+              -170,
+              15
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "south-america",
+        "name": "South America",
+        "zone_type": "region"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -82,
+              -57
+            ],
+            [
+              -82,
+              13
+            ],
+            [
+              -34,
+              13
+            ],
+            [
+              -34,
+              -57
+            ],
+            [
+              -82,
+              -57
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "europe",
+        "name": "Europe",
+        "zone_type": "region"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -12,
+              34
+            ],
+            [
+              -12,
+              72
+            ],
+            [
+              40,
+              72
+            ],
+            [
+              40,
+              34
+            ],
+            [
+              -12,
+              34
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "africa",
+        "name": "Africa",
+        "zone_type": "region"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -20,
+              -35
+            ],
+            [
+              -20,
+              38
+            ],
+            [
+              52,
+              38
+            ],
+            [
+              52,
+              -35
+            ],
+            [
+              -20,
+              -35
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "middle-east",
+        "name": "Middle East",
+        "zone_type": "region"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              25,
+              12
+            ],
+            [
+              25,
+              42
+            ],
+            [
+              64,
+              42
+            ],
+            [
+              64,
+              12
+            ],
+            [
+              25,
+              12
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "asia-pacific",
+        "name": "Asia Pacific",
+        "zone_type": "region"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              64,
+              -12
+            ],
+            [
+              64,
+              60
+            ],
+            [
+              180,
+              60
+            ],
+            [
+              180,
+              -12
+            ],
+            [
+              64,
+              -12
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "australia",
+        "name": "Australia",
+        "zone_type": "region"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              111,
+              -45
+            ],
+            [
+              111,
+              -10
+            ],
+            [
+              156,
+              -10
+            ],
+            [
+              156,
+              -45
+            ],
+            [
+              111,
+              -45
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "arctic",
+        "name": "Arctic",
+        "zone_type": "region"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -180,
+              66
+            ],
+            [
+              -180,
+              90
+            ],
+            [
+              180,
+              90
+            ],
+            [
+              180,
+              66
+            ],
+            [
+              -180,
+              66
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-paris",
+        "name": "Paris",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              2.0021999999999998,
+              48.6066
+            ],
+            [
+              2.0021999999999998,
+              49.1066
+            ],
+            [
+              2.7022,
+              49.1066
+            ],
+            [
+              2.7022,
+              48.6066
+            ],
+            [
+              2.0021999999999998,
+              48.6066
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-london",
+        "name": "London",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -0.47759999999999997,
+              51.2572
+            ],
+            [
+              -0.47759999999999997,
+              51.7572
+            ],
+            [
+              0.2224,
+              51.7572
+            ],
+            [
+              0.2224,
+              51.2572
+            ],
+            [
+              -0.47759999999999997,
+              51.2572
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-new-york",
+        "name": "New York",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -74.356,
+              40.4628
+            ],
+            [
+              -74.356,
+              40.9628
+            ],
+            [
+              -73.656,
+              40.9628
+            ],
+            [
+              -73.656,
+              40.4628
+            ],
+            [
+              -74.356,
+              40.4628
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-los-angeles",
+        "name": "Los Angeles",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -118.5937,
+              33.8022
+            ],
+            [
+              -118.5937,
+              34.3022
+            ],
+            [
+              -117.89370000000001,
+              34.3022
+            ],
+            [
+              -117.89370000000001,
+              33.8022
+            ],
+            [
+              -118.5937,
+              33.8022
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-chicago",
+        "name": "Chicago",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -87.9798,
+              41.6281
+            ],
+            [
+              -87.9798,
+              42.1281
+            ],
+            [
+              -87.27980000000001,
+              42.1281
+            ],
+            [
+              -87.27980000000001,
+              41.6281
+            ],
+            [
+              -87.9798,
+              41.6281
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-toronto",
+        "name": "Toronto",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -79.7332,
+              43.4032
+            ],
+            [
+              -79.7332,
+              43.9032
+            ],
+            [
+              -79.03320000000001,
+              43.9032
+            ],
+            [
+              -79.03320000000001,
+              43.4032
+            ],
+            [
+              -79.7332,
+              43.4032
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-mexico-city",
+        "name": "Mexico City",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -99.4832,
+              19.1826
+            ],
+            [
+              -99.4832,
+              19.6826
+            ],
+            [
+              -98.78320000000001,
+              19.6826
+            ],
+            [
+              -98.78320000000001,
+              19.1826
+            ],
+            [
+              -99.4832,
+              19.1826
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-sao-paulo",
+        "name": "Sao Paulo",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -46.9833,
+              -23.8005
+            ],
+            [
+              -46.9833,
+              -23.3005
+            ],
+            [
+              -46.2833,
+              -23.3005
+            ],
+            [
+              -46.2833,
+              -23.8005
+            ],
+            [
+              -46.9833,
+              -23.8005
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-buenos-aires",
+        "name": "Buenos Aires",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -58.7316,
+              -34.8537
+            ],
+            [
+              -58.7316,
+              -34.3537
+            ],
+            [
+              -58.0316,
+              -34.3537
+            ],
+            [
+              -58.0316,
+              -34.8537
+            ],
+            [
+              -58.7316,
+              -34.8537
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-bogota",
+        "name": "Bogota",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -74.4221,
+              4.461
+            ],
+            [
+              -74.4221,
+              4.961
+            ],
+            [
+              -73.72210000000001,
+              4.961
+            ],
+            [
+              -73.72210000000001,
+              4.461
+            ],
+            [
+              -74.4221,
+              4.461
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-berlin",
+        "name": "Berlin",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              13.055,
+              52.27
+            ],
+            [
+              13.055,
+              52.77
+            ],
+            [
+              13.754999999999999,
+              52.77
+            ],
+            [
+              13.754999999999999,
+              52.27
+            ],
+            [
+              13.055,
+              52.27
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-madrid",
+        "name": "Madrid",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -4.0538,
+              40.1668
+            ],
+            [
+              -4.0538,
+              40.6668
+            ],
+            [
+              -3.3538,
+              40.6668
+            ],
+            [
+              -3.3538,
+              40.1668
+            ],
+            [
+              -4.0538,
+              40.1668
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-rome",
+        "name": "Rome",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              12.1464,
+              41.6528
+            ],
+            [
+              12.1464,
+              42.1528
+            ],
+            [
+              12.8464,
+              42.1528
+            ],
+            [
+              12.8464,
+              41.6528
+            ],
+            [
+              12.1464,
+              41.6528
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-istanbul",
+        "name": "Istanbul",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              28.6284,
+              40.7582
+            ],
+            [
+              28.6284,
+              41.2582
+            ],
+            [
+              29.328400000000002,
+              41.2582
+            ],
+            [
+              29.328400000000002,
+              40.7582
+            ],
+            [
+              28.6284,
+              40.7582
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-moscow",
+        "name": "Moscow",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              37.2673,
+              55.5058
+            ],
+            [
+              37.2673,
+              56.0058
+            ],
+            [
+              37.9673,
+              56.0058
+            ],
+            [
+              37.9673,
+              55.5058
+            ],
+            [
+              37.2673,
+              55.5058
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-cairo",
+        "name": "Cairo",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              30.8857,
+              29.7944
+            ],
+            [
+              30.8857,
+              30.2944
+            ],
+            [
+              31.585700000000003,
+              30.2944
+            ],
+            [
+              31.585700000000003,
+              29.7944
+            ],
+            [
+              30.8857,
+              29.7944
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-lagos",
+        "name": "Lagos",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              3.0292,
+              6.2744
+            ],
+            [
+              3.0292,
+              6.7744
+            ],
+            [
+              3.7292,
+              6.7744
+            ],
+            [
+              3.7292,
+              6.2744
+            ],
+            [
+              3.0292,
+              6.2744
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-johannesburg",
+        "name": "Johannesburg",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              27.6973,
+              -26.4541
+            ],
+            [
+              27.6973,
+              -25.9541
+            ],
+            [
+              28.3973,
+              -25.9541
+            ],
+            [
+              28.3973,
+              -26.4541
+            ],
+            [
+              27.6973,
+              -26.4541
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-dubai",
+        "name": "Dubai",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              54.9208,
+              24.9548
+            ],
+            [
+              54.9208,
+              25.4548
+            ],
+            [
+              55.6208,
+              25.4548
+            ],
+            [
+              55.6208,
+              24.9548
+            ],
+            [
+              54.9208,
+              24.9548
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-riyadh",
+        "name": "Riyadh",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              46.3253,
+              24.4636
+            ],
+            [
+              46.3253,
+              24.9636
+            ],
+            [
+              47.0253,
+              24.9636
+            ],
+            [
+              47.0253,
+              24.4636
+            ],
+            [
+              46.3253,
+              24.4636
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-tehran",
+        "name": "Tehran",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              51.039,
+              35.4392
+            ],
+            [
+              51.039,
+              35.9392
+            ],
+            [
+              51.739000000000004,
+              35.9392
+            ],
+            [
+              51.739000000000004,
+              35.4392
+            ],
+            [
+              51.039,
+              35.4392
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-delhi",
+        "name": "Delhi",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              76.75250000000001,
+              28.4541
+            ],
+            [
+              76.75250000000001,
+              28.9541
+            ],
+            [
+              77.4525,
+              28.9541
+            ],
+            [
+              77.4525,
+              28.4541
+            ],
+            [
+              76.75250000000001,
+              28.4541
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-mumbai",
+        "name": "Mumbai",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              72.52770000000001,
+              18.826
+            ],
+            [
+              72.52770000000001,
+              19.326
+            ],
+            [
+              73.2277,
+              19.326
+            ],
+            [
+              73.2277,
+              18.826
+            ],
+            [
+              72.52770000000001,
+              18.826
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-singapore",
+        "name": "Singapore",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              103.4698,
+              1.1021
+            ],
+            [
+              103.4698,
+              1.6021
+            ],
+            [
+              104.1698,
+              1.6021
+            ],
+            [
+              104.1698,
+              1.1021
+            ],
+            [
+              103.4698,
+              1.1021
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-bangkok",
+        "name": "Bangkok",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              100.15180000000001,
+              13.5063
+            ],
+            [
+              100.15180000000001,
+              14.0063
+            ],
+            [
+              100.8518,
+              14.0063
+            ],
+            [
+              100.8518,
+              13.5063
+            ],
+            [
+              100.15180000000001,
+              13.5063
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-hong-kong",
+        "name": "Hong Kong",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              113.8194,
+              22.0693
+            ],
+            [
+              113.8194,
+              22.5693
+            ],
+            [
+              114.51939999999999,
+              22.5693
+            ],
+            [
+              114.51939999999999,
+              22.0693
+            ],
+            [
+              113.8194,
+              22.0693
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-tokyo",
+        "name": "Tokyo",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              139.3417,
+              35.4395
+            ],
+            [
+              139.3417,
+              35.9395
+            ],
+            [
+              140.0417,
+              35.9395
+            ],
+            [
+              140.0417,
+              35.4395
+            ],
+            [
+              139.3417,
+              35.4395
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-seoul",
+        "name": "Seoul",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              126.628,
+              37.3165
+            ],
+            [
+              126.628,
+              37.8165
+            ],
+            [
+              127.32799999999999,
+              37.8165
+            ],
+            [
+              127.32799999999999,
+              37.3165
+            ],
+            [
+              126.628,
+              37.3165
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-sydney",
+        "name": "Sydney",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              150.85930000000002,
+              -34.1188
+            ],
+            [
+              150.85930000000002,
+              -33.6188
+            ],
+            [
+              151.5593,
+              -33.6188
+            ],
+            [
+              151.5593,
+              -34.1188
+            ],
+            [
+              150.85930000000002,
+              -34.1188
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-melbourne",
+        "name": "Melbourne",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              144.6131,
+              -38.0636
+            ],
+            [
+              144.6131,
+              -37.5636
+            ],
+            [
+              145.3131,
+              -37.5636
+            ],
+            [
+              145.3131,
+              -38.0636
+            ],
+            [
+              144.6131,
+              -38.0636
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-perth",
+        "name": "Perth",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              115.51050000000001,
+              -32.200500000000005
+            ],
+            [
+              115.51050000000001,
+              -31.7005
+            ],
+            [
+              116.2105,
+              -31.7005
+            ],
+            [
+              116.2105,
+              -32.200500000000005
+            ],
+            [
+              115.51050000000001,
+              -32.200500000000005
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-auckland",
+        "name": "Auckland",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              174.4133,
+              -37.0985
+            ],
+            [
+              174.4133,
+              -36.5985
+            ],
+            [
+              175.11329999999998,
+              -36.5985
+            ],
+            [
+              175.11329999999998,
+              -37.0985
+            ],
+            [
+              174.4133,
+              -37.0985
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-cdg",
+        "name": "Paris CDG",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              2.4299999999999997,
+              48.929700000000004
+            ],
+            [
+              2.4299999999999997,
+              49.0897
+            ],
+            [
+              2.67,
+              49.0897
+            ],
+            [
+              2.67,
+              48.929700000000004
+            ],
+            [
+              2.4299999999999997,
+              48.929700000000004
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-lhr",
+        "name": "London Heathrow",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -0.5743,
+              51.39
+            ],
+            [
+              -0.5743,
+              51.55
+            ],
+            [
+              -0.3343,
+              51.55
+            ],
+            [
+              -0.3343,
+              51.39
+            ],
+            [
+              -0.5743,
+              51.39
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-jfk",
+        "name": "New York JFK",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -73.8981,
+              40.5613
+            ],
+            [
+              -73.8981,
+              40.7213
+            ],
+            [
+              -73.65809999999999,
+              40.7213
+            ],
+            [
+              -73.65809999999999,
+              40.5613
+            ],
+            [
+              -73.8981,
+              40.5613
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-lax",
+        "name": "Los Angeles LAX",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -118.52850000000001,
+              33.8616
+            ],
+            [
+              -118.52850000000001,
+              34.0216
+            ],
+            [
+              -118.2885,
+              34.0216
+            ],
+            [
+              -118.2885,
+              33.8616
+            ],
+            [
+              -118.52850000000001,
+              33.8616
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-ord",
+        "name": "Chicago O'Hare",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -88.02730000000001,
+              41.894200000000005
+            ],
+            [
+              -88.02730000000001,
+              42.0542
+            ],
+            [
+              -87.7873,
+              42.0542
+            ],
+            [
+              -87.7873,
+              41.894200000000005
+            ],
+            [
+              -88.02730000000001,
+              41.894200000000005
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-yyz",
+        "name": "Toronto Pearson",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -79.7506,
+              43.5977
+            ],
+            [
+              -79.7506,
+              43.7577
+            ],
+            [
+              -79.5106,
+              43.7577
+            ],
+            [
+              -79.5106,
+              43.5977
+            ],
+            [
+              -79.7506,
+              43.5977
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-mex",
+        "name": "Mexico City MEX",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -99.19210000000001,
+              19.3561
+            ],
+            [
+              -99.19210000000001,
+              19.516099999999998
+            ],
+            [
+              -98.9521,
+              19.516099999999998
+            ],
+            [
+              -98.9521,
+              19.3561
+            ],
+            [
+              -99.19210000000001,
+              19.3561
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-gru",
+        "name": "Sao Paulo GRU",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -46.5931,
+              -23.5156
+            ],
+            [
+              -46.5931,
+              -23.355600000000003
+            ],
+            [
+              -46.353100000000005,
+              -23.355600000000003
+            ],
+            [
+              -46.353100000000005,
+              -23.5156
+            ],
+            [
+              -46.5931,
+              -23.5156
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-eze",
+        "name": "Buenos Aires EZE",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -58.6558,
+              -34.9022
+            ],
+            [
+              -58.6558,
+              -34.742200000000004
+            ],
+            [
+              -58.415800000000004,
+              -34.742200000000004
+            ],
+            [
+              -58.415800000000004,
+              -34.9022
+            ],
+            [
+              -58.6558,
+              -34.9022
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-fra",
+        "name": "Frankfurt FRA",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              8.450600000000001,
+              49.9579
+            ],
+            [
+              8.450600000000001,
+              50.1179
+            ],
+            [
+              8.6906,
+              50.1179
+            ],
+            [
+              8.6906,
+              49.9579
+            ],
+            [
+              8.450600000000001,
+              49.9579
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-mad",
+        "name": "Madrid MAD",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -3.6876,
+              40.4183
+            ],
+            [
+              -3.6876,
+              40.5783
+            ],
+            [
+              -3.4476,
+              40.5783
+            ],
+            [
+              -3.4476,
+              40.4183
+            ],
+            [
+              -3.6876,
+              40.4183
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-fco",
+        "name": "Rome FCO",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              12.1308,
+              41.7203
+            ],
+            [
+              12.1308,
+              41.8803
+            ],
+            [
+              12.3708,
+              41.8803
+            ],
+            [
+              12.3708,
+              41.7203
+            ],
+            [
+              12.1308,
+              41.7203
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-ist",
+        "name": "Istanbul IST",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              28.631899999999998,
+              41.1953
+            ],
+            [
+              28.631899999999998,
+              41.3553
+            ],
+            [
+              28.8719,
+              41.3553
+            ],
+            [
+              28.8719,
+              41.1953
+            ],
+            [
+              28.631899999999998,
+              41.1953
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-dxb",
+        "name": "Dubai DXB",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              55.244400000000006,
+              25.1732
+            ],
+            [
+              55.244400000000006,
+              25.333199999999998
+            ],
+            [
+              55.4844,
+              25.333199999999998
+            ],
+            [
+              55.4844,
+              25.1732
+            ],
+            [
+              55.244400000000006,
+              25.1732
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-del",
+        "name": "Delhi DEL",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              76.9831,
+              28.476200000000002
+            ],
+            [
+              76.9831,
+              28.6362
+            ],
+            [
+              77.2231,
+              28.6362
+            ],
+            [
+              77.2231,
+              28.476200000000002
+            ],
+            [
+              76.9831,
+              28.476200000000002
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-bom",
+        "name": "Mumbai BOM",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              72.7479,
+              19.009600000000002
+            ],
+            [
+              72.7479,
+              19.1696
+            ],
+            [
+              72.98790000000001,
+              19.1696
+            ],
+            [
+              72.98790000000001,
+              19.009600000000002
+            ],
+            [
+              72.7479,
+              19.009600000000002
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-sin",
+        "name": "Singapore SIN",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              103.8715,
+              1.2844
+            ],
+            [
+              103.8715,
+              1.4444000000000001
+            ],
+            [
+              104.1115,
+              1.4444000000000001
+            ],
+            [
+              104.1115,
+              1.2844
+            ],
+            [
+              103.8715,
+              1.2844
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-hnd",
+        "name": "Tokyo Haneda",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              139.6598,
+              35.4694
+            ],
+            [
+              139.6598,
+              35.6294
+            ],
+            [
+              139.8998,
+              35.6294
+            ],
+            [
+              139.8998,
+              35.4694
+            ],
+            [
+              139.6598,
+              35.4694
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-icn",
+        "name": "Seoul ICN",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              126.3305,
+              37.3802
+            ],
+            [
+              126.3305,
+              37.5402
+            ],
+            [
+              126.57050000000001,
+              37.5402
+            ],
+            [
+              126.57050000000001,
+              37.3802
+            ],
+            [
+              126.3305,
+              37.3802
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "apt-syd",
+        "name": "Sydney SYD",
+        "zone_type": "airport"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              151.0572,
+              -34.0199
+            ],
+            [
+              151.0572,
+              -33.8599
+            ],
+            [
+              151.2972,
+              -33.8599
+            ],
+            [
+              151.2972,
+              -34.0199
+            ],
+            [
+              151.0572,
+              -34.0199
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
