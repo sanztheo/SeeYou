@@ -189,23 +189,11 @@ impl GraphBusConsumer {
     }
 
     pub(crate) fn resolve_location_zone_ids(&self, payload: &Value) -> Vec<String> {
-        let mut zone_ids = resolve_zone_ids(payload);
+        let zone_ids = resolve_zone_ids(payload);
 
         if let Some((lat, lon)) = extract_lat_lon(payload) {
             let matches = self.zone_lookup.lookup(lat, lon);
-            let contains_matches: Vec<String> = matches
-                .iter()
-                .filter(|m| m.contains)
-                .map(|m| m.zone_id.clone())
-                .collect();
-
-            if !contains_matches.is_empty() {
-                zone_ids.extend(contains_matches);
-            } else if let Some(nearest) = matches.first() {
-                if nearest.distance_m <= self.nearest_zone_max_distance_m {
-                    zone_ids.push(nearest.zone_id.clone());
-                }
-            }
+            return merge_location_zone_ids(zone_ids, matches, self.nearest_zone_max_distance_m);
         }
 
         dedup_zone_ids(zone_ids)
@@ -239,5 +227,88 @@ impl GraphBusConsumer {
             Some("consumer_graph"),
             Some(json!({ "ttl_seconds": self.flies_over_ttl_seconds })),
         )
+    }
+}
+
+fn merge_location_zone_ids(
+    mut zone_ids: Vec<String>,
+    matches: Vec<graph::zones::ZoneMatch>,
+    nearest_zone_max_distance_m: f64,
+) -> Vec<String> {
+    let contains_matches: Vec<String> = matches
+        .iter()
+        .filter(|m| m.contains)
+        .map(|m| m.zone_id.clone())
+        .collect();
+
+    if !contains_matches.is_empty() {
+        zone_ids.extend(contains_matches);
+    } else if let Some(nearest) = matches.first() {
+        if nearest.distance_m <= nearest_zone_max_distance_m {
+            zone_ids.push(nearest.zone_id.clone());
+        }
+    }
+
+    dedup_zone_ids(zone_ids)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::merge_location_zone_ids;
+    use graph::zones::ZoneMatch;
+
+    #[test]
+    fn merge_location_zone_ids_prefers_contains_matches() {
+        let zone_ids = vec!["known-zone".to_string()];
+        let matches = vec![
+            ZoneMatch {
+                zone_id: "paris".to_string(),
+                zone_type: Some("city".to_string()),
+                distance_m: 0.0,
+                contains: true,
+            },
+            ZoneMatch {
+                zone_id: "idf".to_string(),
+                zone_type: Some("region".to_string()),
+                distance_m: 0.0,
+                contains: true,
+            },
+        ];
+
+        let merged = merge_location_zone_ids(zone_ids, matches, 50_000.0);
+        assert_eq!(
+            merged,
+            vec![
+                "idf".to_string(),
+                "known-zone".to_string(),
+                "paris".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn merge_location_zone_ids_uses_nearest_within_threshold() {
+        let matches = vec![ZoneMatch {
+            zone_id: "closest".to_string(),
+            zone_type: Some("region".to_string()),
+            distance_m: 5_000.0,
+            contains: false,
+        }];
+
+        let merged = merge_location_zone_ids(Vec::new(), matches, 10_000.0);
+        assert_eq!(merged, vec!["closest".to_string()]);
+    }
+
+    #[test]
+    fn merge_location_zone_ids_ignores_nearest_outside_threshold() {
+        let matches = vec![ZoneMatch {
+            zone_id: "too-far".to_string(),
+            zone_type: Some("region".to_string()),
+            distance_m: 150_000.0,
+            contains: false,
+        }];
+
+        let merged = merge_location_zone_ids(Vec::new(), matches, 100_000.0);
+        assert!(merged.is_empty());
     }
 }
