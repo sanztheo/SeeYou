@@ -1,0 +1,28 @@
+[package]
+name = "consumer_redis"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+dotenvy.workspace = true
+bus = { path = "../bus" }
+cache = { path = "../cache" }
+services = { path = "../services" }
+cameras = { path = "../cameras" }
+weather = { path = "../weather" }
+satellites = { path = "../satellites" }
+events = { path = "../events" }
+ws = { path = "../ws" }
+cables = { path = "../cables" }
+cyber = { path = "../cyber" }
+fires = { path = "../fires" }
+gdelt = { path = "../gdelt" }
+maritime = { path = "../maritime" }
+rdkafka.workspace = true
+seismic = { path = "../seismic" }
+serde_json.workspace = true
+space_weather = { path = "../space_weather" }
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
