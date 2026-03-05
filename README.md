@@ -98,7 +98,7 @@ Infrastructure  Redis 7 · Docker Compose · WebSocket
 |------|---------|
 | Node.js | 20+ |
 | Rust | 1.75+ |
-| Docker | 24+ |
+| Docker | 24+ (optional, only for full local infra) |
 | Cesium Ion Token | Free — [sign up here](https://ion.cesium.com/) |
 
 ### Setup
@@ -111,18 +111,75 @@ cd SeeYou
 # Configure environment
 cp .env.example .env
 # Edit .env — add your Cesium Ion token
+```
 
-# Start Redis
-docker compose up -d
+### Run options
 
-# Start the backend (port 3001)
+#### Option A — Railway infra (no local Docker, recommended if your DB/Redis are on Railway)
+
+If your `.env` uses Railway services and **Redpanda is not publicly reachable**, set:
+
+```bash
+BUS_ENABLED=false
+```
+
+Then run only 2 terminals:
+
+```bash
+# Terminal 1: backend (port 3001)
 cd backend
-cargo run
+cargo run -p server
 
-# In another terminal — start the frontend (port 5173)
+# Terminal 2: frontend (port 5173)
 cd frontend
 npm install
 npm run dev
+```
+
+Do **not** run `consumer_redis` / `consumer_postgres` unless you have a reachable public broker (`REDPANDA_BROKERS_PUBLIC`).
+
+#### Option B — Full local bus stack (Docker + Redpanda consumers)
+
+```bash
+# Infra
+docker compose up -d redis postgres redpanda surrealdb
+
+# Terminal 1: backend
+cd backend
+cargo run -p server
+
+# Terminal 2: redis consumer
+cd backend
+cargo run -p consumer_redis
+
+# Terminal 3: postgres consumer
+cd backend
+cargo run -p consumer_postgres
+
+# Terminal 4: frontend
+cd frontend
+npm install
+npm run dev
+```
+
+Optional graph consumer:
+
+```bash
+cd backend
+cargo run -p consumer_graph
+```
+
+#### tmux helper (4 panes)
+
+```bash
+# Railway mode by default (no Docker, consumers auto-disabled if broker is internal only)
+./scripts/dev-tmux.sh
+
+# Force consumers
+RUN_CONSUMERS=1 ./scripts/dev-tmux.sh
+
+# Start local Docker infra first
+./scripts/dev-tmux.sh seeyou-dev --docker
 ```
 
 Open **http://localhost:5173**. The globe loads immediately. Live data streams in within seconds.

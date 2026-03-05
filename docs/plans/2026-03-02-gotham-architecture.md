@@ -117,13 +117,13 @@ Zone est l'entité pivot — tout est relié à une zone géographique.
 ```yaml
 services:
   postgres:
-    image: timescale/timescaledb-ha:pg16
+    image: pgvector/pgvector:pg17
     ports: ["5432:5432"]
     environment:
       POSTGRES_DB: seeyou
       POSTGRES_USER: seeyou
       POSTGRES_PASSWORD: seeyou_dev
-    volumes: [pgdata:/home/postgres/pgdata/data]
+    volumes: [pgdata:/var/lib/postgresql/data]
 
   redpanda:
     image: redpandadata/redpanda:latest
@@ -157,7 +157,7 @@ volumes:
 
 ```
 backend/crates/
-├── db/             # PostgreSQL + TimescaleDB + PostGIS
+├── db/             # PostgreSQL + pgvector (+ Timescale/PostGIS si disponibles)
 │   ├── migrations/
 │   ├── aircraft.rs
 │   ├── cameras.rs
@@ -295,18 +295,18 @@ frontend/src/
 
 Objectif : les données sont persistées dans Postgres en plus de Redis. Le live ne change pas.
 
-- [x] Ajouter Postgres (timescale/timescaledb-ha:pg16) au docker-compose
-- [x] Ajouter PostGIS : `CREATE EXTENSION postgis;`
-- [x] Ajouter TimescaleDB : `CREATE EXTENSION timescaledb;`
+- [x] Ajouter Postgres (pgvector/pgvector:pg17) au docker-compose
+- [x] Ajouter PostGIS : `CREATE EXTENSION postgis;` (si extension disponible)
+- [x] Ajouter TimescaleDB : `CREATE EXTENSION timescaledb;` (si extension disponible)
 - [x] Créer le crate `db/` dans le workspace avec sqlx
 - [x] Migration : table `aircraft_positions` (icao, callsign, lat, lon, altitude, speed, heading, timestamp)
-- [x] Migration : convertir `aircraft_positions` en TimescaleDB hypertable
-- [x] Migration : index PostGIS sur `aircraft_positions` (geometry point)
+- [x] Migration : convertir `aircraft_positions` en TimescaleDB hypertable (si extension disponible)
+- [x] Migration : index PostGIS sur `aircraft_positions` (geometry point, si extension disponible)
 - [x] Migration : table `cameras` (id, name, lat, lon, stream_type, source, is_online, last_seen)
 - [x] Migration : table `traffic_segments` (segment_id, road_name, lat, lon, speed_ratio, delay_min, severity, timestamp)
-- [x] Migration : convertir `traffic_segments` en TimescaleDB hypertable
+- [x] Migration : convertir `traffic_segments` en TimescaleDB hypertable (si extension disponible)
 - [x] Migration : table `weather_readings` (station_id, city, lat, lon, temp, wind, visibility, conditions, timestamp)
-- [x] Migration : convertir `weather_readings` en TimescaleDB hypertable
+- [x] Migration : convertir `weather_readings` en TimescaleDB hypertable (si extension disponible)
 - [x] Migration : table `events` (id, type, lat, lon, severity, description, timestamp)
 - [x] Implémenter `db::aircraft::insert_positions()` — batch INSERT
 - [x] Implémenter `db::cameras::upsert_camera()` — ON CONFLICT UPDATE
@@ -315,12 +315,12 @@ Objectif : les données sont persistées dans Postgres en plus de Redis. Le live
 - [x] Implémenter `db::events::insert_events()` — batch INSERT
 - [x] Ajouter `PgPool` à `AppState` dans le backend Axum
 - [x] Dual-write dans chaque service : écrire Redis ET Postgres
-- [x] Configurer TimescaleDB compression policy (> 7 jours)
-- [x] Configurer TimescaleDB retention policy (> 90 jours)
+- [x] Configurer TimescaleDB compression policy (> 7 jours, si extension disponible)
+- [x] Configurer TimescaleDB retention policy (> 90 jours, si extension disponible)
 - [x] Ajouter DATABASE_URL au .env.example
-- [ ] Test : le frontend marche exactement comme avant
-- [ ] Test : redémarrer le backend → données toujours dans Postgres
-- [ ] Test : `SELECT count(*) FROM aircraft_positions;` croît dans le temps
+- [x] Test : le frontend marche exactement comme avant (tests frontend + build OK)
+- [x] Test : redémarrer le backend → données toujours dans Postgres
+- [x] Test : `SELECT count(*) FROM aircraft_positions;` croît dans le temps
 
 Livrable : persistance complète, historique queryable en SQL, zéro régression live.
 
@@ -330,23 +330,25 @@ Livrable : persistance complète, historique queryable en SQL, zéro régression
 
 Objectif : les services publient dans Redpanda au lieu d'écrire directement dans Redis + Postgres. Découple producteurs et consommateurs.
 
-- [ ] Ajouter Redpanda au docker-compose
-- [ ] Créer le crate `bus/` dans le workspace avec rdkafka
-- [ ] Définir les topics dans `bus::topics` : aircraft.positions, traffic.events, cameras.status, weather.updates, satellites.tle, events.raw
-- [ ] Implémenter `bus::producer::publish()` — sérialise + publie dans un topic
-- [ ] Implémenter `bus::consumer::redis` — consume topic → Redis SET (hot path, priorité max)
-- [ ] Implémenter `bus::consumer::postgres` — consume topic → batch INSERT Postgres (async, peut prendre son temps)
-- [ ] Modifier le service `aircraft` : remplacer dual-write par `bus::producer::publish()`
-- [ ] Modifier le service `cameras` : idem
-- [ ] Modifier le service `traffic` : idem
-- [ ] Modifier le service `weather` : idem
-- [ ] Modifier le service `satellites` : idem
-- [ ] Modifier le service `events` : idem
-- [ ] Implémenter fallback : si Redpanda est down → écriture directe Redis (comme avant)
-- [ ] Consumer groups séparés : redis-consumer, postgres-consumer (indépendants)
-- [ ] Ajouter REDPANDA_URL au .env.example
-- [ ] Test : le frontend marche exactement comme avant
-- [ ] Test : arrêter Redpanda → fallback Redis fonctionne, live OK
+- [x] Ajouter Redpanda au docker-compose
+- [x] Créer le crate `bus/` dans le workspace avec rdkafka
+- [x] Définir les topics dans `bus::topics` : aircraft.positions, traffic.events, cameras.status, weather.updates, satellites.tle, events.raw
+- [x] Implémenter `bus::producer::publish()` — sérialise + publie dans un topic
+- [x] Implémenter `bus::consumer::redis` — consume topic → Redis SET (hot path, priorité max)
+- [x] Implémenter `bus::consumer::postgres` — consume topic → batch INSERT Postgres (async, peut prendre son temps)
+- [x] Modifier le service `aircraft` : remplacer dual-write par `bus::producer::publish()`
+- [x] Modifier le service `cameras` : idem
+- [x] Modifier le service `traffic` : idem
+- [x] Modifier le service `weather` : idem
+- [x] Modifier le service `satellites` : idem
+- [x] Modifier le service `events` : idem
+- [x] Implémenter fallback : si Redpanda est down → écriture directe Redis (comme avant)
+- [x] Consumer groups séparés : redis-consumer, postgres-consumer (indépendants)
+- [x] Ajouter REDPANDA_URL au .env.example
+- [x] (2026-03-05) Ajouter `REDPANDA_BROKERS_PUBLIC` / `REDPANDA_BROKERS_INTERNAL` + fallback auto pour éviter les erreurs `*.railway.internal` hors réseau Railway
+- [x] (2026-03-05) `GET /health` redpanda: statut réel `connected` vs `configured` (plus de faux positif “enabled”)
+- [x] Test : le frontend marche exactement comme avant
+- [x] Test : arrêter Redpanda → fallback Redis fonctionne, live OK
 - [ ] Test : relancer Redpanda → les consumers reprennent sans perte
 
 Livrable : architecture event-driven, producteurs découplés des consommateurs.
@@ -357,18 +359,22 @@ Livrable : architecture event-driven, producteurs découplés des consommateurs.
 
 Objectif : SurrealDB tourne, le schéma d'ontologie est en place, prêt à être alimenté.
 
-- [ ] Ajouter SurrealDB au docker-compose
-- [ ] Créer le crate `graph/` dans le workspace avec surrealdb-rs
-- [ ] Implémenter `graph::ontology::migrate()` — crée toutes les tables et champs
-- [ ] DEFINE TABLE aircraft, camera, weather, traffic_segment, satellite, event, zone, alert
-- [ ] DEFINE les champs typés pour chaque table (cf. ontologie)
-- [ ] DEFINE TABLE pour chaque relation : flies_over, monitored_by, affected_by, located_in, covers, passes_over, observes, triggered, involves
-- [ ] Définir le dataset de Zones initiales (grandes villes, aéroports majeurs, régions)
-- [ ] Implémenter `graph::entities::upsert()` — générique par type d'entité
-- [ ] Implémenter `graph::relations::link()` — créer une relation entre deux entités
-- [ ] Implémenter `graph::queries::get_entity()` — entité + ses relations directes
-- [ ] Implémenter `graph::queries::get_neighbors()` — sous-graphe à N niveaux de profondeur
-- [ ] Ajouter SURREALDB_URL au .env.example
+- [x] Ajouter SurrealDB au docker-compose
+- [x] Créer le crate `graph/` dans le workspace avec surrealdb-rs
+- [x] Implémenter `graph::ontology::migrate()` — crée toutes les tables et champs
+- [x] DEFINE TABLE aircraft, camera, weather, traffic_segment, satellite, event, zone, alert
+- [x] DEFINE les champs typés pour chaque table (cf. ontologie)
+- [x] DEFINE TABLE pour chaque relation : flies_over, monitored_by, affected_by, located_in, covers, passes_over, observes, triggered, involves
+- [x] Définir le dataset de Zones initiales (grandes villes, aéroports majeurs, régions)
+- [x] Étendre l’ontologie (câbles, landing points, seismic, fire, gdelt, maritime, cyber, space weather, military, nuclear)
+- [x] Stocker un dataset global large des zones dans le repo (`backend/data/zones/global_zones.geojson`)
+- [x] Implémenter `graph::entities::upsert()` — générique par type d'entité
+- [x] Implémenter `graph::relations::link()` — créer une relation entre deux entités
+- [x] Implémenter `graph::queries::get_entity()` — entité + ses relations directes
+- [x] Implémenter `graph::queries::get_neighbors()` — sous-graphe à N niveaux de profondeur
+- [x] Ajouter SURREALDB_URL au .env.example
+- [x] (2026-03-05) Compatibilité `SURREALDB_URL` ws/http (`ws://.../rpc` normalisé vers endpoint HTTP pour le client graph et `/health`)
+- [x] (2026-03-05) `GET /health` SurrealDB borné avec timeout applicatif court (2s)
 - [ ] Test : connexion SurrealDB OK au démarrage du backend
 - [ ] Test : `graph::ontology::migrate()` crée le schéma sans erreur
 - [ ] Test : insert + query d'une entité avec relations

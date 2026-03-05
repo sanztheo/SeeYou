@@ -1,0 +1,7 @@
+start=2026-03-05T11:02:12Z
+pid=66046
+health_curl_exit=0
+health_payload={"status":"ok","redis":"disconnected","postgres":"disabled","redpanda":"enabled","surrealdb":"disconnected"}
+alive_at_kill=1
+run_exit_code=143
+end=2026-03-05T11:02:47Z
