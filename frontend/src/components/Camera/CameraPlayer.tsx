@@ -10,6 +10,9 @@ const ZOOM_STEP = 0.5;
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 5;
 
+// Session-level cache of HLS URLs that returned 404 — prevents repeated attempts
+const deadHlsStreams = new Set<string>();
+
 interface CameraPlayerProps {
   camera: Camera | null;
   viewInfo: CameraViewInfo | null;
@@ -77,32 +80,9 @@ export function CameraPlayer({
     setLastSync(Date.now());
   }, [camera, buildSrc]);
 
-  const detectCachedDeadStream = useCallback(async (cam: Camera) => {
-    if (cam.stream_type !== "ImageRefresh") return;
-    const failedCameraId = cam.id;
-    try {
-      const res = await fetch(getProxyUrl(cam.stream_url), { cache: "no-store" });
-      if (activeCameraIdRef.current !== failedCameraId) return;
-      if (res.status !== 404) {
-        setDeadStreamCached(false);
-        return;
-      }
-      const body = (await res.text()).toLowerCase();
-      if (activeCameraIdRef.current !== failedCameraId) return;
-      setDeadStreamCached(body.includes("cached"));
-    } catch {
-      // Ignore probe failures
-    }
-  }, []);
-
   const handleImageError = useCallback(() => {
-    if (!camera || camera.stream_type !== "ImageRefresh") {
-      setImgError(true);
-      return;
-    }
     setImgError(true);
-    void detectCachedDeadStream(camera);
-  }, [camera, detectCachedDeadStream]);
+  }, []);
 
   // Reset state on camera change (state-based tracking, no refs in render)
   const cameraId = camera?.id;
@@ -141,55 +121,119 @@ export function CameraPlayer({
     return () => clearInterval(id);
   }, [camera, expanded, refreshImage, imgError]);
 
-  // HLS setup — load directly from CDN (not proxy) so hls.js can fetch segments
+  // HLS setup — probe via proxy then load if reachable
   useEffect(() => {
     if (!camera || camera.stream_type !== "Hls") return;
 
     const video = videoRef.current;
     if (!video) return;
 
-    // Use stream URL directly: proxy can't handle HLS segment fetching
     const src = camera.stream_url;
 
-    if (Hls.isSupported()) {
-      const hls = new Hls({
-        xhrSetup(xhr) {
-          xhr.withCredentials = false;
-        },
-      });
-      hls.loadSource(src);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (data.fatal) {
-          // If direct fails, retry once via proxy (manifest-only streams)
-          if (
-            data.type === Hls.ErrorTypes.NETWORK_ERROR &&
-            !hls.url?.includes("/cameras/proxy")
-          ) {
-            hls.loadSource(getProxyUrl(src));
-            return;
-          }
-          hls.destroy();
-          setImgError(true);
-        }
-      });
-      return () => hls.destroy();
+    // Gate 1: skip streams already known dead this session
+    if (deadHlsStreams.has(src)) {
+      const t = setTimeout(() => setImgError(true), 0);
+      return () => clearTimeout(t);
     }
 
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = src;
-      const onError = () => setImgError(true);
-      video.addEventListener("error", onError);
-      return () => {
-        video.removeEventListener("error", onError);
+    // Gate 2: skip streams the backend marked offline
+    if (!camera.is_online) {
+      deadHlsStreams.add(src);
+      const t = setTimeout(() => setImgError(true), 0);
+      return () => clearTimeout(t);
+    }
+
+    let cancelled = false;
+    let hls: Hls | undefined;
+    let nativeErrorHandler: (() => void) | undefined;
+
+    // Gate 3: probe manifest via backend proxy (avoids CORS + browser console 404)
+    const init = async (): Promise<void> => {
+      try {
+        const probeUrl = getProxyUrl(src);
+        const probe = await fetch(probeUrl, { method: "HEAD" });
+        if (cancelled) return;
+        if (!probe.ok) {
+          deadHlsStreams.add(src);
+          setImgError(true);
+          return;
+        }
+      } catch {
+        if (cancelled) return;
+        // Proxy unreachable — let hls.js try directly
+      }
+      if (cancelled) return;
+      startHls();
+    };
+
+    const startHls = (): void => {
+      if (!video || cancelled) return;
+
+      if (Hls.isSupported()) {
+        hls = new Hls({
+          xhrSetup(xhr) {
+            xhr.withCredentials = false;
+          },
+          // No retry on 4xx — stream is dead, retrying spams console
+          manifestLoadPolicy: {
+            default: {
+              maxTimeToFirstByteMs: 10_000,
+              maxLoadTimeMs: 20_000,
+              timeoutRetry: {
+                maxNumRetry: 1,
+                retryDelayMs: 500,
+                maxRetryDelayMs: 2000,
+              },
+              errorRetry: {
+                maxNumRetry: 0,
+                retryDelayMs: 0,
+                maxRetryDelayMs: 0,
+              },
+            },
+          },
+        });
+        hls.loadSource(src);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+          if (data.fatal) {
+            deadHlsStreams.add(src);
+            hls?.destroy();
+            hls = undefined;
+            setImgError(true);
+          }
+        });
+        return;
+      }
+
+      if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = src;
+        nativeErrorHandler = (): void => {
+          deadHlsStreams.add(src);
+          setImgError(true);
+        };
+        video.addEventListener("error", nativeErrorHandler);
+        return;
+      }
+
+      setImgError(true);
+    };
+
+    void init();
+
+    return () => {
+      cancelled = true;
+      if (hls) {
+        hls.destroy();
+        hls = undefined;
+      }
+      if (video) {
+        if (nativeErrorHandler) {
+          video.removeEventListener("error", nativeErrorHandler);
+        }
         video.removeAttribute("src");
         video.load();
-      };
-    }
-
-    // Schedule fallback error asynchronously to satisfy lint rule
-    const t = setTimeout(() => setImgError(true), 0);
-    return () => clearTimeout(t);
+      }
+    };
   }, [camera]);
 
   const handleMouseDown = useCallback(
@@ -305,7 +349,9 @@ export function CameraPlayer({
                 <span className="text-cyan-300">DIR {headingText}</span>
                 <span className="text-zinc-600">|</span>
                 <span className="text-amber-300">FOV {fovText}</span>
-                <span className="text-zinc-500 uppercase">{confidenceText}</span>
+                <span className="text-zinc-500 uppercase">
+                  {confidenceText}
+                </span>
               </div>
             )}
           </div>

@@ -19,7 +19,9 @@ export interface CameraProgress {
   done: boolean;
 }
 
-const CHUNK_SIZE = 100;
+// Keep the progressive protocol but use large pages so cached camera snapshots
+// appear almost instantly in the UI.
+const CHUNK_SIZE = 20000;
 
 export async function fetchCamerasChunked(
   bbox: BBox | undefined,

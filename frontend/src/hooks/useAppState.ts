@@ -43,6 +43,7 @@ import { fetchNuclearSites } from "../services/nuclearService";
 import { fetchMaritime } from "../services/maritimeService";
 import { fetchCyber } from "../services/cyberService";
 import { fetchSpaceWeather } from "../services/spaceWeatherService";
+import { fetchSatellites } from "../services/satelliteService";
 
 import type {
   SubmarineCable,
@@ -466,6 +467,40 @@ export function useAppState(): AppState {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAircraft?.icao]);
+
+  useEffect(() => {
+    if (satelliteStore.totalCount > 0) return;
+
+    const ac = new AbortController();
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const bootstrap = (): void => {
+      fetchSatellites(ac.signal)
+        .then((data) => {
+          if (ac.signal.aborted) return;
+
+          if (data.length > 0) {
+            satelliteStore.update(data);
+            return;
+          }
+
+          retryTimer = setTimeout(bootstrap, 2000);
+        })
+        .catch((e) => {
+          if (!(e instanceof DOMException && e.name === "AbortError")) {
+            console.error("[Satellites] bootstrap fetch error:", e);
+            retryTimer = setTimeout(bootstrap, 3000);
+          }
+        });
+    };
+
+    bootstrap();
+
+    return () => {
+      if (retryTimer) clearTimeout(retryTimer);
+      ac.abort();
+    };
+  }, [satelliteStore.totalCount, satelliteStore.update]);
 
   useEffect(() => {
     if (!cameraFilter.enabled) {
