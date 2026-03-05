@@ -1,4 +1,33 @@
 services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.6
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr=internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr=internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr=internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr=redpanda:33145
+      - --advertise-rpc-addr=redpanda:33145
+    ports:
+      - "19092:19092"
+      - "18081:18081"
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster info -X brokers=localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   redis:
     image: redis:7-alpine
     ports:
@@ -27,6 +56,16 @@ services:
       timeout: 5s
       retries: 5
 
+  surrealdb:
+    image: surrealdb/surrealdb:latest
+    command: start --user root --pass root file:/data/surreal.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - surreal-data:/data
+
 volumes:
+  redpanda-data:
   redis-data:
   pgdata:
+  surreal-data:
