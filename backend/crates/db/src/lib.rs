@@ -1,10 +1,20 @@
 pub mod aircraft;
+pub mod cables;
 pub mod cameras;
+pub mod cyber;
 pub mod error;
 pub mod events;
+pub mod fires;
+pub mod gdelt;
+pub mod maritime;
 pub mod migrate;
+pub mod military_bases;
 pub mod models;
+pub mod nuclear_sites;
 pub mod pool;
+pub mod satellites;
+pub mod seismic;
+pub mod space_weather;
 pub mod traffic;
 pub mod weather;
 
