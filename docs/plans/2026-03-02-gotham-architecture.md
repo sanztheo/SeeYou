@@ -391,20 +391,30 @@ Objectif : les entités et relations sont alimentées en temps réel et navigabl
 
 #### Phase 2a — Alimentation du graphe
 
-- [ ] Ajouter un consumer SurrealDB dans `bus/` — consume topics → upsert entités dans le graphe
-- [ ] Implémenter zone_lookup : pour (lat, lon) → trouver la Zone la plus proche
-- [ ] Auto-relation : `flies_over` quand un aircraft est dans le polygone d'une zone
-- [ ] Auto-relation : `located_in` pour cameras, traffic, weather → zone
-- [ ] Auto-relation : `monitored_by` si caméra < 2km d'un aircraft
-- [ ] Auto-relation : `affected_by` si weather.visibility < 1000m dans la même zone qu'un aircraft/traffic
-- [ ] Auto-relation : `covers` pour weather → zone
-- [ ] Auto-relation : `passes_over` pour satellites → zone
-- [ ] TTL sur les relations éphémères (flies_over expire quand l'avion quitte la zone)
+- [x] Ajouter un consumer SurrealDB dans `bus/` — consume topics → upsert entités dans le graphe *(implémenté via `consumer_graph` dédié)*
+- [x] Implémenter zone_lookup : pour (lat, lon) → trouver la Zone la plus proche
+- [x] Auto-relation : `flies_over` quand un aircraft est dans le polygone d'une zone
+- [x] Auto-relation : `located_in` pour cameras, traffic, weather → zone
+- [x] Auto-relation : `monitored_by` si caméra < 2km d'un aircraft
+- [x] Auto-relation : `affected_by` si weather.visibility < 1000m dans la même zone qu'un aircraft/traffic
+- [x] Auto-relation : `covers` pour weather → zone
+- [x] Auto-relation : `passes_over` pour satellites → zone
+- [x] TTL sur les relations éphémères (`flies_over`, `monitored_by`, `affected_by`) + sweep périodique
+- [x] (2026-03-05) Optimisation: cache court terme des snapshots de tables (`GRAPH_TABLE_CACHE_TTL_MS`)
+- [x] (2026-03-05) Qualité géospatiale: fix du point-in-polygon + support coordonnées GeoJSON 3D
+- [x] (2026-03-05) Garde-fou nearest-zone: fallback limité par distance (`GRAPH_NEAREST_ZONE_MAX_DISTANCE_KM`)
 - [ ] Test : un avion au-dessus de Paris → relation flies_over:paris créée
 - [ ] Test : caméra proche d'un avion → relation monitored_by créée
 - [ ] Test : query `SELECT <-flies_over<-aircraft FROM zone:paris` → retourne les avions
 
 Livrable : le graphe se remplit automatiquement en temps réel.
+
+Paramètres runtime (consumer graphe):
+
+- `GRAPH_FLIES_OVER_TTL_SECONDS` (défaut `180`)
+- `GRAPH_RELATION_SWEEP_INTERVAL_SECONDS` (défaut `30`)
+- `GRAPH_TABLE_CACHE_TTL_MS` (défaut `2000`)
+- `GRAPH_NEAREST_ZONE_MAX_DISTANCE_KM` (défaut `100`)
 
 ---
 
