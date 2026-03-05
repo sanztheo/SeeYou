@@ -39,6 +39,47 @@ async fn mark_dead_stream(camera_url: &str) {
     );
 }
 
+/// Lightweight HEAD probe — checks if an upstream stream is reachable without
+/// downloading the body. Returns 200 if alive, 404/502 if dead.
+pub async fn probe_camera_stream(
+    camera_url: &str,
+    client: &reqwest::Client,
+) -> Result<StatusCode, (StatusCode, String)> {
+    if is_cached_dead_stream(camera_url).await {
+        return Err((
+            StatusCode::NOT_FOUND,
+            "upstream camera stream unavailable (cached)".into(),
+        ));
+    }
+
+    let resp = match client
+        .head(camera_url)
+        .timeout(Duration::from_secs(5))
+        .header("User-Agent", "Mozilla/5.0 (compatible; SeeYou/1.0)")
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            mark_dead_stream(camera_url).await;
+            return Err((
+                StatusCode::BAD_GATEWAY,
+                format!("upstream probe failed: {e}"),
+            ));
+        }
+    };
+
+    if resp.status().is_success() || resp.status().as_u16() == 206 {
+        return Ok(StatusCode::OK);
+    }
+
+    mark_dead_stream(camera_url).await;
+    Err((
+        StatusCode::NOT_FOUND,
+        format!("upstream stream unavailable: {}", resp.status()),
+    ))
+}
+
 /// Fetch a camera image/stream and return it as an Axum response with CORS headers.
 pub async fn proxy_camera_stream(
     camera_url: &str,
@@ -51,18 +92,23 @@ pub async fn proxy_camera_stream(
         ));
     }
 
-    let upstream = client
+    let upstream = match client
         .get(camera_url)
         .timeout(PROXY_TIMEOUT)
         .header("User-Agent", "Mozilla/5.0 (compatible; SeeYou/1.0)")
         .send()
         .await
-        .map_err(|e| {
-            (
+    {
+        Ok(resp) => resp,
+        Err(e) => {
+            // Cache timeout/connection failures so we don't retry for 10 min
+            mark_dead_stream(camera_url).await;
+            return Err((
                 StatusCode::BAD_GATEWAY,
                 format!("upstream request failed: {e}"),
-            )
-        })?;
+            ));
+        }
+    };
 
     if !upstream.status().is_success() {
         let status = upstream.status();

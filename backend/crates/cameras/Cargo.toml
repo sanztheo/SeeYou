@@ -15,4 +15,5 @@ axum.workspace = true
 async-trait.workspace = true
 futures-util.workspace = true
 cache = { path = "../cache" }
+bus = { path = "../bus" }
 db = { path = "../db" }

@@ -5,6 +5,7 @@ use ws::Broadcaster;
 pub struct AppState {
     pub redis_pool: RedisPool,
     pub pg_pool: Option<db::PgPool>,
+    pub bus_producer: Option<bus::BusProducer>,
     pub ws_broadcast: Broadcaster,
     pub http_client: reqwest::Client,
 }
@@ -27,6 +28,13 @@ impl axum::extract::FromRef<AppState> for Broadcaster {
 impl axum::extract::FromRef<AppState> for Option<db::PgPool> {
     fn from_ref(state: &AppState) -> Self {
         state.pg_pool.clone()
+    }
+}
+
+// Allow axum extractors to pull optional `BusProducer` out of `AppState`.
+impl axum::extract::FromRef<AppState> for Option<bus::BusProducer> {
+    fn from_ref(state: &AppState) -> Self {
+        state.bus_producer.clone()
     }
 }
 

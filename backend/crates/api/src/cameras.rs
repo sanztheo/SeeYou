@@ -66,3 +66,12 @@ pub async fn proxy_camera(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     cameras::proxy::proxy_camera_stream(&query.url, &client).await
 }
+
+/// HEAD /cameras/proxy?url=<encoded_url> - lightweight probe (no body).
+/// Used by the frontend to check if a stream is alive before loading HLS.
+pub async fn probe_camera(
+    State(client): State<reqwest::Client>,
+    Query(query): Query<ProxyQuery>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    cameras::proxy::probe_camera_stream(&query.url, &client).await
+}

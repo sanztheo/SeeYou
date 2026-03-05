@@ -10,6 +10,7 @@ mod maritime;
 mod military_bases;
 mod nuclear_sites;
 pub mod router;
+mod satellites;
 mod seismic;
 mod space_weather;
 mod tomtom;

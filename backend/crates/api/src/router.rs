@@ -6,14 +6,19 @@ where
     S: Clone + Send + Sync + 'static,
     cache::RedisPool: axum::extract::FromRef<S>,
     Option<db::PgPool>: axum::extract::FromRef<S>,
+    Option<bus::BusProducer>: axum::extract::FromRef<S>,
     reqwest::Client: axum::extract::FromRef<S>,
 {
     Router::new()
         .route("/health", get(super::health::health_check))
         .route("/cameras", get(super::cameras::list_cameras))
-        .route("/cameras/proxy", get(super::cameras::proxy_camera))
+        .route(
+            "/cameras/proxy",
+            get(super::cameras::proxy_camera).head(super::cameras::probe_camera),
+        )
         .route("/geocode", get(super::geocode::geocode))
         .route("/events", get(super::events::get_events))
+        .route("/satellites", get(super::satellites::get_satellites))
         .route("/weather", get(super::weather::get_weather))
         .route("/cables", get(super::cables::get_cables))
         .route("/seismic", get(super::seismic::get_seismic))

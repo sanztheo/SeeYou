@@ -19,6 +19,7 @@ pub async fn run_aircraft_tracker(
     client: reqwest::Client,
     redis_pool: RedisPool,
     pg_pool: Option<db::PgPool>,
+    bus_producer: Option<bus::BusProducer>,
     broadcaster: Broadcaster,
     poll_interval: Duration,
 ) {
@@ -73,31 +74,50 @@ pub async fn run_aircraft_tracker(
             "broadcasting aircraft"
         );
 
+        let mut published = false;
+        if let Some(producer) = &bus_producer {
+            match bus::BusEnvelope::new_json(
+                "1",
+                "services.aircraft_tracker",
+                bus::topics::AIRCRAFT,
+                &aircraft,
+            ) {
+                Ok(envelope) => {
+                    if producer.send_envelope(&envelope).await.is_ok() {
+                        published = true;
+                    }
+                }
+                Err(e) => tracing::warn!(error = %e, "failed to build aircraft bus envelope"),
+            }
+        }
+
         if let Err(e) = cache::aircraft::set_aircraft(&redis_pool, &aircraft).await {
             tracing::warn!("failed to cache aircraft: {e}");
         }
 
-        if let Some(pg_pool) = &pg_pool {
-            let observed_at = chrono::Utc::now();
-            let rows: Vec<db::models::AircraftPositionRow> = aircraft
-                .iter()
-                .map(|a| db::models::AircraftPositionRow {
-                    observed_at,
-                    icao: a.icao.clone(),
-                    callsign: a.callsign.clone(),
-                    lat: a.lat,
-                    lon: a.lon,
-                    altitude_m: a.altitude_m,
-                    speed_ms: a.speed_ms,
-                    heading_deg: a.heading,
-                    vertical_rate_ms: Some(a.vertical_rate_ms),
-                    on_ground: a.on_ground,
-                    is_military: a.is_military,
-                })
-                .collect();
+        if !published {
+            if let Some(pg_pool) = &pg_pool {
+                let observed_at = chrono::Utc::now();
+                let rows: Vec<db::models::AircraftPositionRow> = aircraft
+                    .iter()
+                    .map(|a| db::models::AircraftPositionRow {
+                        observed_at,
+                        icao: a.icao.clone(),
+                        callsign: a.callsign.clone(),
+                        lat: a.lat,
+                        lon: a.lon,
+                        altitude_m: a.altitude_m,
+                        speed_ms: a.speed_ms,
+                        heading_deg: a.heading,
+                        vertical_rate_ms: Some(a.vertical_rate_ms),
+                        on_ground: a.on_ground,
+                        is_military: a.is_military,
+                    })
+                    .collect();
 
-            if let Err(e) = db::aircraft::insert_positions(pg_pool, &rows).await {
-                tracing::warn!(error = %e, count = rows.len(), "failed to persist aircraft positions");
+                if let Err(e) = db::aircraft::insert_positions(pg_pool, &rows).await {
+                    tracing::warn!(error = %e, count = rows.len(), "failed to persist aircraft positions");
+                }
             }
         }
 

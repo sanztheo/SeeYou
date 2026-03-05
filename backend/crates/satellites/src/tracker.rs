@@ -20,6 +20,8 @@ const TLE_CACHE_DURATION: Duration = Duration::from_secs(6 * 3600);
 pub async fn run_satellite_tracker(
     client: reqwest::Client,
     redis_pool: RedisPool,
+    pg_pool: Option<db::PgPool>,
+    bus_producer: Option<bus::BusProducer>,
     broadcaster: Broadcaster,
     poll_interval: Duration,
 ) {
@@ -56,8 +58,47 @@ pub async fn run_satellite_tracker(
         let total = satellites.len();
         tracing::info!(total, "broadcasting satellites");
 
+        let mut published = false;
+        if let Some(producer) = &bus_producer {
+            match bus::BusEnvelope::new_json(
+                "1",
+                "satellites.tracker",
+                bus::topics::SATELLITES,
+                &satellites,
+            ) {
+                Ok(envelope) => {
+                    if producer.send_envelope(&envelope).await.is_ok() {
+                        published = true;
+                    }
+                }
+                Err(e) => tracing::warn!(error = %e, "failed to build satellites bus envelope"),
+            }
+        }
+
         if let Err(e) = cache::satellites::set_satellites(&redis_pool, &satellites).await {
             tracing::warn!("failed to cache satellites: {e}");
+        }
+
+        if !published {
+            if let Some(pg_pool) = &pg_pool {
+                let observed_at = chrono::Utc::now();
+                let rows: Vec<db::models::SatellitePositionRow> = satellites
+                    .iter()
+                    .map(|s| db::models::SatellitePositionRow {
+                        observed_at,
+                        norad_id: s.norad_id as i64,
+                        name: s.name.clone(),
+                        category: s.category.as_str().to_string(),
+                        lat: s.lat,
+                        lon: s.lon,
+                        altitude_km: s.altitude_km,
+                        velocity_km_s: s.velocity_km_s,
+                    })
+                    .collect();
+                if let Err(e) = db::satellites::insert_positions(pg_pool, &rows).await {
+                    tracing::warn!(error = %e, count = rows.len(), "failed to persist satellites");
+                }
+            }
         }
 
         let positions: Vec<SatellitePosition> = satellites

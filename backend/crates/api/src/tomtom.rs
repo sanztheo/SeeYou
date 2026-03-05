@@ -96,6 +96,7 @@ pub struct FlowResponse {
 pub async fn get_flow(
     State(pool): State<RedisPool>,
     State(pg_pool): State<Option<db::PgPool>>,
+    State(bus_producer): State<Option<bus::BusProducer>>,
     Query(q): Query<BboxQuery>,
 ) -> Result<Json<FlowResponse>, StatusCode> {
     validate_bbox(&q)?;
@@ -122,11 +123,34 @@ pub async fn get_flow(
                 error!(error = %e, "failed to cache flow segments");
             }
 
-            if let Some(pg_pool) = &pg_pool {
-                let rows = flow_segments_to_rows(&segments);
-                if let Err(e) = db::traffic::insert_segments(pg_pool, &rows).await {
-                    warn!(error = %e, count = rows.len(), "failed to persist traffic flow segments");
+            let mut published = false;
+            if let Some(producer) = &bus_producer {
+                match bus::BusEnvelope::new_json(
+                    "1",
+                    "api.tomtom.flow",
+                    bus::topics::TRAFFIC,
+                    &FlowResponse {
+                        segments: segments.clone(),
+                    },
+                ) {
+                    Ok(envelope) => {
+                        if producer.send_envelope(&envelope).await.is_ok() {
+                            published = true;
+                        }
+                    }
+                    Err(e) => warn!(error = %e, "failed to build traffic bus envelope"),
                 }
+            }
+
+            if !published {
+                if let Some(pg_pool) = &pg_pool {
+                    let rows = flow_segments_to_rows(&segments);
+                    if let Err(e) = db::traffic::insert_segments(pg_pool, &rows).await {
+                        warn!(error = %e, count = rows.len(), "failed to persist traffic flow segments");
+                    }
+                }
+            } else {
+                debug!("traffic flow published to bus topic");
             }
 
             debug!(count = segments.len(), "fetched flow segments from TomTom");

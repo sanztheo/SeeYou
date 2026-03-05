@@ -11,8 +11,10 @@ tracing.workspace = true
 reqwest.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
+tokio.workspace = true
 sha1 = "0.10"
 cache = { path = "../cache" }
+bus = { path = "../bus" }
 db = { path = "../db" }
 cables = { path = "../cables" }
 cameras = { path = "../cameras" }
@@ -22,5 +24,6 @@ fires = { path = "../fires" }
 gdelt = { path = "../gdelt" }
 maritime = { path = "../maritime" }
 seismic = { path = "../seismic" }
+satellites = { path = "../satellites" }
 space_weather = { path = "../space_weather" }
 weather = { path = "../weather" }

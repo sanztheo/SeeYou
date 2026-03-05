@@ -1,18 +1,10 @@
 use std::time::Duration;
 
-use anyhow::Context;
-use serde::Deserialize;
-
 use crate::types::Vessel;
+use anyhow::Context;
 
 const AIS_URL: &str = "https://meri.digitraffic.fi/api/ais/v1/locations";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-
-#[derive(Deserialize)]
-struct AisResponse {
-    #[serde(default)]
-    features: Vec<serde_json::Value>,
-}
 
 fn nav_stat_type(code: u8) -> &'static str {
     match code {
@@ -48,7 +40,7 @@ fn parse_u8ish(val: &serde_json::Value) -> Option<u8> {
 }
 
 pub async fn fetch_vessels(client: &reqwest::Client) -> anyhow::Result<Vec<Vessel>> {
-    let resp: AisResponse = client
+    let response = client
         .get(AIS_URL)
         .header("Accept", "application/json")
         .header("Accept-Encoding", "gzip")
@@ -56,15 +48,26 @@ pub async fn fetch_vessels(client: &reqwest::Client) -> anyhow::Result<Vec<Vesse
         .timeout(REQUEST_TIMEOUT)
         .send()
         .await
-        .context("AIS request failed")?
-        .error_for_status()
-        .context("AIS returned error")?
-        .json()
-        .await
-        .context("failed to parse AIS response")?;
+        .context("AIS request failed");
 
-    let vessels: Vec<Vessel> = resp
-        .features
+    let Ok(response) = response else {
+        return Ok(Vec::new());
+    };
+    if !response.status().is_success() {
+        return Ok(Vec::new());
+    }
+    let payload: serde_json::Value = match response.json().await {
+        Ok(parsed) => parsed,
+        Err(_) => return Ok(Vec::new()),
+    };
+
+    let features = payload
+        .get("features")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let vessels: Vec<Vessel> = features
         .into_iter()
         .filter_map(|f| {
             let feature = f.as_object()?;

@@ -5,6 +5,7 @@ mod error;
 use std::time::Duration;
 
 use axum::{routing::get, Router};
+use serde::Serialize;
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::TraceLayer,
@@ -30,6 +31,26 @@ async fn main() -> anyhow::Result<()> {
     let redis_pool = cache::create_pool(&config.redis_url)?;
     info!(redis_url = %redact_url(&config.redis_url), "redis pool created");
     let pg_pool = try_create_pg_pool(config.database_url.as_deref()).await;
+    let bus_settings = bus::BusSettings::from_env();
+    let bus_producer = if bus_settings.enabled {
+        match bus::BusProducer::new(
+            &bus_settings.brokers,
+            bus_settings.enabled,
+            bus_settings.fallback_mode,
+        ) {
+            Ok(producer) => {
+                info!(brokers = %bus_settings.brokers, "bus producer enabled");
+                Some(producer)
+            }
+            Err(error) => {
+                warn!(error = %error, "failed to create bus producer; using direct fallback mode");
+                None
+            }
+        }
+    } else {
+        info!("bus disabled; using direct cache/postgres writes");
+        None
+    };
 
     let ws_broadcast = ws::Broadcaster::new(BROADCAST_CAPACITY);
 
@@ -42,6 +63,7 @@ async fn main() -> anyhow::Result<()> {
         http_client.clone(),
         redis_pool.clone(),
         pg_pool.clone(),
+        bus_producer.clone(),
         ws_broadcast.clone(),
         poll_interval,
     ));
@@ -50,6 +72,7 @@ async fn main() -> anyhow::Result<()> {
         http_client.clone(),
         redis_pool.clone(),
         pg_pool.clone(),
+        bus_producer.clone(),
         camera_poll_interval,
     ));
 
@@ -59,6 +82,7 @@ async fn main() -> anyhow::Result<()> {
         let client = http_client.clone();
         let pool = redis_pool.clone();
         let pg_pool = pg_pool.clone();
+        let bus_producer = bus_producer.clone();
         async move {
             loop {
                 match events::eonet::fetch_active_events(&client).await {
@@ -67,31 +91,43 @@ async fn main() -> anyhow::Result<()> {
                             events: evts,
                             fetched_at: chrono::Utc::now().to_rfc3339(),
                         };
+                        let published = publish_json(
+                            &bus_producer,
+                            "server.events",
+                            bus::topics::EVENTS,
+                            &resp,
+                        )
+                        .await;
+
                         if let Err(e) = cache::events::set_events(&pool, &resp).await {
                             tracing::warn!(error = %e, "failed to cache events");
                         }
 
-                        if let Some(pg_pool) = &pg_pool {
-                            let now = chrono::Utc::now();
-                            let rows: Vec<db::models::EventRow> = resp
-                                .events
-                                .iter()
-                                .map(|evt| db::models::EventRow {
-                                    observed_at: chrono::DateTime::parse_from_rfc3339(&evt.date)
+                        if !published {
+                            if let Some(pg_pool) = &pg_pool {
+                                let now = chrono::Utc::now();
+                                let rows: Vec<db::models::EventRow> = resp
+                                    .events
+                                    .iter()
+                                    .map(|evt| db::models::EventRow {
+                                        observed_at: chrono::DateTime::parse_from_rfc3339(
+                                            &evt.date,
+                                        )
                                         .map(|dt| dt.with_timezone(&chrono::Utc))
                                         .unwrap_or(now),
-                                    event_id: evt.id.clone(),
-                                    event_type: format!("{:?}", evt.category),
-                                    lat: evt.lat,
-                                    lon: evt.lon,
-                                    severity: event_severity(&evt.category),
-                                    description: evt.title.clone(),
-                                    source_url: evt.source_url.clone(),
-                                })
-                                .collect();
+                                        event_id: evt.id.clone(),
+                                        event_type: format!("{:?}", evt.category),
+                                        lat: evt.lat,
+                                        lon: evt.lon,
+                                        severity: event_severity(&evt.category),
+                                        description: evt.title.clone(),
+                                        source_url: evt.source_url.clone(),
+                                    })
+                                    .collect();
 
-                            if let Err(e) = db::events::insert_events(pg_pool, &rows).await {
-                                tracing::warn!(error = %e, count = rows.len(), "failed to persist events");
+                                if let Err(e) = db::events::insert_events(pg_pool, &rows).await {
+                                    tracing::warn!(error = %e, count = rows.len(), "failed to persist events");
+                                }
                             }
                         }
                         tracing::info!(count = resp.events.len(), "natural events updated");
@@ -108,6 +144,8 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(satellites::run_satellite_tracker(
         http_client.clone(),
         redis_pool.clone(),
+        pg_pool.clone(),
+        bus_producer.clone(),
         ws_broadcast.clone(),
         satellite_poll_interval,
     ));
@@ -118,6 +156,7 @@ async fn main() -> anyhow::Result<()> {
         http_client.clone(),
         redis_pool.clone(),
         pg_pool.clone(),
+        bus_producer.clone(),
         ws_broadcast.clone(),
         metar_poll_interval,
     ));
@@ -127,6 +166,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn({
         let client = http_client.clone();
         let pool = redis_pool.clone();
+        let bus_producer = bus_producer.clone();
         async move {
             loop {
                 match weather::openmeteo::fetch_weather_grid(&client).await {
@@ -135,6 +175,13 @@ async fn main() -> anyhow::Result<()> {
                             points,
                             fetched_at: chrono::Utc::now().to_rfc3339(),
                         };
+                        let _published = publish_json(
+                            &bus_producer,
+                            "server.weather",
+                            bus::topics::WEATHER,
+                            &grid,
+                        )
+                        .await;
                         if let Err(e) = cache::weather::set_weather(&pool, &grid).await {
                             tracing::warn!(error = %e, "failed to cache weather");
                         }
@@ -153,6 +200,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn({
         let client = http_client.clone();
         let pool = redis_pool.clone();
+        let bus_producer = bus_producer.clone();
         async move {
             loop {
                 let cables_result = cables::telegeography::fetch_cables(&client).await;
@@ -164,6 +212,13 @@ async fn main() -> anyhow::Result<()> {
                             landing_points: lp,
                             fetched_at: chrono::Utc::now().to_rfc3339(),
                         };
+                        let _published = publish_json(
+                            &bus_producer,
+                            "server.cables",
+                            bus::topics::CABLES,
+                            &resp,
+                        )
+                        .await;
                         if let Err(e) = cache::cables::set_cables(&pool, &resp).await {
                             tracing::warn!(error = %e, "failed to cache cables");
                         }
@@ -185,6 +240,7 @@ async fn main() -> anyhow::Result<()> {
         let client = http_client.clone();
         let pool = redis_pool.clone();
         let broadcaster = ws_broadcast.clone();
+        let bus_producer = bus_producer.clone();
         async move {
             loop {
                 match seismic::usgs::fetch_earthquakes(&client).await {
@@ -193,6 +249,13 @@ async fn main() -> anyhow::Result<()> {
                             earthquakes: quakes.clone(),
                             fetched_at: chrono::Utc::now().to_rfc3339(),
                         };
+                        let _published = publish_json(
+                            &bus_producer,
+                            "server.seismic",
+                            bus::topics::SEISMIC,
+                            &resp,
+                        )
+                        .await;
                         if let Err(e) = cache::seismic::set_seismic(&pool, &resp).await {
                             tracing::warn!(error = %e, "failed to cache seismic");
                         }
@@ -226,6 +289,7 @@ async fn main() -> anyhow::Result<()> {
         let client = http_client.clone();
         let pool = redis_pool.clone();
         let broadcaster = ws_broadcast.clone();
+        let bus_producer = bus_producer.clone();
         async move {
             loop {
                 match fires::firms::fetch_fires(&client).await {
@@ -234,6 +298,9 @@ async fn main() -> anyhow::Result<()> {
                             fires: hotspots.clone(),
                             fetched_at: chrono::Utc::now().to_rfc3339(),
                         };
+                        let _published =
+                            publish_json(&bus_producer, "server.fires", bus::topics::FIRES, &resp)
+                                .await;
                         if let Err(e) = cache::fires::set_fires(&pool, &resp).await {
                             tracing::warn!(error = %e, "failed to cache fires");
                         }
@@ -262,6 +329,7 @@ async fn main() -> anyhow::Result<()> {
         let client = http_client.clone();
         let pool = redis_pool.clone();
         let broadcaster = ws_broadcast.clone();
+        let bus_producer = bus_producer.clone();
         async move {
             loop {
                 match gdelt::api::fetch_events(&client).await {
@@ -270,6 +338,9 @@ async fn main() -> anyhow::Result<()> {
                             events: events.clone(),
                             fetched_at: chrono::Utc::now().to_rfc3339(),
                         };
+                        let _published =
+                            publish_json(&bus_producer, "server.gdelt", bus::topics::GDELT, &resp)
+                                .await;
                         if let Err(e) = cache::gdelt::set_gdelt(&pool, &resp).await {
                             tracing::warn!(error = %e, "failed to cache gdelt");
                         }
@@ -299,6 +370,7 @@ async fn main() -> anyhow::Result<()> {
         let client = http_client.clone();
         let pool = redis_pool.clone();
         let broadcaster = ws_broadcast.clone();
+        let bus_producer = bus_producer.clone();
         async move {
             loop {
                 match maritime::ais::fetch_vessels(&client).await {
@@ -307,6 +379,13 @@ async fn main() -> anyhow::Result<()> {
                             vessels: vessels.clone(),
                             fetched_at: chrono::Utc::now().to_rfc3339(),
                         };
+                        let _published = publish_json(
+                            &bus_producer,
+                            "server.maritime",
+                            bus::topics::MARITIME,
+                            &resp,
+                        )
+                        .await;
                         if let Err(e) = cache::maritime::set_maritime(&pool, &resp).await {
                             tracing::warn!(error = %e, "failed to cache maritime");
                         }
@@ -339,6 +418,7 @@ async fn main() -> anyhow::Result<()> {
         let client = http_client.clone();
         let pool = redis_pool.clone();
         let broadcaster = ws_broadcast.clone();
+        let bus_producer = bus_producer.clone();
         async move {
             loop {
                 match cyber::threatfox::fetch_threats(&client).await {
@@ -347,6 +427,9 @@ async fn main() -> anyhow::Result<()> {
                             threats: threats.clone(),
                             fetched_at: chrono::Utc::now().to_rfc3339(),
                         };
+                        let _published =
+                            publish_json(&bus_producer, "server.cyber", bus::topics::CYBER, &resp)
+                                .await;
                         if let Err(e) = cache::cyber::set_cyber(&pool, &resp).await {
                             tracing::warn!(error = %e, "failed to cache cyber");
                         }
@@ -380,6 +463,7 @@ async fn main() -> anyhow::Result<()> {
         let client = http_client.clone();
         let pool = redis_pool.clone();
         let broadcaster = ws_broadcast.clone();
+        let bus_producer = bus_producer.clone();
         async move {
             loop {
                 let aurora_res = space_weather::noaa::fetch_aurora(&client).await;
@@ -396,6 +480,13 @@ async fn main() -> anyhow::Result<()> {
                     alerts: alerts.clone(),
                     fetched_at: chrono::Utc::now().to_rfc3339(),
                 };
+                let _published = publish_json(
+                    &bus_producer,
+                    "server.space_weather",
+                    bus::topics::SPACE_WEATHER,
+                    &resp,
+                )
+                .await;
                 if let Err(e) = cache::space_weather::set_space_weather(&pool, &resp).await {
                     tracing::warn!(error = %e, "failed to cache space weather");
                 }
@@ -431,9 +522,42 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    if let Some(producer) = bus_producer.clone() {
+        tokio::spawn(async move {
+            loop {
+                let military: serde_json::Value =
+                    serde_json::from_str(include_str!("../../../data/military_bases.json"))
+                        .unwrap_or_else(|_| serde_json::json!([]));
+
+                let nuclear: serde_json::Value =
+                    serde_json::from_str(include_str!("../../../data/nuclear_sites.json"))
+                        .unwrap_or_else(|_| serde_json::json!([]));
+
+                let _ = publish_json(
+                    &Some(producer.clone()),
+                    "server.static.military_bases",
+                    bus::topics::MILITARY_BASES,
+                    &military,
+                )
+                .await;
+
+                let _ = publish_json(
+                    &Some(producer.clone()),
+                    "server.static.nuclear_sites",
+                    bus::topics::NUCLEAR_SITES,
+                    &nuclear,
+                )
+                .await;
+
+                tokio::time::sleep(Duration::from_secs(3600)).await;
+            }
+        });
+    }
+
     let state = AppState {
         redis_pool,
         pg_pool,
+        bus_producer,
         ws_broadcast,
         http_client,
     };
@@ -459,6 +583,25 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     Ok(())
+}
+
+async fn publish_json<T: Serialize>(
+    producer: &Option<bus::BusProducer>,
+    source: &str,
+    topic: &str,
+    payload: &T,
+) -> bool {
+    let Some(producer) = producer else {
+        return false;
+    };
+
+    match bus::BusEnvelope::new_json("1", source, topic, payload) {
+        Ok(envelope) => producer.send_envelope(&envelope).await.is_ok(),
+        Err(error) => {
+            warn!(error = %error, source, topic, "failed to build bus envelope");
+            false
+        }
+    }
 }
 
 async fn try_create_pg_pool(database_url: Option<&str>) -> Option<db::PgPool> {

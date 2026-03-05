@@ -12,5 +12,7 @@ tracing = { workspace = true }
 chrono = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
+bus = { path = "../bus" }
 cache = { path = "../cache" }
+db = { path = "../db" }
 ws = { path = "../ws" }
