@@ -1,4 +1,7 @@
-use std::{collections::hash_map::DefaultHasher, hash::Hasher};
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 
 use anyhow::Context;
 use bus::{topics, BusEnvelope};
@@ -7,16 +10,56 @@ use rdkafka::{
     message::Message,
 };
 use serde_json::Value;
+use tokio::sync::RwLock;
 use tracing::{info, warn};
 
+use crate::{
+    constants::{
+        DEFAULT_FLIES_OVER_TTL_SECONDS, DEFAULT_NEAREST_ZONE_MAX_DISTANCE_KM,
+        DEFAULT_RELATION_SWEEP_INTERVAL_SECONDS, DEFAULT_TABLE_CACHE_TTL_MS,
+    },
+    payload::extract_records_for_topic,
+};
+
+const RELATION_TABLES_WITH_TTL: &[&str] = &["flies_over", "monitored_by", "affected_by"];
+
+#[derive(Clone, Debug)]
+pub(crate) struct TableCacheEntry {
+    pub(crate) loaded_at: Instant,
+    pub(crate) records: Vec<Value>,
+}
+
 pub struct GraphBusConsumer {
-    client: graph::GraphClient,
+    pub(crate) client: graph::GraphClient,
     consumer: StreamConsumer,
+    pub(crate) zone_lookup: graph::zones::ZoneLookup,
+    pub(crate) flies_over_ttl_seconds: i64,
+    pub(crate) nearest_zone_max_distance_m: f64,
+    relation_sweep_interval: Duration,
+    pub(crate) table_cache_ttl: Duration,
+    pub(crate) table_cache: RwLock<HashMap<String, TableCacheEntry>>,
 }
 
 impl GraphBusConsumer {
-    pub fn new(client: graph::GraphClient, consumer: StreamConsumer) -> Self {
-        Self { client, consumer }
+    pub fn new(
+        client: graph::GraphClient,
+        consumer: StreamConsumer,
+        zone_lookup: graph::zones::ZoneLookup,
+        flies_over_ttl_seconds: i64,
+        nearest_zone_max_distance_m: f64,
+        relation_sweep_interval: Duration,
+        table_cache_ttl: Duration,
+    ) -> Self {
+        Self {
+            client,
+            consumer,
+            zone_lookup,
+            flies_over_ttl_seconds,
+            nearest_zone_max_distance_m,
+            relation_sweep_interval,
+            table_cache_ttl,
+            table_cache: RwLock::new(HashMap::new()),
+        }
     }
 
     pub fn from_env(client: graph::GraphClient) -> anyhow::Result<Self> {
@@ -33,261 +76,147 @@ impl GraphBusConsumer {
             .create()
             .with_context(|| format!("failed to create graph consumer for brokers={brokers}"))?;
 
+        let zones_path = std::env::var("GRAPH_ZONES_FILE")
+            .unwrap_or_else(|_| "data/zones/global_zones.geojson".to_string());
+        let zone_lookup = graph::zones::ZoneLookup::from_geojson_path(&zones_path)
+            .with_context(|| format!("failed to load zone lookup from {zones_path}"))?;
+
+        let flies_over_ttl_seconds = parse_env_i64(
+            "GRAPH_FLIES_OVER_TTL_SECONDS",
+            DEFAULT_FLIES_OVER_TTL_SECONDS,
+        )
+        .max(1);
+        let relation_sweep_interval = Duration::from_secs(parse_env_u64(
+            "GRAPH_RELATION_SWEEP_INTERVAL_SECONDS",
+            DEFAULT_RELATION_SWEEP_INTERVAL_SECONDS,
+        ));
+        let nearest_zone_max_distance_km = parse_env_f64(
+            "GRAPH_NEAREST_ZONE_MAX_DISTANCE_KM",
+            DEFAULT_NEAREST_ZONE_MAX_DISTANCE_KM,
+        )
+        .max(0.0);
+        let table_cache_ttl = Duration::from_millis(parse_env_u64(
+            "GRAPH_TABLE_CACHE_TTL_MS",
+            DEFAULT_TABLE_CACHE_TTL_MS,
+        ));
+
+        info!(
+            zones = zone_lookup.len(),
+            flies_over_ttl_seconds,
+            nearest_zone_max_distance_km,
+            sweep_interval_seconds = relation_sweep_interval.as_secs(),
+            table_cache_ttl_ms = table_cache_ttl.as_millis(),
+            "graph consumer geo-relation settings loaded"
+        );
+
         consumer.subscribe(&topics::ALL_TOPICS)?;
-        Ok(Self::new(client, consumer))
+        Ok(Self::new(
+            client,
+            consumer,
+            zone_lookup,
+            flies_over_ttl_seconds,
+            nearest_zone_max_distance_km * 1_000.0,
+            relation_sweep_interval,
+            table_cache_ttl,
+        ))
     }
 
     pub async fn handle_envelope(&self, envelope: BusEnvelope) -> anyhow::Result<()> {
         let payload: Value = serde_json::from_slice(&envelope.payload_json).unwrap_or_else(|_| {
             Value::String(String::from_utf8_lossy(&envelope.payload_json).to_string())
         });
+
         let records = extract_records_for_topic(&envelope.topic, &payload);
         for (table, entity_payload) in records {
-            let entity_id = resolve_entity_id(table, None, &entity_payload);
-            graph::entities::upsert(&self.client, table, &entity_id, entity_payload.clone())
+            self.process_entity(table, &entity_payload, &envelope.topic)
                 .await?;
-
-            for zone_id in resolve_zone_ids(&entity_payload) {
-                graph::relations::link(
-                    &self.client,
-                    table,
-                    &entity_id,
-                    "located_in",
-                    "zone",
-                    &zone_id,
-                    None,
-                )
-                .await?;
-            }
-
-            info!(
-                topic = %envelope.topic,
-                table,
-                entity_id = %entity_id,
-                "graph entity upserted from bus envelope"
-            );
         }
+
         Ok(())
     }
 
     pub async fn run(&self) -> anyhow::Result<()> {
+        let sweep_enabled = !self.relation_sweep_interval.is_zero();
+        let mut sweep_interval = tokio::time::interval(if sweep_enabled {
+            self.relation_sweep_interval
+        } else {
+            Duration::from_secs(3600)
+        });
+        sweep_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let _ = sweep_interval.tick().await;
+
         loop {
-            let msg = match self.consumer.recv().await {
-                Ok(msg) => msg,
-                Err(error) => {
-                    warn!(error = %error, "failed to receive graph bus message");
-                    continue;
+            tokio::select! {
+                msg_result = self.consumer.recv() => {
+                    let msg = match msg_result {
+                        Ok(msg) => msg,
+                        Err(error) => {
+                            warn!(error = %error, "failed to receive graph bus message");
+                            continue;
+                        }
+                    };
+
+                    let payload = match msg.payload() {
+                        Some(payload) => payload,
+                        None => continue,
+                    };
+
+                    let envelope = match BusEnvelope::decode_from_slice(payload) {
+                        Ok(envelope) => envelope,
+                        Err(error) => {
+                            warn!(error = %error, topic = %msg.topic(), "invalid envelope payload");
+                            continue;
+                        }
+                    };
+
+                    if let Err(error) = self.handle_envelope(envelope).await {
+                        warn!(error = %error, topic = %msg.topic(), "failed graph consume");
+                        continue;
+                    }
+
+                    if let Err(error) = self.consumer.commit_message(&msg, CommitMode::Async) {
+                        warn!(error = %error, topic = %msg.topic(), "failed graph offset commit");
+                    }
                 }
-            };
-
-            let payload = match msg.payload() {
-                Some(payload) => payload,
-                None => continue,
-            };
-
-            let envelope = match BusEnvelope::decode_from_slice(payload) {
-                Ok(envelope) => envelope,
-                Err(error) => {
-                    warn!(error = %error, topic = %msg.topic(), "invalid envelope payload");
-                    continue;
-                }
-            };
-
-            if let Err(error) = self.handle_envelope(envelope).await {
-                warn!(error = %error, topic = %msg.topic(), "failed graph consume");
-                continue;
-            }
-
-            if let Err(error) = self.consumer.commit_message(&msg, CommitMode::Async) {
-                warn!(error = %error, topic = %msg.topic(), "failed graph offset commit");
-            }
-        }
-    }
-}
-
-fn values_from_key(payload: &Value, key: &str) -> Vec<Value> {
-    payload
-        .get(key)
-        .and_then(Value::as_array)
-        .map(|items| items.to_vec())
-        .unwrap_or_default()
-}
-
-fn extract_entities(payload: &Value, key: &str) -> Vec<Value> {
-    if let Some(items) = payload.as_array() {
-        return items.to_vec();
-    }
-
-    let by_key = values_from_key(payload, key);
-    if !by_key.is_empty() {
-        return by_key;
-    }
-
-    vec![payload.clone()]
-}
-
-fn extract_records_for_topic(topic: &str, payload: &Value) -> Vec<(&'static str, Value)> {
-    match topic {
-        topics::AIRCRAFT => extract_entities(payload, "aircraft")
-            .into_iter()
-            .map(|v| ("aircraft", v))
-            .collect(),
-        topics::CAMERAS => extract_entities(payload, "cameras")
-            .into_iter()
-            .map(|v| ("camera", v))
-            .collect(),
-        topics::TRAFFIC => extract_entities(payload, "segments")
-            .into_iter()
-            .map(|v| ("traffic_segment", v))
-            .collect(),
-        topics::WEATHER => extract_entities(payload, "points")
-            .into_iter()
-            .map(|v| ("weather", v))
-            .collect(),
-        topics::METAR => extract_entities(payload, "stations")
-            .into_iter()
-            .map(|v| ("weather", v))
-            .collect(),
-        topics::SATELLITES => extract_entities(payload, "satellites")
-            .into_iter()
-            .map(|v| ("satellite", v))
-            .collect(),
-        topics::EVENTS => extract_entities(payload, "events")
-            .into_iter()
-            .map(|v| ("event", v))
-            .collect(),
-        topics::SEISMIC => extract_entities(payload, "earthquakes")
-            .into_iter()
-            .map(|v| ("seismic_event", v))
-            .collect(),
-        topics::FIRES => extract_entities(payload, "fires")
-            .into_iter()
-            .map(|v| ("fire_hotspot", v))
-            .collect(),
-        topics::GDELT => extract_entities(payload, "events")
-            .into_iter()
-            .map(|v| ("gdelt_event", v))
-            .collect(),
-        topics::MARITIME => extract_entities(payload, "vessels")
-            .into_iter()
-            .map(|v| ("vessel", v))
-            .collect(),
-        topics::CYBER => extract_entities(payload, "threats")
-            .into_iter()
-            .map(|v| ("cyber_threat", v))
-            .collect(),
-        topics::SPACE_WEATHER => {
-            let mut out = Vec::new();
-            out.extend(
-                values_from_key(payload, "aurora")
-                    .into_iter()
-                    .map(|v| ("aurora_point", v)),
-            );
-            out.extend(
-                values_from_key(payload, "alerts")
-                    .into_iter()
-                    .map(|v| ("space_weather_alert", v)),
-            );
-            if out.is_empty() {
-                out.extend(
-                    extract_entities(payload, "alerts")
-                        .into_iter()
-                        .map(|v| ("space_weather_event", v)),
-                );
-            }
-            out
-        }
-        topics::CABLES => {
-            let mut out = Vec::new();
-            out.extend(
-                values_from_key(payload, "cables")
-                    .into_iter()
-                    .map(|v| ("cable", v)),
-            );
-            out.extend(
-                values_from_key(payload, "landing_points")
-                    .into_iter()
-                    .map(|v| ("landing_point", v)),
-            );
-            if out.is_empty() {
-                out.extend(
-                    extract_entities(payload, "cables")
-                        .into_iter()
-                        .map(|v| ("cable", v)),
-                );
-            }
-            out
-        }
-        topics::MILITARY_BASES => extract_entities(payload, "bases")
-            .into_iter()
-            .map(|v| ("military_base", v))
-            .collect(),
-        topics::NUCLEAR_SITES => extract_entities(payload, "sites")
-            .into_iter()
-            .map(|v| ("nuclear_site", v))
-            .collect(),
-        _ => Vec::new(),
-    }
-}
-
-fn resolve_entity_id(table: &str, key: Option<&str>, payload: &Value) -> String {
-    if let Some(key) = key.filter(|k| !k.is_empty()) {
-        return key.to_string();
-    }
-
-    let candidates = [
-        "id",
-        "icao",
-        "icao24",
-        "hex",
-        "segment_id",
-        "station_id",
-        "mmsi",
-        "norad_id",
-        "event_id",
-    ];
-
-    for candidate in candidates {
-        if let Some(value) = payload.get(candidate) {
-            if let Some(as_str) = value.as_str() {
-                if !as_str.is_empty() {
-                    return as_str.to_string();
+                _ = sweep_interval.tick(), if sweep_enabled => {
+                    if let Err(error) = self.sweep_expired_relations().await {
+                        warn!(error = %error, "failed sweeping expired graph relations");
+                    }
                 }
             }
-            if let Some(as_u64) = value.as_u64() {
-                return as_u64.to_string();
-            }
-            if let Some(as_i64) = value.as_i64() {
-                return as_i64.to_string();
-            }
         }
     }
 
-    let mut hasher = DefaultHasher::new();
-    hasher.write(format!("{table}:{payload}").as_bytes());
-    format!("{}_{}", table, hasher.finish())
+    async fn sweep_expired_relations(&self) -> anyhow::Result<()> {
+        let removed =
+            graph::relations::sweep_expired_relations(&self.client, RELATION_TABLES_WITH_TTL)
+                .await?;
+
+        if removed > 0 {
+            info!(removed, "expired graph relations swept");
+        }
+
+        Ok(())
+    }
 }
 
-fn resolve_zone_ids(payload: &Value) -> Vec<String> {
-    let mut zone_ids = Vec::new();
+fn parse_env_u64(name: &str, default: u64) -> u64 {
+    std::env::var(name)
+        .ok()
+        .and_then(|raw| raw.parse::<u64>().ok())
+        .unwrap_or(default)
+}
 
-    if let Some(zone_id) = payload.get("zone_id").and_then(Value::as_str) {
-        zone_ids.push(zone_id.to_string());
-    }
+fn parse_env_i64(name: &str, default: i64) -> i64 {
+    std::env::var(name)
+        .ok()
+        .and_then(|raw| raw.parse::<i64>().ok())
+        .unwrap_or(default)
+}
 
-    if let Some(located_in) = payload.get("located_in").and_then(Value::as_str) {
-        zone_ids.push(located_in.to_string());
-    }
-
-    if let Some(values) = payload.get("zone_ids").and_then(Value::as_array) {
-        for value in values {
-            if let Some(zone_id) = value.as_str() {
-                zone_ids.push(zone_id.to_string());
-            }
-        }
-    }
-
-    zone_ids.sort();
-    zone_ids.dedup();
-    zone_ids
+fn parse_env_f64(name: &str, default: f64) -> f64 {
+    std::env::var(name)
+        .ok()
+        .and_then(|raw| raw.parse::<f64>().ok())
+        .unwrap_or(default)
 }
