@@ -1,14 +1,7 @@
+use anyhow::Context;
 use serde_json::{json, Value};
 
 use crate::GraphClient;
-
-const RELATION_UPSERT_QUERY: &str = r#"
-UPSERT type::thing($relation, $edge_id) CONTENT {
-    in: type::thing($from_table, $from_id),
-    out: type::thing($to_table, $to_id)
-};
-UPDATE type::thing($relation, $edge_id) MERGE $attributes;
-"#;
 
 const SWEEP_EXPIRED_QUERY: &str = r#"
 DELETE FROM type::table($relation_table)
@@ -47,18 +40,20 @@ pub async fn link_with_attributes(
     to_id: &str,
     attributes: Value,
 ) -> anyhow::Result<()> {
-    let edge_id = deterministic_edge_id(relation, from_table, from_id, to_table, to_id);
-    client
-        .db()
-        .query(RELATION_UPSERT_QUERY)
-        .bind(("from_table", from_table))
-        .bind(("from_id", from_id))
-        .bind(("relation", relation))
-        .bind(("edge_id", edge_id))
-        .bind(("to_table", to_table))
-        .bind(("to_id", to_id))
-        .bind(("attributes", attributes))
-        .await?;
+    let edge_id = deterministic_edge_id(&relation, &from_table, &from_id, &to_table, &to_id);
+    let escaped_from_id = from_id.replace('`', "\\`");
+    let escaped_to_id = to_id.replace('`', "\\`");
+    let escaped_edge_id = edge_id.replace('`', "\\`");
+    let attributes_json = serde_json::to_string(&attributes).with_context(|| {
+        format!(
+            "failed to serialize relation attributes for {relation} {from_table}:{from_id}->{to_table}:{to_id}"
+        )
+    })?;
+    let statement = format!(
+        "RELATE {from_table}:`{escaped_from_id}`->{relation}:`{escaped_edge_id}`->{to_table}:`{escaped_to_id}` CONTENT {attributes_json};"
+    );
+
+    client.db().query(statement).await?.check()?;
 
     Ok(())
 }
@@ -98,11 +93,13 @@ pub async fn sweep_expired_relations(
     let mut removed = 0usize;
 
     for relation_table in relation_tables {
+        let relation_table = (*relation_table).to_string();
         let mut response = client
             .db()
             .query(SWEEP_EXPIRED_QUERY)
-            .bind(("relation_table", *relation_table))
-            .await?;
+            .bind(("relation_table", relation_table))
+            .await?
+            .check()?;
 
         let deleted: Vec<Value> = response.take(0)?;
         removed += deleted.len();

@@ -7,12 +7,16 @@ pub async fn get_entity(
     table: &str,
     id: &str,
 ) -> anyhow::Result<Option<Value>> {
+    let table = table.to_string();
+    let id = id.to_string();
+
     let mut response = client
         .db()
-        .query("SELECT * FROM type::thing($table, $id);")
+        .query("SELECT * FROM type::record($table, $id);")
         .bind(("table", table))
         .bind(("id", id))
-        .await?;
+        .await?
+        .check()?;
 
     let record: Option<Value> = response.take(0)?;
     Ok(record)
@@ -24,15 +28,19 @@ pub async fn get_neighbors(
     id: &str,
     depth: usize,
 ) -> anyhow::Result<Vec<Value>> {
+    let table = table.to_string();
+    let id = id.to_string();
+
     let mut response = client
         .db()
         .query(
-            "SELECT ->* AS outgoing, <-* AS incoming FROM type::thing($table, $id) FETCH ->*, <-* LIMIT $depth;",
+            "SELECT ->* AS outgoing, <-* AS incoming FROM type::record($table, $id) FETCH ->*, <-* LIMIT $depth;",
         )
         .bind(("table", table))
         .bind(("id", id))
         .bind(("depth", depth.max(1) as i64))
-        .await?;
+        .await?
+        .check()?;
 
     let records: Vec<Value> = response.take(0)?;
     Ok(records)

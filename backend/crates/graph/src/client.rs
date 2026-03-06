@@ -1,7 +1,7 @@
 use anyhow::Context;
 use surrealdb::{
     engine::any::{connect, Any},
-    opt::auth::Root,
+    opt::{auth::Root, WaitFor},
     Surreal,
 };
 
@@ -40,18 +40,22 @@ impl GraphClient {
         let db = connect(&config.url)
             .await
             .with_context(|| format!("failed to connect surrealdb at {}", config.url))?;
+        db.wait_for(WaitFor::Connection).await;
 
         db.signin(Root {
-            username: &config.username,
-            password: &config.password,
+            username: config.username.clone(),
+            password: config.password.clone(),
         })
         .await
         .context("failed to authenticate to surrealdb")?;
 
         db.use_ns(&config.namespace)
-            .use_db(&config.database)
             .await
-            .context("failed to select surrealdb namespace/database")?;
+            .context("failed to select surrealdb namespace")?;
+        db.use_db(&config.database)
+            .await
+            .context("failed to select surrealdb database")?;
+        db.wait_for(WaitFor::Database).await;
 
         Ok(Self { db })
     }
@@ -64,13 +68,13 @@ impl GraphClient {
 pub fn normalize_surreal_url(raw: &str) -> String {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
-        return "http://127.0.0.1:8000".to_string();
+        return "ws://127.0.0.1:8000".to_string();
     }
 
-    let normalized_scheme = if let Some(rest) = trimmed.strip_prefix("ws://") {
-        format!("http://{rest}")
-    } else if let Some(rest) = trimmed.strip_prefix("wss://") {
-        format!("https://{rest}")
+    let normalized_scheme = if let Some(rest) = trimmed.strip_prefix("http://") {
+        format!("ws://{rest}")
+    } else if let Some(rest) = trimmed.strip_prefix("https://") {
+        format!("wss://{rest}")
     } else {
         trimmed.to_string()
     };
@@ -83,7 +87,7 @@ pub fn normalize_surreal_url(raw: &str) -> String {
             .trim_end_matches('/')
             .to_string()
     } else {
-        normalized_scheme
+        without_trailing_slash
     }
 }
 
@@ -92,39 +96,39 @@ mod tests {
     use super::normalize_surreal_url;
 
     #[test]
-    fn normalizes_ws_rpc_url_to_http() {
+    fn normalizes_http_rpc_url_to_ws() {
         assert_eq!(
-            normalize_surreal_url("ws://surreal.internal:8000/rpc"),
-            "http://surreal.internal:8000"
+            normalize_surreal_url("http://surreal.internal:8000/rpc"),
+            "ws://surreal.internal:8000"
         );
     }
 
     #[test]
-    fn normalizes_wss_rpc_url_to_https() {
+    fn normalizes_https_rpc_url_to_wss() {
         assert_eq!(
-            normalize_surreal_url("wss://surreal.internal/rpc"),
-            "https://surreal.internal"
+            normalize_surreal_url("https://surreal.internal/rpc"),
+            "wss://surreal.internal"
         );
     }
 
     #[test]
-    fn trims_rpc_suffix_from_http_url() {
+    fn trims_rpc_suffix_from_ws_url() {
         assert_eq!(
-            normalize_surreal_url("http://127.0.0.1:8000/rpc/"),
-            "http://127.0.0.1:8000"
+            normalize_surreal_url("ws://127.0.0.1:8000/rpc/"),
+            "ws://127.0.0.1:8000"
         );
     }
 
     #[test]
-    fn keeps_http_url_without_rpc_unchanged() {
+    fn keeps_ws_url_without_rpc_unchanged() {
         assert_eq!(
-            normalize_surreal_url("http://127.0.0.1:8000"),
-            "http://127.0.0.1:8000"
+            normalize_surreal_url("ws://127.0.0.1:8000"),
+            "ws://127.0.0.1:8000"
         );
     }
 
     #[test]
     fn defaults_empty_url_to_localhost() {
-        assert_eq!(normalize_surreal_url(""), "http://127.0.0.1:8000");
+        assert_eq!(normalize_surreal_url(""), "ws://127.0.0.1:8000");
     }
 }

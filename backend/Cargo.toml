@@ -47,7 +47,7 @@ reqwest = { version = "0.12", features = ["json"] }
 chrono = { version = "0.4", features = ["serde"] }
 async-trait = "0.1"
 prost = "0.13"
-rdkafka = { version = "0.36", features = ["tokio", "cmake-build"] }
+rdkafka = { version = "0.36", features = ["tokio", "cmake-build", "ssl-vendored"] }
 tokio-stream = "0.1"
-surrealdb = { version = "1.5", default-features = false, features = ["protocol-http", "rustls"] }
+surrealdb = { version = "3.0.2", default-features = false, features = ["protocol-http", "protocol-ws", "rustls"] }
 geojson = "0.24"

@@ -2,7 +2,7 @@ use std::{collections::hash_map::DefaultHasher, fs, hash::Hasher, path::Path};
 
 use anyhow::Context;
 use geojson::{Feature, GeoJson, Geometry};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 
 use crate::{
     entities,
@@ -49,7 +49,9 @@ pub async fn seed_zones_from_file(
 
         let id = zone_id(&feature, idx);
         let payload = zone_payload(&feature, geometry, &id);
-        entities::upsert(client, "zone", &id, payload).await?;
+        entities::upsert(client, "zone", &id, payload)
+            .await
+            .with_context(|| format!("failed upserting zone id={id} index={idx}"))?;
         upserted += 1;
     }
 
@@ -163,7 +165,7 @@ impl ZoneLookup {
     }
 }
 
-fn zone_payload(feature: &Feature, geometry: Geometry, id: &str) -> Value {
+fn zone_payload(feature: &Feature, _geometry: Geometry, id: &str) -> Value {
     let mut payload = Map::new();
     payload.insert("id".to_string(), Value::String(id.to_string()));
 
@@ -173,7 +175,6 @@ fn zone_payload(feature: &Feature, geometry: Geometry, id: &str) -> Value {
         }
     }
 
-    payload.insert("geometry".to_string(), json!(geometry));
     Value::Object(payload)
 }
 

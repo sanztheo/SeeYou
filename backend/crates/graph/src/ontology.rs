@@ -125,7 +125,7 @@ const FIELD_DEFINITIONS: &[&str] = &[
     "DEFINE FIELD lat ON TABLE fire_hotspot TYPE number;",
     "DEFINE FIELD lon ON TABLE fire_hotspot TYPE number;",
     "DEFINE FIELD brightness ON TABLE fire_hotspot TYPE number;",
-    "DEFINE FIELD confidence ON TABLE fire_hotspot TYPE number;",
+    "DEFINE FIELD confidence ON TABLE fire_hotspot TYPE string;",
     "DEFINE FIELD satellite ON TABLE fire_hotspot TYPE string;",
     "DEFINE FIELD timestamp ON TABLE fire_hotspot TYPE datetime;",
     "DEFINE FIELD id ON TABLE gdelt_event TYPE string;",
@@ -230,23 +230,34 @@ const FIELD_DEFINITIONS: &[&str] = &[
 
 pub async fn migrate(client: &GraphClient) -> anyhow::Result<()> {
     for table in ENTITY_TABLES {
-        let statement = format!("DEFINE TABLE {table} SCHEMALESS;");
-        client.db().query(statement).await?;
+        let statement = format!("DEFINE TABLE IF NOT EXISTS {table} SCHEMALESS;");
+        client.db().query(statement).await?.check()?;
     }
 
     for table in RELATION_TABLES {
-        let statement = format!("DEFINE TABLE {table} TYPE RELATION SCHEMALESS;");
-        client.db().query(statement).await?;
+        let statement = format!("DEFINE TABLE OVERWRITE {table} TYPE RELATION SCHEMALESS;");
+        client.db().query(statement).await?.check()?;
     }
 
     for statement in FIELD_DEFINITIONS {
-        client.db().query(*statement).await?;
+        let mut statement = statement.replacen("DEFINE FIELD ", "DEFINE FIELD OVERWRITE ", 1);
+        if !statement.starts_with("DEFINE FIELD OVERWRITE id ON TABLE ") {
+            statement = statement
+                .replace(" TYPE string;", " TYPE option<string>;")
+                .replace(" TYPE number;", " TYPE option<number>;")
+                .replace(" TYPE bool;", " TYPE option<bool>;")
+                .replace(" TYPE datetime;", " TYPE option<datetime>;")
+                .replace(" TYPE array;", " TYPE option<array>;")
+                .replace(" TYPE object;", " TYPE option<object>;");
+        }
+        client.db().query(statement).await?.check()?;
     }
 
     client
         .db()
-        .query("DEFINE INDEX zone_name_idx ON TABLE zone COLUMNS name;")
-        .await?;
+        .query("DEFINE INDEX IF NOT EXISTS zone_name_idx ON TABLE zone COLUMNS name;")
+        .await?
+        .check()?;
 
     Ok(())
 }
