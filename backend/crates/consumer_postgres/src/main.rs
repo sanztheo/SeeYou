@@ -88,12 +88,16 @@ async fn main() -> anyhow::Result<()> {
     let pg_pool = db::create_pool(&database_url).await?;
     db::run_migrations(&pg_pool).await?;
 
-    let consumer: StreamConsumer = rdkafka::ClientConfig::new()
+    let mut config = rdkafka::ClientConfig::new();
+    config
         .set("bootstrap.servers", &broker)
         .set("group.id", &group_id)
         .set("enable.partition.eof", "false")
         .set("enable.auto.commit", "false")
-        .set("auto.offset.reset", "earliest")
+        .set("auto.offset.reset", "earliest");
+    bus::apply_kafka_security_from_env(&mut config);
+
+    let consumer: StreamConsumer = config
         .create()
         .context("failed to create postgres stream consumer")?;
 

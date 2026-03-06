@@ -13,6 +13,7 @@ const MAX_SATELLITES: usize = 10_000;
 
 /// Satellites per WebSocket message chunk.
 const WS_CHUNK_SIZE: usize = 2_000;
+const BUS_CHUNK_SIZE: usize = 500;
 
 /// TLE data changes slowly — re-fetch only every 6 hours.
 const TLE_CACHE_DURATION: Duration = Duration::from_secs(6 * 3600);
@@ -60,18 +61,26 @@ pub async fn run_satellite_tracker(
 
         let mut published = false;
         if let Some(producer) = &bus_producer {
-            match bus::BusEnvelope::new_json(
-                "1",
-                "satellites.tracker",
-                bus::topics::SATELLITES,
-                &satellites,
-            ) {
-                Ok(envelope) => {
-                    if producer.send_envelope(&envelope).await.is_ok() {
-                        published = true;
-                    }
+            match producer
+                .send_json_slices(
+                    "satellites.tracker",
+                    bus::topics::SATELLITES,
+                    &satellites,
+                    BUS_CHUNK_SIZE,
+                )
+                .await
+            {
+                Ok(_chunk_count) => {
+                    published = true;
                 }
-                Err(e) => tracing::warn!(error = %e, "failed to build satellites bus envelope"),
+                Err(e) => {
+                    tracing::warn!(
+                        error = ?e,
+                        topic = bus::topics::SATELLITES,
+                        records = satellites.len(),
+                        "failed to publish satellites to bus"
+                    );
+                }
             }
         }
 

@@ -14,6 +14,7 @@ const MAX_AIRCRAFT: usize = 30_000;
 
 /// How many aircraft per WebSocket message chunk.
 const WS_CHUNK_SIZE: usize = 2_000;
+const BUS_CHUNK_SIZE: usize = 500;
 
 pub async fn run_aircraft_tracker(
     client: reqwest::Client,
@@ -76,18 +77,26 @@ pub async fn run_aircraft_tracker(
 
         let mut published = false;
         if let Some(producer) = &bus_producer {
-            match bus::BusEnvelope::new_json(
-                "1",
-                "services.aircraft_tracker",
-                bus::topics::AIRCRAFT,
-                &aircraft,
-            ) {
-                Ok(envelope) => {
-                    if producer.send_envelope(&envelope).await.is_ok() {
-                        published = true;
-                    }
+            match producer
+                .send_json_slices(
+                    "services.aircraft_tracker",
+                    bus::topics::AIRCRAFT,
+                    &aircraft,
+                    BUS_CHUNK_SIZE,
+                )
+                .await
+            {
+                Ok(_chunk_count) => {
+                    published = true;
                 }
-                Err(e) => tracing::warn!(error = %e, "failed to build aircraft bus envelope"),
+                Err(e) => {
+                    tracing::warn!(
+                        error = ?e,
+                        topic = bus::topics::AIRCRAFT,
+                        records = aircraft.len(),
+                        "failed to publish aircraft to bus"
+                    );
+                }
             }
         }
 

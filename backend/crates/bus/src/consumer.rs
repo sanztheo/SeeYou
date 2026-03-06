@@ -12,13 +12,15 @@ pub struct BusConsumer {
 
 impl BusConsumer {
     pub fn new(brokers: &str, group_id: &str) -> Result<Self> {
-        let consumer = ClientConfig::new()
+        let mut config = ClientConfig::new();
+        config
             .set("bootstrap.servers", brokers)
             .set("group.id", group_id)
             .set("enable.partition.eof", "false")
-            .set("auto.offset.reset", "earliest")
-            .create()
-            .context("failed to create kafka consumer")?;
+            .set("auto.offset.reset", "earliest");
+        crate::config::apply_kafka_security_from_env(&mut config);
+
+        let consumer = config.create().context("failed to create kafka consumer")?;
 
         Ok(Self { consumer })
     }

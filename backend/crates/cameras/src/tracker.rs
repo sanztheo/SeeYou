@@ -5,6 +5,8 @@ use cache::RedisPool;
 use crate::health::check_batch_health;
 use crate::providers::fetch_all_cameras;
 
+const BUS_CHUNK_SIZE: usize = 1_000;
+
 /// Periodically fetch cameras from all providers, health-check them,
 /// and cache the result in Redis.
 pub async fn run_camera_tracker(
@@ -37,14 +39,26 @@ pub async fn run_camera_tracker(
 
         let mut published = false;
         if let Some(producer) = &bus_producer {
-            match bus::BusEnvelope::new_json("1", "cameras.tracker", bus::topics::CAMERAS, &cameras)
+            match producer
+                .send_json_slices(
+                    "cameras.tracker",
+                    bus::topics::CAMERAS,
+                    &cameras,
+                    BUS_CHUNK_SIZE,
+                )
+                .await
             {
-                Ok(envelope) => {
-                    if producer.send_envelope(&envelope).await.is_ok() {
-                        published = true;
-                    }
+                Ok(_chunk_count) => {
+                    published = true;
                 }
-                Err(e) => tracing::warn!(error = %e, "failed to build cameras bus envelope"),
+                Err(e) => {
+                    tracing::warn!(
+                        error = ?e,
+                        topic = bus::topics::CAMERAS,
+                        records = cameras.len(),
+                        "failed to publish cameras to bus"
+                    );
+                }
             }
         }
 

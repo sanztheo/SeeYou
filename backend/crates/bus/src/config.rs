@@ -1,3 +1,5 @@
+use rdkafka::ClientConfig;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BusFallbackMode {
     RedisPostgres,
@@ -74,6 +76,32 @@ pub fn resolve_brokers_from_env() -> String {
         .map(|value| normalize_broker_list(&value))
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| "127.0.0.1:9092".to_string())
+}
+
+pub fn apply_kafka_security_from_env(config: &mut ClientConfig) -> &mut ClientConfig {
+    apply_optional_env(config, "REDPANDA_SECURITY_PROTOCOL", "security.protocol");
+    apply_optional_env(config, "REDPANDA_SASL_MECHANISM", "sasl.mechanism");
+    apply_optional_env(config, "REDPANDA_SASL_USERNAME", "sasl.username");
+    apply_optional_env(config, "REDPANDA_SASL_PASSWORD", "sasl.password");
+    apply_optional_env(config, "REDPANDA_SSL_CA_LOCATION", "ssl.ca.location");
+    apply_optional_env(
+        config,
+        "REDPANDA_SSL_CERT_LOCATION",
+        "ssl.certificate.location",
+    );
+    apply_optional_env(config, "REDPANDA_SSL_KEY_LOCATION", "ssl.key.location");
+    apply_optional_env(config, "REDPANDA_SSL_KEY_PASSWORD", "ssl.key.password");
+    config
+}
+
+fn apply_optional_env(config: &mut ClientConfig, env_key: &str, kafka_key: &str) {
+    if let Some(value) = std::env::var(env_key)
+        .ok()
+        .map(|raw| raw.trim().to_string())
+        .filter(|value| !value.is_empty())
+    {
+        config.set(kafka_key, &value);
+    }
 }
 
 fn first_non_empty(keys: &[&str]) -> Option<String> {

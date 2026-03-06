@@ -133,11 +133,19 @@ pub async fn get_flow(
                         segments: segments.clone(),
                     },
                 ) {
-                    Ok(envelope) => {
-                        if producer.send_envelope(&envelope).await.is_ok() {
+                    Ok(envelope) => match producer.send_envelope(&envelope).await {
+                        Ok(()) => {
                             published = true;
                         }
-                    }
+                        Err(e) => {
+                            warn!(
+                                error = ?e,
+                                topic = bus::topics::TRAFFIC,
+                                segments = segments.len(),
+                                "failed to publish traffic to bus"
+                            );
+                        }
+                    },
                     Err(e) => warn!(error = %e, "failed to build traffic bus envelope"),
                 }
             }

@@ -17,6 +17,7 @@ use app_state::AppState;
 use config::Config;
 
 const BROADCAST_CAPACITY: usize = 256;
+const FIRE_BUS_CHUNK_SIZE: usize = 2_000;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -298,9 +299,14 @@ async fn main() -> anyhow::Result<()> {
                             fires: hotspots.clone(),
                             fetched_at: chrono::Utc::now().to_rfc3339(),
                         };
-                        let _published =
-                            publish_json(&bus_producer, "server.fires", bus::topics::FIRES, &resp)
-                                .await;
+                        let _published = publish_fires_chunks(
+                            &bus_producer,
+                            "server.fires",
+                            bus::topics::FIRES,
+                            &resp.fires,
+                            &resp.fetched_at,
+                        )
+                        .await;
                         if let Err(e) = cache::fires::set_fires(&pool, &resp).await {
                             tracing::warn!(error = %e, "failed to cache fires");
                         }
@@ -596,12 +602,77 @@ async fn publish_json<T: Serialize>(
     };
 
     match bus::BusEnvelope::new_json("1", source, topic, payload) {
-        Ok(envelope) => producer.send_envelope(&envelope).await.is_ok(),
+        Ok(envelope) => match producer.send_envelope(&envelope).await {
+            Ok(()) => true,
+            Err(error) => {
+                warn!(error = ?error, source, topic, "failed to publish bus envelope");
+                false
+            }
+        },
         Err(error) => {
             warn!(error = %error, source, topic, "failed to build bus envelope");
             false
         }
     }
+}
+
+async fn publish_fires_chunks(
+    producer: &Option<bus::BusProducer>,
+    source: &str,
+    topic: &str,
+    fires: &[fires::FireHotspot],
+    fetched_at: &str,
+) -> bool {
+    let Some(producer) = producer else {
+        return false;
+    };
+
+    if fires.is_empty() {
+        let payload = fires::FiresResponse {
+            fires: Vec::new(),
+            fetched_at: fetched_at.to_string(),
+        };
+        return publish_json(&Some(producer.clone()), source, topic, &payload).await;
+    }
+
+    let total_chunks = fires.len().max(1).div_ceil(FIRE_BUS_CHUNK_SIZE);
+    let chunk_id = bus::new_chunk_id();
+
+    for (chunk_index, chunk) in fires.chunks(FIRE_BUS_CHUNK_SIZE.max(1)).enumerate() {
+        let chunk_source = if total_chunks > 1 {
+            bus::format_chunked_source(
+                source,
+                &bus::BusChunkInfo::new(chunk_id.clone(), chunk_index, total_chunks),
+            )
+        } else {
+            source.to_string()
+        };
+        let payload = fires::FiresResponse {
+            fires: chunk.to_vec(),
+            fetched_at: fetched_at.to_string(),
+        };
+
+        let envelope = match bus::BusEnvelope::new_json("1", chunk_source, topic, &payload) {
+            Ok(envelope) => envelope,
+            Err(error) => {
+                warn!(error = %error, source, topic, "failed to build bus envelope");
+                return false;
+            }
+        };
+
+        let key = if total_chunks > 1 {
+            chunk_id.as_str()
+        } else {
+            envelope.event_id.as_str()
+        };
+
+        if let Err(error) = producer.send_envelope_with_key(&envelope, key).await {
+            warn!(error = ?error, source, topic, "failed to publish bus envelope");
+            return false;
+        }
+    }
+
+    true
 }
 
 async fn try_create_pg_pool(database_url: Option<&str>) -> Option<db::PgPool> {

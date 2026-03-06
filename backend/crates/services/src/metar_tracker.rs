@@ -31,11 +31,19 @@ pub async fn run_metar_tracker(
                         bus::topics::METAR,
                         &stations,
                     ) {
-                        Ok(envelope) => {
-                            if producer.send_envelope(&envelope).await.is_ok() {
+                        Ok(envelope) => match producer.send_envelope(&envelope).await {
+                            Ok(()) => {
                                 published = true;
                             }
-                        }
+                            Err(e) => {
+                                tracing::warn!(
+                                    error = ?e,
+                                    topic = bus::topics::METAR,
+                                    records = stations.len(),
+                                    "failed to publish metar to bus"
+                                );
+                            }
+                        },
                         Err(e) => tracing::warn!(error = %e, "failed to build metar bus envelope"),
                     }
                 }
