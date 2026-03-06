@@ -31,7 +31,7 @@ pub(crate) struct TableCacheEntry {
 
 pub struct GraphBusConsumer {
     pub(crate) client: graph::GraphClient,
-    consumer: StreamConsumer,
+    consumer: Option<StreamConsumer>,
     pub(crate) zone_lookup: graph::zones::ZoneLookup,
     pub(crate) flies_over_ttl_seconds: i64,
     pub(crate) nearest_zone_max_distance_m: f64,
@@ -52,7 +52,27 @@ impl GraphBusConsumer {
     ) -> Self {
         Self {
             client,
-            consumer,
+            consumer: Some(consumer),
+            zone_lookup,
+            flies_over_ttl_seconds,
+            nearest_zone_max_distance_m,
+            relation_sweep_interval,
+            table_cache_ttl,
+            table_cache: RwLock::new(HashMap::new()),
+        }
+    }
+
+    pub fn new_for_processing(
+        client: graph::GraphClient,
+        zone_lookup: graph::zones::ZoneLookup,
+        flies_over_ttl_seconds: i64,
+        nearest_zone_max_distance_m: f64,
+        relation_sweep_interval: Duration,
+        table_cache_ttl: Duration,
+    ) -> Self {
+        Self {
+            client,
+            consumer: None,
             zone_lookup,
             flies_over_ttl_seconds,
             nearest_zone_max_distance_m,
@@ -67,12 +87,16 @@ impl GraphBusConsumer {
         let group_id =
             std::env::var("GRAPH_CONSUMER_GROUP").unwrap_or_else(|_| "graph-consumer".to_string());
 
-        let consumer: StreamConsumer = rdkafka::ClientConfig::new()
+        let mut config = rdkafka::ClientConfig::new();
+        config
             .set("bootstrap.servers", &brokers)
             .set("group.id", &group_id)
             .set("enable.partition.eof", "false")
             .set("enable.auto.commit", "false")
-            .set("auto.offset.reset", "earliest")
+            .set("auto.offset.reset", "earliest");
+        bus::apply_kafka_security_from_env(&mut config);
+
+        let consumer: StreamConsumer = config
             .create()
             .with_context(|| format!("failed to create graph consumer for brokers={brokers}"))?;
 
@@ -136,6 +160,10 @@ impl GraphBusConsumer {
     }
 
     pub async fn run(&self) -> anyhow::Result<()> {
+        let consumer = self
+            .consumer
+            .as_ref()
+            .context("graph bus consumer run() requires a Kafka consumer")?;
         let sweep_enabled = !self.relation_sweep_interval.is_zero();
         let mut sweep_interval = tokio::time::interval(if sweep_enabled {
             self.relation_sweep_interval
@@ -147,7 +175,7 @@ impl GraphBusConsumer {
 
         loop {
             tokio::select! {
-                msg_result = self.consumer.recv() => {
+                msg_result = consumer.recv() => {
                     let msg = match msg_result {
                         Ok(msg) => msg,
                         Err(error) => {
@@ -174,7 +202,7 @@ impl GraphBusConsumer {
                         continue;
                     }
 
-                    if let Err(error) = self.consumer.commit_message(&msg, CommitMode::Async) {
+                    if let Err(error) = consumer.commit_message(&msg, CommitMode::Async) {
                         warn!(error = %error, topic = %msg.topic(), "failed graph offset commit");
                     }
                 }

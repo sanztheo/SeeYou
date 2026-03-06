@@ -138,12 +138,14 @@ impl GraphBusConsumer {
             return Ok(cached_records);
         }
 
+        let table_name = table.to_string();
         let mut response = self
             .client
             .db()
             .query("SELECT * FROM type::table($table);")
-            .bind(("table", table))
+            .bind(("table", table_name))
             .await
+            .and_then(|response| response.check())
             .with_context(|| format!("failed to query entities from table={table}"))?;
 
         let records: Vec<Value> = response
@@ -255,7 +257,33 @@ fn merge_location_zone_ids(
 #[cfg(test)]
 mod tests {
     use super::merge_location_zone_ids;
+    use crate::consumer::GraphBusConsumer;
+    use anyhow::Context;
+    use chrono::Utc;
     use graph::zones::ZoneMatch;
+    use serde_json::{json, Value};
+    use std::fs;
+    use std::time::Duration;
+
+    const PARIS_TEST_ZONE_GEOJSON: &str = r#"
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "city-paris",
+        "name": "Paris",
+        "zone_type": "city"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[2.20,48.80],[2.20,48.90],[2.40,48.90],[2.40,48.80],[2.20,48.80]]]
+      }
+    }
+  ]
+}
+"#;
 
     #[test]
     fn merge_location_zone_ids_prefers_contains_matches() {
@@ -310,5 +338,152 @@ mod tests {
 
         let merged = merge_location_zone_ids(Vec::new(), matches, 100_000.0);
         assert!(merged.is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "requires external surrealdb env"]
+    async fn phase2a_creates_flies_over_monitored_by_and_traversal() -> anyhow::Result<()> {
+        let _ = dotenvy::dotenv();
+        if std::env::var("SURREALDB_URL").is_err() {
+            return Ok(());
+        }
+
+        let graph_config = graph::GraphConfig::from_env();
+        let client = graph::GraphClient::connect(&graph_config)
+            .await
+            .context("failed to connect graph client")?;
+        graph::ontology::migrate(&client)
+            .await
+            .context("failed graph ontology migrate")?;
+        let zones_path = std::env::temp_dir().join(format!(
+            "phase2a-zones-{}.geojson",
+            Utc::now().timestamp_micros()
+        ));
+        fs::write(&zones_path, PARIS_TEST_ZONE_GEOJSON)
+            .context("failed to write temporary phase2a zone file")?;
+        graph::zones::seed_zones_from_file(&client, &zones_path)
+            .await
+            .context("failed to seed temporary phase2a zone")?;
+
+        let zone_lookup = graph::zones::ZoneLookup::from_geojson_str(PARIS_TEST_ZONE_GEOJSON)
+            .context("failed to build phase2a zone lookup")?;
+        let graph_consumer = GraphBusConsumer::new_for_processing(
+            client.clone(),
+            zone_lookup,
+            180,
+            100_000.0,
+            Duration::from_secs(0),
+            Duration::from_millis(0),
+        );
+
+        let suffix = Utc::now().timestamp_micros();
+        let aircraft_id = format!("phase2a-aircraft-{suffix}");
+        let camera_id = format!("phase2a-camera-{suffix}");
+
+        let camera_payload = json!({
+            "id": camera_id,
+            "name": "Test Camera",
+            "lat": 48.8567,
+            "lon": 2.3525
+        });
+        graph_consumer
+            .process_entity("camera", &camera_payload, "tests.camera")
+            .await
+            .context("failed processing camera payload")?;
+
+        let aircraft_payload = json!({
+            "id": aircraft_id,
+            "callsign": "N31MK",
+            "lat": 48.8566,
+            "lon": 2.3522,
+            "altitude": 15175.0,
+            "speed": 197.0
+        });
+        graph_consumer
+            .process_entity("aircraft", &aircraft_payload, "tests.aircraft")
+            .await
+            .context("failed processing aircraft payload")?;
+
+        let flies_over_sql = format!(
+            "SELECT count() AS total FROM flies_over WHERE `in` = aircraft:`{}` AND out = zone:`city-paris` GROUP ALL;",
+            aircraft_id
+        );
+        let mut flies_over_response = client
+            .db()
+            .query(flies_over_sql)
+            .await
+            .context("failed querying flies_over count")?
+            .check()
+            .context("flies_over count query returned error")?;
+        let flies_over_rows: Vec<Value> = flies_over_response.take(0)?;
+        let flies_over_total = flies_over_rows
+            .first()
+            .and_then(|row| row.get("total"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        assert!(flies_over_total >= 1);
+
+        let monitored_by_sql = format!(
+            "SELECT count() AS total FROM monitored_by WHERE `in` = aircraft:`{}` AND out = camera:`{}` GROUP ALL;",
+            aircraft_id, camera_id
+        );
+        let mut monitored_by_response = client
+            .db()
+            .query(monitored_by_sql)
+            .await
+            .context("failed querying monitored_by count")?
+            .check()
+            .context("monitored_by count query returned error")?;
+        let monitored_by_rows: Vec<Value> = monitored_by_response.take(0)?;
+        let monitored_by_total = monitored_by_rows
+            .first()
+            .and_then(|row| row.get("total"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        assert!(monitored_by_total >= 1);
+
+        let traversal_sql =
+            "SELECT <-flies_over<-aircraft.id AS aircraft_ids FROM zone:`city-paris`;";
+        let mut traversal_response = client
+            .db()
+            .query(traversal_sql)
+            .await
+            .context("failed querying traversal ids from city-paris")?
+            .check()
+            .context("traversal query returned error")?;
+        let traversal_rows: Vec<Value> = traversal_response.take(0)?;
+        let traversal_contains_aircraft = traversal_rows
+            .first()
+            .and_then(|row| row.get("aircraft_ids"))
+            .and_then(Value::as_array)
+            .map(|ids| {
+                ids.iter().any(|id| {
+                    id.as_str()
+                        .map(|raw| raw.contains(&aircraft_id))
+                        .unwrap_or(false)
+                })
+            })
+            .unwrap_or(false);
+        assert!(traversal_contains_aircraft);
+
+        let cleanup_sql = format!(
+            "DELETE flies_over WHERE `in` = aircraft:`{aircraft_id}`; DELETE monitored_by WHERE `in` = aircraft:`{aircraft_id}`; DELETE aircraft:`{aircraft_id}`; DELETE camera:`{camera_id}`;"
+        );
+        client
+            .db()
+            .query(cleanup_sql)
+            .await
+            .context("failed running phase2a cleanup query")?
+            .check()
+            .context("phase2a cleanup query returned error")?;
+        client
+            .db()
+            .invalidate()
+            .await
+            .context("failed to invalidate surreal session after phase2a test")?;
+
+        let _ = fs::remove_file(&zones_path);
+
+        Ok(())
     }
 }
