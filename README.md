@@ -356,12 +356,13 @@ This project is proprietary and is not open source.
 
 Copyright (c) 2026 Theo Sanz. All rights reserved.
 
-No use, copy, modification, distribution, deployment, resale, AI training, or
-derivative work is allowed without prior written permission from the owner.
+No use, copy, modification, distribution, deployment, resale, scraping, AI
+training, benchmarking, or derivative work is allowed without prior written
+permission from the owner.
 Permission requests: sanztheopro@gmail.com
 
 If this repository is public on GitHub, only the limited rights required by
 GitHub's platform and Terms of Service apply there (for example, viewing and
 forking on GitHub). No broader permission is granted.
 
-See [LICENSE](LICENSE) for the full terms.
+See [LICENSE](LICENSE) and [TERMS.md](TERMS.md) for the full terms.

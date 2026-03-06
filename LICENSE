@@ -1,35 +1,81 @@
 SeeYou Proprietary License
+Version 2.0
+
 Copyright (c) 2026 Theo Sanz
 Contact: sanztheopro@gmail.com
 
-All original source code, project files, documentation, assets, and other
-copyrightable material in this repository are the exclusive property of Theo
-Sanz, except any third-party material that is clearly identified as such.
+1. Ownership
 
-This project is proprietary software. It is not open source.
+All original source code, project files, documentation, visual assets,
+configuration, build scripts, database schemas, and other copyrightable material
+in this repository are the exclusive property of Theo Sanz, except any
+third-party material clearly identified as such.
 
-No license or other right is granted to any person or entity to use, copy,
-modify, merge, publish, distribute, sublicense, sell, deploy, host, train on,
-reverse engineer, create derivative works from, or otherwise exploit this
-project or any part of it, whether for commercial or non-commercial purposes,
-without the owner's prior written permission.
+2. No Open-Source Grant
 
-Any access to this repository does not mean that permission is granted. If you
-want to use this code or project in any way, you must first obtain written
-authorization from Theo Sanz at sanztheopro@gmail.com.
+This project is proprietary software. It is not open source. No express or
+implied license, permission, waiver, or covenant is granted except where
+required by applicable law or by GitHub's platform rules solely for hosting this
+repository on GitHub.
 
-If this repository is publicly accessible through GitHub, GitHub users may only
-exercise the limited rights automatically granted through GitHub's Terms of
+3. Reserved Rights
+
+All rights are reserved. Without Theo Sanz's prior written authorization, no
+person or entity may:
+
+- use, execute, copy, reproduce, download, archive, or store the project except
+  to the limited extent technically necessary to view a public GitHub repository;
+- modify, adapt, translate, reverse engineer, decompile, disassemble, or create
+  derivative works;
+- publish, distribute, sublicense, assign, sell, rent, lease, host, provide as
+  a service, or otherwise exploit the project in any form;
+- mirror, scrape, index, dataset-ize, mine, benchmark, or package the project
+  or any substantial part of it;
+- use the project or any part of it to train, fine-tune, evaluate, ground, or
+  improve any machine learning or artificial intelligence system;
+- remove or alter copyright, attribution, legal notices, or technical
+  protection and provenance information;
+- use any name, logo, brand, trade dress, or identifier associated with this
+  project without separate written consent.
+
+4. Public GitHub Limitation
+
+If this repository is publicly accessible through GitHub, other GitHub users may
+only exercise the narrow rights automatically granted by GitHub's Terms of
 Service and platform functionality, such as viewing the repository and creating
-forks on GitHub. No separate copyright, patent, trademark, or other license is
-granted for any use outside those limited GitHub platform rights unless Theo
-Sanz gives prior written permission.
+forks on GitHub. No broader copyright, patent, trademark, trade secret, or
+other intellectual property license is granted for any use outside those narrow
+platform rights unless Theo Sanz gives prior written permission.
 
-Unauthorized use is strictly prohibited and may result in legal action.
+5. No Patent or Trademark License
+
+No patent license, trademark license, trade secret license, publicity right, or
+other intellectual property right is granted under this license.
+
+6. Enforcement
+
+Any unauthorized use is strictly prohibited and may result in suspension of
+access requests, takedown demands, injunctive relief, damages, costs, and any
+other remedies available under applicable law.
+
+7. Governing Law and Jurisdiction
+
+To the fullest extent permitted by applicable law, this license and any dispute
+relating to the project are governed by the laws of France. Exclusive
+jurisdiction lies with the competent courts of Paris, subject to any mandatory
+consumer or statutory jurisdiction rules that cannot be excluded.
+
+8. Severability and No Waiver
+
+If any provision of this license is held unenforceable, the remaining provisions
+remain in effect to the maximum extent permitted by law. A failure to enforce
+any provision is not a waiver.
+
+9. Disclaimer
 
 THE PROJECT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
-OWNER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN
-ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION
-WITH THE PROJECT OR THE USE OR OTHER DEALINGS IN THE PROJECT.
+FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. TO THE MAXIMUM
+EXTENT PERMITTED BY LAW, THE OWNER SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES,
+LOSSES, OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT, OR OTHERWISE, ARISING
+FROM, OUT OF, OR IN CONNECTION WITH THE PROJECT OR ANY USE OF IT.
