@@ -11,3 +11,4 @@ tokio.workspace = true
 tracing.workspace = true
 surrealdb.workspace = true
 geojson.workspace = true
+rustls.workspace = true

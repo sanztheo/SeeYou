@@ -27,3 +27,5 @@ seismic = { path = "../seismic" }
 satellites = { path = "../satellites" }
 space_weather = { path = "../space_weather" }
 weather = { path = "../weather" }
+graph = { path = "../graph" }
+consumer_graph = { path = "../consumer_graph" }

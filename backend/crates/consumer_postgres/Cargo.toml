@@ -29,3 +29,4 @@ space_weather = { path = "../space_weather" }
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+runtime_logging = { path = "../runtime_logging" }

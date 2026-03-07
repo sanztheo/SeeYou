@@ -89,11 +89,13 @@ dependencies = [
  "cache",
  "cameras",
  "chrono",
+ "consumer_graph",
  "cyber",
  "db",
  "events",
  "fires",
  "gdelt",
+ "graph",
  "maritime",
  "reqwest 0.12.28",
  "satellites",
@@ -734,8 +736,10 @@ dependencies = [
  "futures-util",
  "graph",
  "rdkafka",
+ "runtime_logging",
  "serde",
  "serde_json",
+ "surrealdb",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -758,6 +762,7 @@ dependencies = [
  "gdelt",
  "maritime",
  "rdkafka",
+ "runtime_logging",
  "satellites",
  "seismic",
  "serde",
@@ -788,6 +793,7 @@ dependencies = [
  "gdelt",
  "maritime",
  "rdkafka",
+ "runtime_logging",
  "satellites",
  "seismic",
  "serde_json",
@@ -855,6 +861,15 @@ name = "critical-section"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
+
+[[package]]
+name = "crossbeam-channel"
+version = "0.5.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82b8f8f868b36967f9606790d1903570de9ceaf870a7bf9fbbd3016d636a2cb2"
+dependencies = [
+ "crossbeam-utils",
+]
 
 [[package]]
 name = "crossbeam-deque"
@@ -1571,23 +1586,6 @@ dependencies = [
 
 [[package]]
 name = "geo"
-version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4841b40fdbccd4b7042bd6195e4de91da54af34c50632e371bcbfcdfb558b873"
-dependencies = [
- "earcutr",
- "float_next_after",
- "geo-types",
- "geographiclib-rs",
- "log",
- "num-traits",
- "robust",
- "rstar 0.11.0",
- "spade",
-]
-
-[[package]]
-name = "geo"
 version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fc1a1678e54befc9b4bcab6cd43b8e7f834ae8ea121118b0fd8c42747675b4a"
@@ -1611,6 +1609,7 @@ version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f3901269ec6d4f6068d3f09e5f02f995bd076398dcd1dfec407cd230b02d11b"
 dependencies = [
+ "earcutr",
  "float_next_after",
  "geo-types",
  "geographiclib-rs",
@@ -1622,6 +1621,7 @@ dependencies = [
  "rstar 0.12.2",
  "serde",
  "sif-itree",
+ "spade",
 ]
 
 [[package]]
@@ -1715,6 +1715,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "geojson",
+ "rustls",
  "serde",
  "serde_json",
  "surrealdb",
@@ -3364,7 +3365,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -3377,7 +3378,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27c6023962132f4b30eb4c172c91ce92d933da334c59c23cddee82358ddafb0b"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -4016,6 +4017,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "runtime_logging"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "rust-stemmers"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4388,8 +4399,10 @@ dependencies = [
  "events",
  "fires",
  "gdelt",
+ "graph",
  "maritime",
  "reqwest 0.12.28",
+ "runtime_logging",
  "satellites",
  "seismic",
  "serde",
@@ -5026,7 +5039,7 @@ dependencies = [
  "chrono",
  "flatbuffers",
  "futures",
- "geo 0.27.0",
+ "geo 0.32.0",
  "prost 0.14.3",
  "prost-types",
  "rust_decimal",
@@ -5537,6 +5550,18 @@ dependencies = [
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-appender"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "786d480bce6247ab75f005b14ae1624ad978d3029d9113f0a22fa1ac773faeaf"
+dependencies = [
+ "crossbeam-channel",
+ "thiserror 2.0.18",
+ "time",
+ "tracing-subscriber",
 ]
 
 [[package]]

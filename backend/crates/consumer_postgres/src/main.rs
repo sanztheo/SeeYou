@@ -13,7 +13,6 @@ use rdkafka::{
 };
 use serde::Deserialize;
 use tracing::{error, info, warn};
-use tracing_subscriber::{fmt, EnvFilter};
 
 #[derive(Debug, Clone, Deserialize)]
 struct MilitaryBaseInput {
@@ -76,9 +75,8 @@ struct FlowResponse {
 async fn main() -> anyhow::Result<()> {
     let _ = dotenvy::dotenv();
 
-    fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
-        .init();
+    let _runtime_log_guard =
+        runtime_logging::init(env!("CARGO_PKG_NAME"), env!("CARGO_MANIFEST_DIR"))?;
 
     let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL is required")?;
     let broker = bus::resolve_brokers_from_env();

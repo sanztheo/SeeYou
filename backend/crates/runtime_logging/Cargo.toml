@@ -1,0 +1,10 @@
+[package]
+name = "runtime_logging"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+tracing-subscriber.workspace = true
+tracing-appender.workspace = true

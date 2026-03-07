@@ -35,3 +35,5 @@ weather = { path = "../weather" }
 reqwest.workspace = true
 url.workspace = true
 chrono.workspace = true
+graph = { path = "../graph" }
+runtime_logging = { path = "../runtime_logging" }

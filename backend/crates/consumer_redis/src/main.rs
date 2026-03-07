@@ -11,7 +11,6 @@ use rdkafka::{
 };
 use serde_json::{Map, Value};
 use tracing::{error, info, warn};
-use tracing_subscriber::{fmt, EnvFilter};
 
 const CHUNK_REASSEMBLY_TTL: Duration = Duration::from_secs(120);
 
@@ -31,9 +30,8 @@ struct PendingPayload {
 async fn main() -> anyhow::Result<()> {
     let _ = dotenvy::dotenv();
 
-    fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
-        .init();
+    let _runtime_log_guard =
+        runtime_logging::init(env!("CARGO_PKG_NAME"), env!("CARGO_MANIFEST_DIR"))?;
 
     let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
     let broker = bus::resolve_brokers_from_env();

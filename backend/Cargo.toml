@@ -24,6 +24,7 @@ members = [
     "crates/consumer_postgres",
     "crates/graph",
     "crates/consumer_graph",
+    "crates/runtime_logging",
 ]
 resolver = "2"
 
@@ -51,3 +52,5 @@ rdkafka = { version = "0.36", features = ["tokio", "cmake-build", "ssl-vendored"
 tokio-stream = "0.1"
 surrealdb = { version = "3.0.2", default-features = false, features = ["protocol-http", "protocol-ws", "rustls"] }
 geojson = "0.24"
+rustls = { version = "0.23.37", features = ["ring"] }
+tracing-appender = "0.2"
