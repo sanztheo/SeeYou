@@ -6,4 +6,4 @@ pub mod relations;
 mod zone_geometry;
 pub mod zones;
 
-pub use client::{GraphClient, GraphConfig};
+pub use client::{is_retryable_connection_error, GraphClient, GraphConfig};

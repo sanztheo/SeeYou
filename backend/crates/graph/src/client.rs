@@ -1,9 +1,14 @@
+use std::{future::Future, sync::Arc};
+
 use anyhow::Context;
+use rustls::crypto::{ring, CryptoProvider};
 use surrealdb::{
     engine::any::{connect, Any},
     opt::{auth::Root, WaitFor},
     Surreal,
 };
+use tokio::sync::RwLock;
+use tracing::warn;
 
 #[derive(Debug, Clone)]
 pub struct GraphConfig {
@@ -32,37 +37,107 @@ impl GraphConfig {
 
 #[derive(Clone)]
 pub struct GraphClient {
-    db: Surreal<Any>,
+    config: GraphConfig,
+    db: Arc<RwLock<Surreal<Any>>>,
 }
 
 impl GraphClient {
     pub async fn connect(config: &GraphConfig) -> anyhow::Result<Self> {
-        let db = connect(&config.url)
-            .await
-            .with_context(|| format!("failed to connect surrealdb at {}", config.url))?;
-        db.wait_for(WaitFor::Connection).await;
+        ensure_rustls_crypto_provider();
 
-        db.signin(Root {
-            username: config.username.clone(),
-            password: config.password.clone(),
+        let db = connect_db(config).await?;
+
+        Ok(Self {
+            config: config.clone(),
+            db: Arc::new(RwLock::new(db)),
         })
+    }
+
+    pub async fn with_retry<T, Op, Fut>(&self, operation: Op) -> anyhow::Result<T>
+    where
+        Op: Fn(Surreal<Any>) -> Fut + Clone,
+        Fut: Future<Output = anyhow::Result<T>>,
+    {
+        let db = self.current_db().await;
+        match operation.clone()(db).await {
+            Ok(value) => Ok(value),
+            Err(error) if is_retryable_connection_error(&error) => {
+                warn!(error = %error, "graph connection lost; reconnecting and retrying once");
+                let db = self.reconnect().await?;
+                operation(db).await
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    async fn current_db(&self) -> Surreal<Any> {
+        self.db.read().await.clone()
+    }
+
+    async fn reconnect(&self) -> anyhow::Result<Surreal<Any>> {
+        let db = connect_db(&self.config)
+            .await
+            .context("failed to reconnect surrealdb after transient graph connection error")?;
+
+        let mut guard = self.db.write().await;
+        *guard = db.clone();
+
+        Ok(db)
+    }
+
+    pub async fn invalidate(&self) -> anyhow::Result<()> {
+        self.current_db()
+            .await
+            .invalidate()
+            .await
+            .context("failed to invalidate surrealdb session")
+    }
+}
+
+fn ensure_rustls_crypto_provider() {
+    if CryptoProvider::get_default().is_none() {
+        let _ = ring::default_provider().install_default();
+    }
+}
+
+async fn connect_db(config: &GraphConfig) -> anyhow::Result<Surreal<Any>> {
+    let db = connect(&config.url)
         .await
-        .context("failed to authenticate to surrealdb")?;
+        .with_context(|| format!("failed to connect surrealdb at {}", config.url))?;
+    db.wait_for(WaitFor::Connection).await;
 
-        db.use_ns(&config.namespace)
-            .await
-            .context("failed to select surrealdb namespace")?;
-        db.use_db(&config.database)
-            .await
-            .context("failed to select surrealdb database")?;
-        db.wait_for(WaitFor::Database).await;
+    db.signin(Root {
+        username: config.username.clone(),
+        password: config.password.clone(),
+    })
+    .await
+    .context("failed to authenticate to surrealdb")?;
 
-        Ok(Self { db })
-    }
+    db.use_ns(&config.namespace)
+        .use_db(&config.database)
+        .await
+        .context("failed to select surrealdb namespace/database")?;
+    db.wait_for(WaitFor::Database).await;
 
-    pub fn db(&self) -> &Surreal<Any> {
-        &self.db
-    }
+    Ok(db)
+}
+
+pub fn is_retryable_connection_error(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        let message = cause.to_string().to_lowercase();
+        [
+            "connection reset",
+            "connection closed",
+            "broken pipe",
+            "channel closed",
+            "unexpected eof",
+            "not connected",
+            "io error",
+            "websocket",
+        ]
+        .iter()
+        .any(|needle| message.contains(needle))
+    })
 }
 
 pub fn normalize_surreal_url(raw: &str) -> String {
@@ -93,7 +168,9 @@ pub fn normalize_surreal_url(raw: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_surreal_url;
+    use anyhow::anyhow;
+
+    use super::{is_retryable_connection_error, normalize_surreal_url};
 
     #[test]
     fn normalizes_http_rpc_url_to_ws() {
@@ -130,5 +207,17 @@ mod tests {
     #[test]
     fn defaults_empty_url_to_localhost() {
         assert_eq!(normalize_surreal_url(""), "ws://127.0.0.1:8000");
+    }
+
+    #[test]
+    fn classifies_connection_reset_as_retryable() {
+        assert!(is_retryable_connection_error(&anyhow!(
+            "connection reset by peer"
+        )));
+    }
+
+    #[test]
+    fn ignores_non_connection_errors() {
+        assert!(!is_retryable_connection_error(&anyhow!("parse error")));
     }
 }

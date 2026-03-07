@@ -20,7 +20,15 @@ pub async fn upsert(
         .with_context(|| format!("failed to serialize payload for {table}:{id}"))?;
     let statement = format!("UPSERT {table}:`{escaped_id}` MERGE {payload_json} RETURN AFTER;");
 
-    client.db().query(statement).await?.check()?;
+    client
+        .with_retry(move |db| {
+            let statement = statement.clone();
+            async move {
+                db.query(statement).await?.check()?;
+                Ok(())
+            }
+        })
+        .await?;
 
     Ok(())
 }

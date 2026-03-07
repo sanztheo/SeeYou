@@ -231,12 +231,28 @@ const FIELD_DEFINITIONS: &[&str] = &[
 pub async fn migrate(client: &GraphClient) -> anyhow::Result<()> {
     for table in ENTITY_TABLES {
         let statement = format!("DEFINE TABLE IF NOT EXISTS {table} SCHEMALESS;");
-        client.db().query(statement).await?.check()?;
+        client
+            .with_retry(move |db| {
+                let statement = statement.clone();
+                async move {
+                    db.query(statement).await?.check()?;
+                    Ok(())
+                }
+            })
+            .await?;
     }
 
     for table in RELATION_TABLES {
         let statement = format!("DEFINE TABLE OVERWRITE {table} TYPE RELATION SCHEMALESS;");
-        client.db().query(statement).await?.check()?;
+        client
+            .with_retry(move |db| {
+                let statement = statement.clone();
+                async move {
+                    db.query(statement).await?.check()?;
+                    Ok(())
+                }
+            })
+            .await?;
     }
 
     for statement in FIELD_DEFINITIONS {
@@ -250,14 +266,25 @@ pub async fn migrate(client: &GraphClient) -> anyhow::Result<()> {
                 .replace(" TYPE array;", " TYPE option<array>;")
                 .replace(" TYPE object;", " TYPE option<object>;");
         }
-        client.db().query(statement).await?.check()?;
+        client
+            .with_retry(move |db| {
+                let statement = statement.clone();
+                async move {
+                    db.query(statement).await?.check()?;
+                    Ok(())
+                }
+            })
+            .await?;
     }
 
     client
-        .db()
-        .query("DEFINE INDEX IF NOT EXISTS zone_name_idx ON TABLE zone COLUMNS name;")
-        .await?
-        .check()?;
+        .with_retry(|db| async move {
+            db.query("DEFINE INDEX IF NOT EXISTS zone_name_idx ON TABLE zone COLUMNS name;")
+                .await?
+                .check()?;
+            Ok(())
+        })
+        .await?;
 
     Ok(())
 }

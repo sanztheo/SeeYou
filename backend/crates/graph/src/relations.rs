@@ -53,7 +53,15 @@ pub async fn link_with_attributes(
         "RELATE {from_table}:`{escaped_from_id}`->{relation}:`{escaped_edge_id}`->{to_table}:`{escaped_to_id}` CONTENT {attributes_json};"
     );
 
-    client.db().query(statement).await?.check()?;
+    client
+        .with_retry(move |db| {
+            let statement = statement.clone();
+            async move {
+                db.query(statement).await?.check()?;
+                Ok(())
+            }
+        })
+        .await?;
 
     Ok(())
 }
@@ -95,11 +103,18 @@ pub async fn sweep_expired_relations(
     for relation_table in relation_tables {
         let relation_table = (*relation_table).to_string();
         let mut response = client
-            .db()
-            .query(SWEEP_EXPIRED_QUERY)
-            .bind(("relation_table", relation_table))
-            .await?
-            .check()?;
+            .with_retry(move |db| {
+                let relation_table = relation_table.clone();
+                async move {
+                    let response = db
+                        .query(SWEEP_EXPIRED_QUERY)
+                        .bind(("relation_table", relation_table))
+                        .await?
+                        .check()?;
+                    Ok(response)
+                }
+            })
+            .await?;
 
         let deleted: Vec<Value> = response.take(0)?;
         removed += deleted.len();

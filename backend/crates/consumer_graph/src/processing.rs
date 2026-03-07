@@ -2,6 +2,7 @@ use anyhow::Context;
 use chrono::{SecondsFormat, Utc};
 use serde_json::{json, Value};
 use std::time::Instant;
+use surrealdb::types::Value as SurrealValue;
 use tracing::info;
 
 use crate::{
@@ -64,6 +65,71 @@ impl GraphBusConsumer {
             entity_id = %entity_id,
             "graph entity upserted from bus envelope"
         );
+
+        Ok(())
+    }
+
+    pub(crate) async fn process_entity_on_demand(
+        &self,
+        table: &str,
+        entity_payload: &Value,
+        _topic: &str,
+    ) -> anyhow::Result<()> {
+        let normalized_payload = normalize_entity_payload(table, entity_payload);
+        let entity_id = resolve_entity_id(table, None, &normalized_payload);
+        graph::entities::upsert(&self.client, table, &entity_id, normalized_payload.clone())
+            .await
+            .with_context(|| format!("failed to upsert on-demand entity {table}:{entity_id}"))?;
+        self.invalidate_table_cache(table).await;
+
+        let location_zone_ids = self.resolve_location_zone_ids(&normalized_payload);
+
+        match table {
+            "aircraft" => {
+                let contains_zone_ids = self.resolve_contains_zone_ids(&normalized_payload);
+                self.link_to_zones(
+                    "aircraft",
+                    &entity_id,
+                    "flies_over",
+                    &contains_zone_ids,
+                    None,
+                )
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to create flies_over relations on demand for aircraft:{entity_id}"
+                    )
+                })?;
+            }
+            "camera" | "traffic_segment" | "weather" => {
+                self.link_to_zones(table, &entity_id, "located_in", &location_zone_ids, None)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "failed to create located_in relations on demand for {table}:{entity_id}"
+                        )
+                    })?;
+            }
+            _ => {}
+        }
+
+        if table == "weather" {
+            self.link_to_zones(table, &entity_id, "covers", &location_zone_ids, None)
+                .await
+                .with_context(|| {
+                    format!("failed to create covers relations on demand for {table}:{entity_id}")
+                })?;
+        }
+
+        if table == "satellite" {
+            self.link_to_zones(table, &entity_id, "passes_over", &location_zone_ids, None)
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to create passes_over relations on demand for {table}:{entity_id}"
+                    )
+                })?;
+        }
 
         Ok(())
     }
@@ -141,16 +207,27 @@ impl GraphBusConsumer {
         let table_name = table.to_string();
         let mut response = self
             .client
-            .db()
-            .query("SELECT * FROM type::table($table);")
-            .bind(("table", table_name))
+            .with_retry(move |db| {
+                let table_name = table_name.clone();
+                async move {
+                    let response = db
+                        .query("SELECT * FROM type::table($table);")
+                        .bind(("table", table_name))
+                        .await?
+                        .check()?;
+                    Ok(response)
+                }
+            })
             .await
-            .and_then(|response| response.check())
             .with_context(|| format!("failed to query entities from table={table}"))?;
 
-        let records: Vec<Value> = response
+        let records: Vec<SurrealValue> = response
             .take(0)
             .with_context(|| format!("failed to decode entities from table={table}"))?;
+        let records = records
+            .into_iter()
+            .map(SurrealValue::into_json_value)
+            .collect::<Vec<_>>();
 
         self.store_table_entities_cache(table, records.clone())
             .await;
@@ -409,12 +486,15 @@ mod tests {
             aircraft_id
         );
         let mut flies_over_response = client
-            .db()
-            .query(flies_over_sql)
+            .with_retry(move |db| {
+                let flies_over_sql = flies_over_sql.clone();
+                async move {
+                    let response = db.query(flies_over_sql).await?.check()?;
+                    Ok(response)
+                }
+            })
             .await
-            .context("failed querying flies_over count")?
-            .check()
-            .context("flies_over count query returned error")?;
+            .context("failed querying flies_over count")?;
         let flies_over_rows: Vec<Value> = flies_over_response.take(0)?;
         let flies_over_total = flies_over_rows
             .first()
@@ -428,12 +508,15 @@ mod tests {
             aircraft_id, camera_id
         );
         let mut monitored_by_response = client
-            .db()
-            .query(monitored_by_sql)
+            .with_retry(move |db| {
+                let monitored_by_sql = monitored_by_sql.clone();
+                async move {
+                    let response = db.query(monitored_by_sql).await?.check()?;
+                    Ok(response)
+                }
+            })
             .await
-            .context("failed querying monitored_by count")?
-            .check()
-            .context("monitored_by count query returned error")?;
+            .context("failed querying monitored_by count")?;
         let monitored_by_rows: Vec<Value> = monitored_by_response.take(0)?;
         let monitored_by_total = monitored_by_rows
             .first()
@@ -445,12 +528,12 @@ mod tests {
         let traversal_sql =
             "SELECT <-flies_over<-aircraft.id AS aircraft_ids FROM zone:`city-paris`;";
         let mut traversal_response = client
-            .db()
-            .query(traversal_sql)
+            .with_retry(move |db| async move {
+                let response = db.query(traversal_sql).await?.check()?;
+                Ok(response)
+            })
             .await
-            .context("failed querying traversal ids from city-paris")?
-            .check()
-            .context("traversal query returned error")?;
+            .context("failed querying traversal ids from city-paris")?;
         let traversal_rows: Vec<Value> = traversal_response.take(0)?;
         let traversal_contains_aircraft = traversal_rows
             .first()
@@ -470,14 +553,16 @@ mod tests {
             "DELETE flies_over WHERE `in` = aircraft:`{aircraft_id}`; DELETE monitored_by WHERE `in` = aircraft:`{aircraft_id}`; DELETE aircraft:`{aircraft_id}`; DELETE camera:`{camera_id}`;"
         );
         client
-            .db()
-            .query(cleanup_sql)
+            .with_retry(move |db| {
+                let cleanup_sql = cleanup_sql.clone();
+                async move {
+                    db.query(cleanup_sql).await?.check()?;
+                    Ok(())
+                }
+            })
             .await
-            .context("failed running phase2a cleanup query")?
-            .check()
-            .context("phase2a cleanup query returned error")?;
+            .context("failed running phase2a cleanup query")?;
         client
-            .db()
             .invalidate()
             .await
             .context("failed to invalidate surreal session after phase2a test")?;
