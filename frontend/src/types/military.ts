@@ -1,4 +1,5 @@
 export interface MilitaryBase {
+  id?: string;
   name: string;
   country: string;
   branch: string;

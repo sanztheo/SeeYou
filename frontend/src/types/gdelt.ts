@@ -1,4 +1,5 @@
 export interface GdeltEvent {
+  id?: string;
   url: string;
   title: string;
   lat: number;

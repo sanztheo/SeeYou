@@ -1,4 +1,5 @@
 export interface FireHotspot {
+  id?: string;
   lat: number;
   lon: number;
   brightness: number;

@@ -1,4 +1,5 @@
 export interface NuclearSite {
+  id?: string;
   name: string;
   country: string;
   type: string;
