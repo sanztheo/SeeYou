@@ -32,6 +32,7 @@ import { MaritimeLayer } from "../Maritime/MaritimeLayer";
 import { CyberThreatLayer } from "../Cyber/CyberThreatLayer";
 import { SpaceWeatherLayer } from "../SpaceWeather/SpaceWeatherLayer";
 import { ConvergenceAlertLayer } from "../Convergence/ConvergenceAlertLayer";
+import { RelationLines } from "./RelationLines";
 import { useViewerCallbacks } from "../../hooks/useViewerCallbacks";
 import type { CameraState, CursorState } from "../../hooks/useViewerCallbacks";
 import type {
@@ -68,6 +69,7 @@ import type { CyberThreat, CyberFilter } from "../../types/cyber";
 import type { AuroraPoint, SpaceWeatherFilter } from "../../types/spaceWeather";
 import type { ConvergenceZone } from "../Convergence/ConvergenceAlertLayer";
 import type { BasemapStyle } from "../../types/basemap";
+import type { GraphRef, GraphSnapshot } from "../../types/graph";
 import { DEFAULT_BASEMAP_STYLE } from "../../types/basemap";
 
 const RAD2DEG = 180 / Math.PI;
@@ -171,6 +173,9 @@ interface GlobeProps {
   } | null;
   onFlyComplete?: () => void;
   basemapStyle?: BasemapStyle;
+
+  graphSnapshot?: GraphSnapshot | null;
+  graphFocus?: GraphRef | null;
 }
 
 const DEFAULT_AIRCRAFT_FILTER: AircraftFilter = {
@@ -239,6 +244,8 @@ export function Globe({
   flyToTarget,
   onFlyComplete,
   basemapStyle,
+  graphSnapshot,
+  graphFocus,
 }: GlobeProps): React.ReactElement {
   const viewerRef = useRef<ViewerRef>(null);
   const onViewportChangeRef = useRef(onViewportChange);
@@ -521,6 +528,8 @@ export function Globe({
       {convergenceZones && convergenceZones.length > 0 && (
         <ConvergenceAlertLayer zones={convergenceZones} enabled={true} />
       )}
+
+      <RelationLines snapshot={graphSnapshot} focus={graphFocus} />
 
       <CityLabelsLayer />
     </ResiumViewer>
