@@ -4,6 +4,7 @@ mod error;
 
 use std::time::Duration;
 
+use anyhow::Context;
 use axum::{routing::get, Router};
 use serde::Serialize;
 use tower_http::{
@@ -11,7 +12,6 @@ use tower_http::{
     trace::TraceLayer,
 };
 use tracing::{info, warn};
-use tracing_subscriber::{fmt, EnvFilter};
 
 use app_state::AppState;
 use config::Config;
@@ -23,9 +23,8 @@ const FIRE_BUS_CHUNK_SIZE: usize = 2_000;
 async fn main() -> anyhow::Result<()> {
     let _ = dotenvy::dotenv();
 
-    fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
-        .init();
+    let _runtime_log_guard =
+        runtime_logging::init(env!("CARGO_PKG_NAME"), env!("CARGO_MANIFEST_DIR"))?;
 
     let config = Config::from_env()?;
 
@@ -54,6 +53,13 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let ws_broadcast = ws::Broadcaster::new(BROADCAST_CAPACITY);
+    let graph_client = match initialize_graph_client().await {
+        Ok(client) => Some(client),
+        Err(error) => {
+            warn!(error = %error, "graph client unavailable; /graph endpoints will return 503");
+            None
+        }
+    };
 
     let http_client = reqwest::Client::new();
     let poll_interval = Duration::from_secs(config.poll_interval_secs);
@@ -564,6 +570,7 @@ async fn main() -> anyhow::Result<()> {
         redis_pool,
         pg_pool,
         bus_producer,
+        graph_client,
         ws_broadcast,
         http_client,
     };
@@ -589,6 +596,30 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     Ok(())
+}
+
+async fn initialize_graph_client() -> anyhow::Result<graph::GraphClient> {
+    let graph_config = graph::GraphConfig::from_env();
+    let client = graph::GraphClient::connect(&graph_config)
+        .await
+        .context("failed to connect graph client")?;
+    info!("graph client connected");
+
+    info!("running graph ontology migration");
+    graph::ontology::migrate(&client)
+        .await
+        .context("failed to run graph ontology migration")?;
+    info!("graph ontology migration completed");
+
+    let zones_path = std::env::var("GRAPH_ZONES_FILE")
+        .unwrap_or_else(|_| "data/zones/global_zones.geojson".to_string());
+    info!(path = %zones_path, "seeding graph zones");
+    let stats = graph::zones::seed_zones_from_file(&client, &zones_path)
+        .await
+        .with_context(|| format!("failed to seed zones from {zones_path}"))?;
+    info!(count = stats.upserted, "zone seed completed");
+
+    Ok(client)
 }
 
 async fn publish_json<T: Serialize>(

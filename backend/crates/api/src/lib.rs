@@ -5,6 +5,8 @@ mod events;
 mod fires;
 mod gdelt;
 mod geocode;
+mod graph_api;
+mod graph_hydration;
 mod health;
 mod maritime;
 mod military_bases;
@@ -13,6 +15,7 @@ pub mod router;
 mod satellites;
 mod seismic;
 mod space_weather;
+mod stable_ids;
 mod tomtom;
 mod weather;
 

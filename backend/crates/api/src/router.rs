@@ -7,6 +7,7 @@ where
     cache::RedisPool: axum::extract::FromRef<S>,
     Option<db::PgPool>: axum::extract::FromRef<S>,
     Option<bus::BusProducer>: axum::extract::FromRef<S>,
+    Option<graph::GraphClient>: axum::extract::FromRef<S>,
     reqwest::Client: axum::extract::FromRef<S>,
 {
     Router::new()
@@ -38,6 +39,19 @@ where
             "/nuclear-sites",
             get(super::nuclear_sites::get_nuclear_sites),
         )
+        .route(
+            "/graph/entity/:entity_type/:id",
+            get(super::graph_api::get_entity_graph),
+        )
+        .route(
+            "/graph/neighbors/:entity_type/:id",
+            get(super::graph_api::get_neighbors_graph),
+        )
+        .route(
+            "/graph/zone/:zone_id",
+            get(super::graph_api::get_zone_graph),
+        )
+        .route("/graph/search", get(super::graph_api::search_graph))
         .route("/traffic/tiles-url", get(super::tomtom::get_tiles_url))
         .route("/traffic/flow", get(super::tomtom::get_flow))
         .route("/traffic/incidents", get(super::tomtom::get_incidents))
