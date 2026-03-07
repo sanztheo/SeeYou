@@ -8,7 +8,8 @@ export type SectionId =
   | "weather"
   | "metar"
   | "events"
-  | "intel";
+  | "intel"
+  | "graph";
 
 interface IconRailProps {
   activeSection: SectionId | null;
@@ -99,6 +100,15 @@ const SECTIONS: SectionDef[] = [
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
         <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z" />
+      </svg>
+    ),
+  },
+  {
+    id: "graph",
+    label: "REL",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+        <path d="M7 4a3 3 0 013 3c0 .27-.03.54-.1.79l3.26 1.86A3 3 0 0118 12c0 .27-.03.54-.1.79l2.04 1.17A3 3 0 1120 16l-2.04-1.17A3 3 0 0112 13a3 3 0 01-1.17-2.04L7.57 9.1A3 3 0 117 4zm0 2a1 1 0 100 2 1 1 0 000-2zm11 5a1 1 0 100 2 1 1 0 000-2zm-6 1a1 1 0 100 2 1 1 0 000-2zm8 5a1 1 0 100 2 1 1 0 000-2z" />
       </svg>
     ),
   },

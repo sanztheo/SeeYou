@@ -41,10 +41,13 @@ import { AlertSystem } from "./components/Alerts/AlertSystem";
 import { CursorCoords } from "./components/HUD/CursorCoords";
 import { CameraInfo } from "./components/HUD/CameraInfo";
 import { DraggablePanel } from "./components/DraggablePanel";
+import { GraphView } from "./components/Graph/GraphView";
 import { useAppState } from "./hooks/useAppState";
+import { useGraphNavigation } from "./hooks/useGraphNavigation";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import type { CameraState, CursorState } from "./hooks/useViewerCallbacks";
 import type { Camera } from "./types/camera";
+import type { GraphNode as GraphNodeType, GraphRef } from "./types/graph";
 
 export function App(): React.ReactElement {
   const state = useAppState();
@@ -105,9 +108,30 @@ export function App(): React.ReactElement {
       state.setFlyToTarget({ lat, lon, alt }),
     [state.setFlyToTarget],
   );
+  const graphNavigation = useGraphNavigation({
+    onFlyTo: (lat, lon) => state.setFlyToTarget({ lat, lon, alt: 2500 }),
+  });
   const handleFlyComplete = useCallback(
     () => state.setFlyToTarget(null),
     [state.setFlyToTarget],
+  );
+
+  const openGraphFor = useCallback(
+    (target: GraphRef) => {
+      graphNavigation.focusEntity(target);
+      setActiveSection("graph");
+    },
+    [graphNavigation.focusEntity],
+  );
+
+  const handleSelectGraphNode = useCallback(
+    (node: GraphNodeType) => {
+      openGraphFor(node.ref);
+      if (typeof node.lat === "number" && typeof node.lon === "number") {
+        state.setFlyToTarget({ lat: node.lat, lon: node.lon, alt: 2500 });
+      }
+    },
+    [openGraphFor, state.setFlyToTarget],
   );
 
   const handleSelectCamera = useCallback(
@@ -141,6 +165,77 @@ export function App(): React.ReactElement {
     document.addEventListener("fullscreenchange", sync);
     return () => document.removeEventListener("fullscreenchange", sync);
   }, []);
+
+  useEffect(() => {
+    const target: GraphRef | null = state.selectedAircraft
+      ? { table: "aircraft", id: state.selectedAircraft.icao }
+      : state.selectedCamera
+        ? { table: "camera", id: state.selectedCamera.id }
+        : state.selectedSatellite
+          ? { table: "satellite", id: String(state.selectedSatellite.norad_id) }
+          : state.selectedEvent
+            ? { table: "event", id: state.selectedEvent.id }
+            : state.selectedMetar
+              ? { table: "weather", id: state.selectedMetar.station_id }
+              : state.selectedCable
+                ? { table: "cable", id: state.selectedCable.id }
+                : state.selectedEarthquake
+                  ? { table: "seismic_event", id: state.selectedEarthquake.id }
+                  : state.selectedFire
+                    ? state.selectedFire.id
+                      ? {
+                          table: "fire_hotspot",
+                          id: state.selectedFire.id,
+                        }
+                      : null
+                    : state.selectedGdeltEvent
+                      ? state.selectedGdeltEvent.id
+                        ? {
+                            table: "gdelt_event",
+                            id: state.selectedGdeltEvent.id,
+                          }
+                        : null
+                      : state.selectedVessel
+                        ? { table: "vessel", id: state.selectedVessel.mmsi }
+                        : state.selectedCyberThreat
+                          ? {
+                              table: "cyber_threat",
+                              id: state.selectedCyberThreat.id,
+                            }
+                          : state.selectedMilitaryBase
+                            ? state.selectedMilitaryBase.id
+                              ? {
+                                  table: "military_base",
+                                  id: state.selectedMilitaryBase.id,
+                                }
+                              : null
+                            : state.selectedNuclearSite
+                              ? state.selectedNuclearSite.id
+                                ? {
+                                    table: "nuclear_site",
+                                    id: state.selectedNuclearSite.id,
+                                  }
+                                : null
+                              : null;
+
+    if (!target) return;
+    openGraphFor(target);
+  }, [
+    openGraphFor,
+    state.selectedAircraft,
+    state.selectedCamera,
+    state.selectedSatellite,
+    state.selectedEvent,
+    state.selectedMetar,
+    state.selectedCable,
+    state.selectedEarthquake,
+    state.selectedFire,
+    state.selectedGdeltEvent,
+    state.selectedVessel,
+    state.selectedCyberThreat,
+    state.selectedMilitaryBase,
+    state.selectedNuclearSite,
+  ]);
 
   const handleCloseAircraft = useCallback(
     () => state.setSelectedAircraft(null),
@@ -285,6 +380,8 @@ export function App(): React.ReactElement {
         flyToTarget={state.flyToTarget}
         onFlyComplete={handleFlyComplete}
         basemapStyle={state.basemapStyle}
+        graphSnapshot={graphNavigation.snapshot}
+        graphFocus={graphNavigation.focus}
       />
 
       {/* Icon Rail (always visible unless fullscreen) */}
@@ -395,6 +492,14 @@ export function App(): React.ReactElement {
             vesselCount={state.vessels.length}
             threatCount={state.cyberThreats.length}
             kpIndex={state.kpIndex}
+          />
+        </SidePanel>
+      )}
+      {panelOpen && activeSection === "graph" && (
+        <SidePanel title="Relations" onClose={handleCloseSection}>
+          <GraphView
+            navigation={graphNavigation}
+            onSelectNode={handleSelectGraphNode}
           />
         </SidePanel>
       )}
