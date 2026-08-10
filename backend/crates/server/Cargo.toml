@@ -27,6 +27,7 @@ gdelt = { path = "../gdelt" }
 maritime = { path = "../maritime" }
 seismic = { path = "../seismic" }
 services = { path = "../services" }
+prediction = { path = "../prediction" }
 space_weather = { path = "../space_weather" }
 traffic = { path = "../traffic" }
 cameras = { path = "../cameras" }

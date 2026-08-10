@@ -1,4 +1,5 @@
 use cache::RedisPool;
+use prediction::service::SharedPredictor;
 use ws::Broadcaster;
 
 #[derive(Clone)]
@@ -9,6 +10,7 @@ pub struct AppState {
     pub graph_client: Option<graph::GraphClient>,
     pub ws_broadcast: Broadcaster,
     pub http_client: reqwest::Client,
+    pub predictor: SharedPredictor,
 }
 
 // Allow axum extractors to pull `RedisPool` out of `AppState`.
@@ -50,5 +52,12 @@ impl axum::extract::FromRef<AppState> for Option<graph::GraphClient> {
 impl axum::extract::FromRef<AppState> for reqwest::Client {
     fn from_ref(state: &AppState) -> Self {
         state.http_client.clone()
+    }
+}
+
+// Allow axum extractors to pull `SharedPredictor` out of `AppState`.
+impl axum::extract::FromRef<AppState> for SharedPredictor {
+    fn from_ref(state: &AppState) -> Self {
+        state.predictor.clone()
     }
 }

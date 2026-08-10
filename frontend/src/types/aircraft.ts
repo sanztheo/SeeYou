@@ -32,13 +32,15 @@ export interface FlightRoute {
 
 // ── IMM-EKF Prediction types ────────────────────────────────
 
+/** `lat`/`lon` are rounded to 5 decimals (~1.1 m) and `alt_m` to the metre —
+ * wire payload reduction (SeeYou v2 P0-2). No per-point timestamp or
+ * uncertainty: both derive from the trajectory-level `step_secs` /
+ * `sigma_growth_m_s` (point `i`, 0-based, is `(i + 1) * step_secs` seconds
+ * from now). */
 export interface PredictedPoint {
   lat: number;
   lon: number;
   alt_m: number;
-  dt_secs: number;
-  sigma_xy_m: number;
-  sigma_z_m: number;
 }
 
 export type MilitaryPattern =
@@ -57,6 +59,15 @@ export type MilitaryPattern =
 export interface PredictedTrajectory {
   icao: string;
   points: PredictedPoint[];
+  /** Seconds between consecutive points. */
+  step_secs: number;
+  /** Combined horizontal+vertical 1-sigma uncertainty growth rate (m/s):
+   * sigma at point `i` (0-based) ≈ `sigma_growth_m_s * (i + 1) * step_secs`.
+   * `0` for a cold-start trajectory, which tracks no covariance. */
+  sigma_growth_m_s: number;
   pattern: MilitaryPattern | null;
   model_probabilities: [number, number, number, number];
+  /** "imm" for a tracked military aircraft, "cv_coldstart" for a
+   * straight-line + vertical-rate projection from last known kinematics. */
+  model: string;
 }

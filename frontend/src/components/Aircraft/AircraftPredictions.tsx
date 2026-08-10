@@ -65,7 +65,10 @@ export function usePredictions(
 
       for (let i = 0; i < pred.points.length; i += 4) {
         const p = pred.points[i];
-        if (p.sigma_xy_m < 500) continue;
+        // sigma at point i (0-based) derives from the trajectory-level
+        // growth rate — see PredictedTrajectory.sigma_growth_m_s.
+        const sigmaM = pred.sigma_growth_m_s * (i + 1) * pred.step_secs;
+        if (sigmaM < 500) continue;
 
         const corridorCenter = Cartesian3.fromDegrees(p.lon, p.lat, p.alt_m);
         const alpha = Math.max(0.03, 0.15 - (i / pred.points.length) * 0.12);
@@ -74,8 +77,8 @@ export function usePredictions(
           id: `pred-unc-${icao}-${i}`,
           position: corridorCenter,
           ellipse: {
-            semiMajorAxis: p.sigma_xy_m,
-            semiMinorAxis: p.sigma_xy_m,
+            semiMajorAxis: sigmaM,
+            semiMinorAxis: sigmaM,
             height: p.alt_m,
             material: PREDICTION_COLOR.withAlpha(alpha),
             outline: false,

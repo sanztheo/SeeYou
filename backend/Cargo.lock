@@ -97,6 +97,7 @@ dependencies = [
  "gdelt",
  "graph",
  "maritime",
+ "prediction",
  "reqwest 0.12.28",
  "satellites",
  "seismic",
@@ -3298,6 +3299,7 @@ version = "0.1.0"
 dependencies = [
  "nalgebra",
  "serde",
+ "tokio",
  "tracing",
 ]
 
@@ -4401,6 +4403,7 @@ dependencies = [
  "gdelt",
  "graph",
  "maritime",
+ "prediction",
  "reqwest 0.12.28",
  "runtime_logging",
  "satellites",

@@ -7,3 +7,4 @@ edition = "2021"
 nalgebra = "0.33"
 serde.workspace = true
 tracing.workspace = true
+tokio.workspace = true

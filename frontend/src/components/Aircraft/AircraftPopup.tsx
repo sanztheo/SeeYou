@@ -212,7 +212,7 @@ export function AircraftPopup({
               )}
               <Row
                 label="Horizon"
-                value={`${prediction.points.length > 0 ? Math.round(prediction.points[prediction.points.length - 1].dt_secs / 60) : 0} min`}
+                value={`${prediction.points.length > 0 ? Math.round((prediction.points.length * prediction.step_secs) / 60) : 0} min`}
               />
               <div className="space-y-1">
                 <span className="text-emerald-800/60 text-[10px]">

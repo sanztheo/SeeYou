@@ -1,5 +1,8 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Instant;
+
+use tokio::sync::RwLock;
 
 use crate::ekf::meas_vec;
 use crate::history::{HistoryBuffer, HistoryPoint};
@@ -11,11 +14,16 @@ use crate::trajectory::{self, PredictedTrajectory};
 /// How far ahead to predict (seconds).
 const PREDICTION_HORIZON_SECS: f64 = 300.0;
 /// Spacing between predicted points.
-const PREDICTION_STEP_SECS: f64 = 5.0;
+const PREDICTION_STEP_SECS: f64 = 15.0;
 /// History buffer length.
 const HISTORY_SECS: f64 = 1800.0;
 /// Prune trackers not seen for this long.
 const STALE_SECS: f64 = 120.0;
+
+/// Shared, lock-guarded prediction state — reachable from both the aircraft
+/// tracker task (write lock, held for one `process_batch` call per poll) and
+/// the on-demand `GET /aircraft/:icao/predict` handler (read lock).
+pub type SharedPredictor = Arc<RwLock<PredictionService>>;
 
 /// Input measurement from ADS-B.
 pub struct AircraftMeasurement {
@@ -27,6 +35,7 @@ pub struct AircraftMeasurement {
     pub heading_deg: f64,
     pub vertical_rate_ms: f64,
     pub is_military: bool,
+    pub on_ground: bool,
 }
 
 /// Per-aircraft tracking state.
@@ -40,10 +49,26 @@ struct AircraftState {
     last_seen: Instant,
 }
 
+/// Last known kinematics for an aircraft with no IMM/EKF state. Populated
+/// from every batch for every aircraft (civil and military — see
+/// `PredictionService::process_batch`), so `get_trajectory` always has
+/// something to cold-start a `ConstantVelocity` projection from.
+#[derive(Debug, Clone, Copy)]
+struct LastKinematics {
+    lat: f64,
+    lon: f64,
+    alt_m: f64,
+    speed_ms: f64,
+    heading_deg: f64,
+    vertical_rate_ms: f64,
+    last_seen: Instant,
+}
+
 /// The top-level prediction service.  Feed it aircraft measurements and
 /// it returns predicted trajectories for military aircraft.
 pub struct PredictionService {
     trackers: HashMap<String, AircraftState>,
+    last_kinematics: HashMap<String, LastKinematics>,
     epoch: Instant,
 }
 
@@ -51,6 +76,7 @@ impl PredictionService {
     pub fn new() -> Self {
         Self {
             trackers: HashMap::new(),
+            last_kinematics: HashMap::new(),
             epoch: Instant::now(),
         }
     }
@@ -59,7 +85,11 @@ impl PredictionService {
         self.epoch.elapsed().as_secs_f64()
     }
 
-    /// Feed a batch of aircraft and get predictions for all tracked military aircraft.
+    /// Feed a batch of aircraft and get predictions for all tracked military
+    /// aircraft. Every aircraft's last known kinematics is recorded
+    /// regardless of `is_military` — that's what lets `get_trajectory` fall
+    /// back to a cold-start projection for a civil aircraft, which never
+    /// gets an IMM tracker.
     pub fn process_batch(
         &mut self,
         measurements: &[AircraftMeasurement],
@@ -68,7 +98,20 @@ impl PredictionService {
         let t = self.now_secs();
 
         for m in measurements {
-            if !m.is_military {
+            self.last_kinematics.insert(
+                m.icao.clone(),
+                LastKinematics {
+                    lat: m.lat,
+                    lon: m.lon,
+                    alt_m: m.alt_m,
+                    speed_ms: m.speed_ms,
+                    heading_deg: m.heading_deg,
+                    vertical_rate_ms: m.vertical_rate_ms,
+                    last_seen: now,
+                },
+            );
+
+            if !m.is_military || m.on_ground {
                 continue;
             }
             self.update_aircraft(m, t, now);
@@ -132,6 +175,8 @@ impl PredictionService {
     fn prune_stale(&mut self, now: Instant) {
         self.trackers
             .retain(|_, s| now.duration_since(s.last_seen).as_secs_f64() < STALE_SECS);
+        self.last_kinematics
+            .retain(|_, k| now.duration_since(k.last_seen).as_secs_f64() < STALE_SECS);
     }
 
     fn generate_predictions(&self) -> Vec<PredictedTrajectory> {
@@ -142,7 +187,7 @@ impl PredictionService {
                 continue;
             }
 
-            let points = trajectory::generate(
+            let (points, sigma_growth_m_s) = trajectory::generate(
                 &state.imm,
                 state.origin_lat,
                 state.origin_lon,
@@ -153,12 +198,70 @@ impl PredictionService {
             result.push(PredictedTrajectory {
                 icao: icao.clone(),
                 points,
+                step_secs: PREDICTION_STEP_SECS,
+                sigma_growth_m_s,
                 pattern: state.pattern.clone(),
                 model_probabilities: state.imm.probabilities(),
+                model: "imm".to_string(),
             });
         }
 
         result
+    }
+
+    /// Full-resolution trajectory for one aircraft, on demand (the
+    /// `GET /aircraft/:icao/predict` route). Replays the IMM state if one
+    /// exists (military, airborne, already seen at least once); otherwise
+    /// cold-starts a `ConstantVelocity` projection from the aircraft's last
+    /// known kinematics — that fallback is what makes this work for civil
+    /// aircraft, which never get an IMM tracker (see `process_batch`).
+    pub fn get_trajectory(
+        &self,
+        icao: &str,
+        horizon_secs: f64,
+        step_secs: f64,
+    ) -> Option<PredictedTrajectory> {
+        if let Some(state) = self.trackers.get(icao) {
+            if state.imm.is_initialised() {
+                let (points, sigma_growth_m_s) = trajectory::generate(
+                    &state.imm,
+                    state.origin_lat,
+                    state.origin_lon,
+                    horizon_secs,
+                    step_secs,
+                );
+                return Some(PredictedTrajectory {
+                    icao: icao.to_string(),
+                    points,
+                    step_secs,
+                    sigma_growth_m_s,
+                    pattern: state.pattern.clone(),
+                    model_probabilities: state.imm.probabilities(),
+                    model: "imm".to_string(),
+                });
+            }
+        }
+
+        let kin = self.last_kinematics.get(icao)?;
+        let points = trajectory::generate_cv(
+            kin.lat,
+            kin.lon,
+            kin.alt_m,
+            kin.speed_ms,
+            kin.heading_deg,
+            kin.vertical_rate_ms,
+            horizon_secs,
+            step_secs,
+        );
+        Some(PredictedTrajectory {
+            icao: icao.to_string(),
+            points,
+            step_secs,
+            sigma_growth_m_s: 0.0,
+            pattern: None,
+            model_probabilities: [0.0; 4],
+            model: "cv_coldstart".to_string(),
+        })
     }
 
     pub fn tracked_count(&self) -> usize {
@@ -177,4 +280,93 @@ fn latlon_to_enu(lat: f64, lon: f64, origin_lat: f64, origin_lon: f64) -> (f64, 
     let x = (lon - origin_lon) * 111_320.0 * cos_lat;
     let y = (lat - origin_lat) * 111_320.0;
     (x, y)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn measurement(icao: &str, is_military: bool, on_ground: bool) -> AircraftMeasurement {
+        AircraftMeasurement {
+            icao: icao.to_string(),
+            lat: 48.0,
+            lon: 2.0,
+            alt_m: 8000.0,
+            speed_ms: 200.0,
+            heading_deg: 90.0,
+            vertical_rate_ms: 0.0,
+            is_military,
+            on_ground,
+        }
+    }
+
+    #[test]
+    fn process_batch_ignores_civilian_aircraft_for_imm_but_still_predicts_on_demand() {
+        let mut svc = PredictionService::new();
+        svc.process_batch(&[measurement("civ1", false, false)]);
+
+        // No IMM tracker for a civilian — tracked_count stays at 0.
+        assert_eq!(svc.tracked_count(), 0);
+
+        // But get_trajectory still returns a cold-start projection, because
+        // last_kinematics is fed for every aircraft, not just military ones.
+        let traj = svc.get_trajectory("civ1", 300.0, 15.0).unwrap();
+        assert_eq!(traj.model, "cv_coldstart");
+        assert!(!traj.points.is_empty());
+    }
+
+    #[test]
+    fn process_batch_tracks_airborne_military_aircraft() {
+        let mut svc = PredictionService::new();
+        svc.process_batch(&[measurement("mil1", true, false)]);
+        assert_eq!(svc.tracked_count(), 1);
+
+        let traj = svc.get_trajectory("mil1", 300.0, 15.0).unwrap();
+        assert_eq!(traj.model, "imm");
+    }
+
+    #[test]
+    fn process_batch_skips_imm_for_grounded_military_aircraft() {
+        let mut svc = PredictionService::new();
+        svc.process_batch(&[measurement("mil-parked", true, true)]);
+
+        // Not IMM-tracked (on the ground), but still cold-start-able.
+        assert_eq!(svc.tracked_count(), 0);
+        let traj = svc.get_trajectory("mil-parked", 300.0, 15.0).unwrap();
+        assert_eq!(traj.model, "cv_coldstart");
+    }
+
+    #[test]
+    fn get_trajectory_returns_none_for_unknown_icao() {
+        let svc = PredictionService::new();
+        assert!(svc.get_trajectory("ghost", 300.0, 15.0).is_none());
+    }
+
+    #[test]
+    fn prune_stale_purges_last_kinematics_for_unseen_aircraft() {
+        let mut svc = PredictionService::new();
+        svc.process_batch(&[measurement("civ-gone", false, false)]);
+        assert!(svc.get_trajectory("civ-gone", 300.0, 15.0).is_some());
+
+        // Simulate STALE_SECS elapsing without another sighting: last_kinematics
+        // must be purged alongside trackers, or it grows unbounded for every
+        // ICAO ever seen (the leak this test guards against).
+        let future = Instant::now() + std::time::Duration::from_secs_f64(STALE_SECS + 1.0);
+        svc.prune_stale(future);
+
+        assert!(svc.get_trajectory("civ-gone", 300.0, 15.0).is_none());
+    }
+
+    #[test]
+    fn generate_predictions_uses_configured_horizon_and_step() {
+        let mut svc = PredictionService::new();
+        svc.process_batch(&[measurement("mil2", true, false)]);
+        let predictions = svc.process_batch(&[measurement("mil2", true, false)]);
+        assert_eq!(predictions.len(), 1);
+        assert_eq!(predictions[0].step_secs, PREDICTION_STEP_SECS);
+        assert_eq!(
+            predictions[0].points.len(),
+            (PREDICTION_HORIZON_SECS / PREDICTION_STEP_SECS).ceil() as usize
+        );
+    }
 }

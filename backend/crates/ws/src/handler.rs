@@ -67,15 +67,15 @@ async fn handle_socket(socket: WebSocket, broadcaster: Broadcaster) {
                 }
             }
 
-            // Outbound broadcast message.
+            // Outbound broadcast message. The frame is already-encoded JSON
+            // (`Arc<str>`, encoded once in `Broadcaster::send`) -- this clones
+            // the string per client instead of re-running serde per socket.
             result = broadcast_rx.recv() => {
                 match result {
-                    Ok(msg) => {
-                        if let Some(frame) = encode_message(&msg) {
-                            if sink.send(frame).await.is_err() {
-                                warn!(client_id = %client_id, "failed to forward broadcast, dropping");
-                                break;
-                            }
+                    Ok(frame) => {
+                        if sink.send(Message::Text((*frame).to_string())).await.is_err() {
+                            warn!(client_id = %client_id, "failed to forward broadcast, dropping");
+                            break;
                         }
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {

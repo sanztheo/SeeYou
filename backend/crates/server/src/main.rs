@@ -66,6 +66,13 @@ async fn main() -> anyhow::Result<()> {
 
     let camera_poll_interval = Duration::from_secs(config.camera_poll_interval_secs);
 
+    // Shared across the tracker task (write lock, ~once per poll) and the
+    // on-demand GET /aircraft/:icao/predict handler (read lock) — see
+    // AppState's `FromRef<AppState> for SharedPredictor`.
+    let predictor: prediction::service::SharedPredictor = std::sync::Arc::new(
+        tokio::sync::RwLock::new(prediction::service::PredictionService::new()),
+    );
+
     tokio::spawn(services::aircraft_tracker::run_aircraft_tracker(
         http_client.clone(),
         redis_pool.clone(),
@@ -73,6 +80,7 @@ async fn main() -> anyhow::Result<()> {
         bus_producer.clone(),
         ws_broadcast.clone(),
         poll_interval,
+        predictor.clone(),
     ));
 
     tokio::spawn(cameras::tracker::run_camera_tracker(
@@ -573,6 +581,7 @@ async fn main() -> anyhow::Result<()> {
         graph_client,
         ws_broadcast,
         http_client,
+        predictor,
     };
 
     let cors = CorsLayer::new()

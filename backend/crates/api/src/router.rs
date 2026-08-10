@@ -9,6 +9,7 @@ where
     Option<bus::BusProducer>: axum::extract::FromRef<S>,
     Option<graph::GraphClient>: axum::extract::FromRef<S>,
     reqwest::Client: axum::extract::FromRef<S>,
+    prediction::service::SharedPredictor: axum::extract::FromRef<S>,
 {
     Router::new()
         .route("/health", get(super::health::health_check))
@@ -38,6 +39,10 @@ where
         .route(
             "/nuclear-sites",
             get(super::nuclear_sites::get_nuclear_sites),
+        )
+        .route(
+            "/aircraft/:icao/predict",
+            get(super::predict::predict_aircraft),
         )
         .route(
             "/graph/entity/:entity_type/:id",

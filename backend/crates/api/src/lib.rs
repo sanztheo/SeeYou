@@ -11,6 +11,7 @@ mod health;
 mod maritime;
 mod military_bases;
 mod nuclear_sites;
+mod predict;
 pub mod router;
 mod satellites;
 mod seismic;
