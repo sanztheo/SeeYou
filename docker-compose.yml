@@ -42,8 +42,10 @@ services:
 
   postgres:
     image: pgvector/pgvector:pg17
+    # 5433 on the host: a host-level Postgres already owns 127.0.0.1:5432 and
+    # shadows the container, so the app would connect to the wrong cluster.
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_DB: seeyou
       POSTGRES_USER: seeyou
@@ -51,15 +53,18 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U seeyou -d seeyou"]
+      test: ["CMD-SHELL", "pg_isready -U seeyou -d seeyou -p 5432"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   surrealdb:
-    image: surrealdb/surrealdb:v2
+    # Must stay on the v3 line: the Rust SDK is surrealdb 3.0.2 and a v2 server
+    # rejects the v3 protocol, which silently disables every /graph endpoint.
+    image: surrealdb/surrealdb:v3.2
     user: "0:0"
-    command: start --user root --pass root file:/data/surreal.db
+    # v3 dropped the `file://` scheme; rocksdb is its replacement for local storage.
+    command: start --user root --pass root rocksdb:/data/surreal.db
     ports:
       - "8000:8000"
     volumes:
