@@ -14,12 +14,9 @@ for arg in "${@:2}"; do
   esac
 done
 
-if [[ -f "$ROOT_DIR/.env" ]]; then
-  # shellcheck disable=SC1090
-  set -a
-  source "$ROOT_DIR/.env"
-  set +a
-fi
+INFISICAL_ENV="${INFISICAL_ENV:-dev}"
+INFISICAL_PATH="${INFISICAL_PATH:-/}"
+INFISICAL_RUN="infisical run --env=$INFISICAL_ENV --path=$INFISICAL_PATH --"
 
 if ! command -v tmux >/dev/null 2>&1; then
   echo "❌ tmux n'est pas installé."
@@ -28,6 +25,16 @@ fi
 
 if ! command -v cargo >/dev/null 2>&1; then
   echo "❌ cargo n'est pas installé."
+  exit 1
+fi
+
+if ! command -v infisical >/dev/null 2>&1; then
+  echo "❌ infisical n'est pas installé (brew install infisical/get-cli/infisical)."
+  exit 1
+fi
+
+if ! infisical secrets --env="$INFISICAL_ENV" --path="$INFISICAL_PATH" >/dev/null 2>&1; then
+  echo "❌ Infisical inaccessible. Lance 'infisical login'."
   exit 1
 fi
 
@@ -46,14 +53,17 @@ else
   echo "ℹ️ Docker local désactivé."
 fi
 
+# Consumers only make sense when the local broker actually answers.
 if [[ "$RUN_CONSUMERS" == "auto" ]]; then
-  BROKERS="${REDPANDA_BROKERS:-${REDPANDA_URL:-}}"
-  BROKERS_PUBLIC="${REDPANDA_BROKERS_PUBLIC:-${REDPANDA_PUBLIC_BROKERS:-}}"
+  BROKERS="$(infisical secrets get REDPANDA_BROKERS --env="$INFISICAL_ENV" --path="$INFISICAL_PATH" --plain 2>/dev/null || true)"
+  BROKER_HOST="${BROKERS%%:*}"
+  BROKER_PORT="${BROKERS##*:}"
 
-  if [[ -n "$BROKERS" && "$BROKERS" == *".railway.internal"* && -z "$BROKERS_PUBLIC" ]]; then
-    RUN_CONSUMERS=0
-  else
+  if [[ -n "$BROKER_HOST" && -n "$BROKER_PORT" ]] &&
+    (exec 3<>"/dev/tcp/$BROKER_HOST/$BROKER_PORT") 2>/dev/null; then
     RUN_CONSUMERS=1
+  else
+    RUN_CONSUMERS=0
   fi
 fi
 
@@ -74,12 +84,12 @@ pane_top_right="$(tmux split-window -h -t "$pane_server" -c "$ROOT_DIR" -P -F '#
 pane_bottom_left="$(tmux split-window -v -t "$pane_server" -c "$ROOT_DIR" -P -F '#{pane_id}')"
 pane_bottom_right="$(tmux split-window -v -t "$pane_top_right" -c "$ROOT_DIR" -P -F '#{pane_id}')"
 
-cmd_server="cd '$ROOT_DIR' && cargo run -p server --manifest-path backend/Cargo.toml"
-cmd_consumer_redis="cd '$ROOT_DIR' && cargo run -p consumer_redis --manifest-path backend/Cargo.toml"
-cmd_consumer_postgres="cd '$ROOT_DIR' && cargo run -p consumer_postgres --manifest-path backend/Cargo.toml"
-cmd_frontend="cd '$ROOT_DIR/frontend' && if [ ! -d node_modules ]; then npm install; fi && npm run dev"
+cmd_server="cd '$ROOT_DIR' && $INFISICAL_RUN cargo run -p server --manifest-path backend/Cargo.toml"
+cmd_consumer_redis="cd '$ROOT_DIR' && $INFISICAL_RUN cargo run -p consumer_redis --manifest-path backend/Cargo.toml"
+cmd_consumer_postgres="cd '$ROOT_DIR' && $INFISICAL_RUN cargo run -p consumer_postgres --manifest-path backend/Cargo.toml"
+cmd_frontend="cd '$ROOT_DIR/frontend' && if [ ! -d node_modules ]; then npm install; fi && $INFISICAL_RUN npm run dev"
 cmd_health_loop="while true; do date '+%H:%M:%S'; curl -sS -m 3 http://127.0.0.1:3001/health || true; echo; sleep 5; done"
-cmd_helper_shell="echo 'Consumers OFF (mode Railway auto).'; echo 'Force: RUN_CONSUMERS=1 ./scripts/dev-tmux.sh'; exec \"${SHELL:-/bin/zsh}\" -i"
+cmd_helper_shell="echo 'Consumers OFF (broker injoignable).'; echo 'Force: RUN_CONSUMERS=1 ./scripts/dev-tmux.sh'; exec \"${SHELL:-/bin/zsh}\" -i"
 
 tmux send-keys -t "$pane_server" "$cmd_server" C-m
 

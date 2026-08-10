@@ -46,9 +46,13 @@ Brutally honest. Lead with the verdict — "no, that's bad" or "yes, ship it" �
 
 ## Commands
 
-From `backend/`: `cargo run -p server` (port 3001, health at `GET /health`), `cargo test`. Run `consumer_redis` / `consumer_postgres` / `consumer_graph` only with a reachable broker — otherwise keep `BUS_ENABLED=false`.
-From `frontend/`: `npm run dev` (port 5173), `npm test`, `npm run lint`, `npm run build` — `build` runs `tsc -b` and is the only typecheck.
-From the root: `./scripts/dev-tmux.sh` for the whole stack, `docker compose up -d redis postgres redpanda surrealdb` for local infra.
+**Secrets live in Infisical, never in a `.env` file.** The repo has no `.env` — anything reading configuration must be wrapped in `infisical run --env=dev --path=/ --`. `.env.example` is an inventory for documentation only. Everything runs locally: no Railway, no cloud dependency.
+
+From `backend/`: `infisical run --env=dev --path=/ -- cargo run -p server` (port 3001, health at `GET /health`), `cargo test`. Run `consumer_redis` / `consumer_postgres` / `consumer_graph` only with a reachable broker — otherwise keep `BUS_ENABLED=false`.
+From `frontend/`: `infisical run --env=dev --path=/ -- npm run dev` (port 5173), `npm test`, `npm run lint`, `infisical run --env=dev --path=/ -- npm run build` — `build` runs `tsc -b` and is the only typecheck.
+
+**`npm run build` must be wrapped in `infisical run` too.** Vite freezes `import.meta.env.VITE_*` at *build* time, not at serve time: a bare `npm run build` silently ships a bundle with no tokens, and Cesium falls back to its bundled demo Ion token, which 401s on the imagery asset. `npm run preview` cannot fix that after the fact — rebuild.
+From the root: `./scripts/dev-tmux.sh` for the whole stack (Infisical injection included), `docker compose up -d redis postgres redpanda surrealdb` for local infra.
 
 ## Git
 
