@@ -32,7 +32,11 @@ Thumbs.db
 /.codex/
 /AGENTS.md
 
-# Local planning notes
+# Local planning notes — scratch stays out, the specs the work is built on stay in
 /docs/plans/*
 !/docs/plans/sources.md
+!/docs/plans/seeyou-v2.md
+!/docs/plans/seeyou-p1-correlation-avancee.md
+!/docs/plans/baseline-mesures.md
+!/docs/plans/resultats-lot0-lot1.md
 .infisical.json
