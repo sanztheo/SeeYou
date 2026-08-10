@@ -3,7 +3,10 @@ import { useWebSocket } from "./useWebSocket";
 import { useAircraftStore } from "./useAircraftStore";
 import { useSatelliteStore } from "./useSatelliteStore";
 import { fetchFlightRoute } from "../services/flightRoute";
-import { fetchCamerasChunked } from "../services/cameraService";
+import {
+  fetchCamerasChunked,
+  resolveCameraBbox,
+} from "../services/cameraService";
 import type { BBox, CameraProgress } from "../services/cameraService";
 import type {
   AircraftPosition,
@@ -258,6 +261,7 @@ export function useAppState(): AppState {
 
   const [viewportBbox, setViewportBbox] = useState<BBox | null>(null);
   const cameraAbortRef = useRef<AbortController | null>(null);
+  const lastValidCameraBboxRef = useRef<BBox | undefined>(undefined);
   const [cameraProgress, setCameraProgress] = useState<CameraProgress>({
     loaded: 0,
     total: 0,
@@ -510,9 +514,14 @@ export function useAppState(): AppState {
       return;
     }
 
+    const bbox = resolveCameraBbox(
+      viewportBbox,
+      lastValidCameraBboxRef.current,
+    );
+    lastValidCameraBboxRef.current = bbox;
+
     const ac = new AbortController();
     cameraAbortRef.current = ac;
-    setCameraProgress({ loaded: 0, total: 0, done: false });
 
     let retries = 0;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -520,9 +529,10 @@ export function useAppState(): AppState {
 
     const doFetch = (): void => {
       if (ac.signal.aborted) return;
+      setCameraProgress({ loaded: 0, total: 0, done: false });
 
       fetchCamerasChunked(
-        undefined,
+        bbox,
         (cams, progress) => {
           setCameras(cams);
           setCameraProgress(progress);
@@ -541,12 +551,17 @@ export function useAppState(): AppState {
       });
     };
 
-    doFetch();
+    // Debounce refetches on viewport changes (moveend) — avoids firing a
+    // full chunked fetch on every camera "changed" tick while the user pans.
+    const CAMERA_BBOX_DEBOUNCE_MS = 500;
+    const debounceTimer = setTimeout(doFetch, CAMERA_BBOX_DEBOUNCE_MS);
+
     return () => {
+      clearTimeout(debounceTimer);
       if (retryTimer) clearTimeout(retryTimer);
       ac.abort();
     };
-  }, [cameraFilter.enabled]);
+  }, [cameraFilter.enabled, viewportBbox]);
 
   useEffect(() => {
     if (!weatherFilter.enabled) {

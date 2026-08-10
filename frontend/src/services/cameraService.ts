@@ -66,3 +66,28 @@ export async function fetchCamerasChunked(
 export function getProxyUrl(streamUrl: string): string {
   return `${API_URL}/cameras/proxy?url=${encodeURIComponent(streamUrl)}`;
 }
+
+// A bbox spanning more than this many degrees of longitude is effectively a
+// "world view" — filtering by it would fetch close to everything, defeating
+// the point of a bbox. Treated the same as no bbox at all (P0-4 clamp).
+const WORLD_VIEW_LON_SPAN_DEG = 90;
+
+export function isWorldViewBbox(bbox: BBox): boolean {
+  return bbox.east - bbox.west > WORLD_VIEW_LON_SPAN_DEG;
+}
+
+/**
+ * Resolves the bbox to fetch cameras for from the latest viewport rectangle.
+ * `viewer.camera.computeViewRectangle()` returns undefined when the horizon
+ * is visible (tilted/zoomed-out view), and can return a valid but
+ * world-spanning rectangle when zoomed all the way out — both cases fall
+ * back to `lastValid` (the last known non-world-view bbox), or undefined
+ * (limit-only fetch) if none exists yet.
+ */
+export function resolveCameraBbox(
+  current: BBox | null,
+  lastValid: BBox | undefined,
+): BBox | undefined {
+  if (current && !isWorldViewBbox(current)) return current;
+  return lastValid;
+}
