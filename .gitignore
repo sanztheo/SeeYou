@@ -33,5 +33,6 @@ Thumbs.db
 /AGENTS.md
 
 # Local planning notes
-/docs/plans/
+/docs/plans/*
+!/docs/plans/sources.md
 .infisical.json
