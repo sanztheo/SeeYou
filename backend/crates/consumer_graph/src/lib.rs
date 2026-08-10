@@ -1,3 +1,4 @@
+mod aircraft_filter;
 mod constants;
 pub mod consumer;
 mod geo;

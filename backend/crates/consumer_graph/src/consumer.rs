@@ -14,6 +14,7 @@ use tokio::sync::RwLock;
 use tracing::{info, warn};
 
 use crate::{
+    aircraft_filter::is_aircraft_admitted,
     constants::{
         DEFAULT_FLIES_OVER_TTL_SECONDS, DEFAULT_NEAREST_ZONE_MAX_DISTANCE_KM,
         DEFAULT_RELATION_SWEEP_INTERVAL_SECONDS, DEFAULT_TABLE_CACHE_TTL_MS,
@@ -194,6 +195,12 @@ impl GraphBusConsumer {
 
         let records = extract_records_for_topic(&envelope.topic, &payload);
         for (table, entity_payload) in records {
+            // Admission gate: at 30k aircraft/tick post-P0-1, the O(n×m)
+            // aircraft↔camera correlation below cannot see every aircraft.
+            if table == "aircraft" && !is_aircraft_admitted(&entity_payload) {
+                continue;
+            }
+
             self.process_entity(table, &entity_payload, &envelope.topic)
                 .await?;
         }
