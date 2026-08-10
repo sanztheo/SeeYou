@@ -40,7 +40,7 @@ export function MetarPopup({
 
   const ceilText =
     station.ceiling_ft != null
-      ? `${station.ceiling_ft.toLocaleString()} ft`
+      ? `${station.ceiling_ft.toLocaleString("en-US")} ft`
       : "CLR";
 
   return (
