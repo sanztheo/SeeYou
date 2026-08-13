@@ -114,19 +114,19 @@ Gates WS à deux paliers : **A** = hors `AircraftBatch` ≤ 1 MB/min ; **B** = t
 - [ ] #10 `aircraft(is_military)→near→military_base` (haversine < R) dans `correlation.rs`.
 - [ ] #5 `seismic_event(M≥4,5)→near→nuclear_site`/`military_base` (< 150 km).
 - [ ] #7 `fire_hotspot(FRP haut)→affected_by→weather` + `near→base`.
-- [ ] #6 `vessel→near→cable` / `connects_to→landing_point` — **cadré côtier** (AIS terrestre ~40-75 km des côtes ; trou hauturier documenté, pas comblé).
-- [ ] #8 **re-sémantisé** : `cyber_threat→hosted_in→zone` (la géoloc d'un C2 ≠ sa cible) ; `derived_from→gdelt` **uniquement sur correspondance d'entité nommée** (IOC cité dans l'article), jamais co-occurrence pays+fenêtre.
-- [ ] #9 `gdelt_event→located_in→zone` / `involves→base` (après tier pays, 7a).
-- [ ] **#11 Convergence par rareté + hystérésis** : baseline glissante 7 j du nombre de domaines actifs par zone (seuils anti-bruit) ; alerte sur écart significatif, S_on/S_off + durée min pour qu'elle s'éteigne → `WsMessage::ConvergenceAlert` (déjà mirroré `ws/messages.rs:181`).
-- [ ] `api/graph_api.rs:277-365` : map statique `table→relations`, `join_all`, cache snapshot court TTL.
-- [ ] `api/graph_api.rs:199-250` : index full-text SurrealDB + filtre en SurrealQL (supprime le cap 250) ; trier voisins par `score`.
-- [ ] `frontend/src/components/Graph/GraphEdge.tsx` : rendre `edge.attributes` (score normalisé + explain + timestamp).
-- [ ] Vérif : `cargo test -p consumer_graph -p api` ; `npm test` ; arêtes multi-domaines dans `/graph/*` ; un `ConvergenceAlert` déclenche **et s'éteint** ; taux d'arêtes/jour par relation loggé (contrôle bruit).
+- [ ] #6 `vessel→near→cable` / `connects_to→landing_point` — **cadré côtier** (AIS terrestre ~40-75 km des côtes ; trou hauturier documenté, pas comblé). **Toujours pas de producteur de relation.** Ce qui a changé (revue Lots 4-7a, correction ciblée) : le producteur de *données* était cassé (0 vessel en prod, cf. Lot 7a — flux digitraffic corrigé, maintenant 1235 vessels réels) ; le graphe a maintenant de la matière première (`vessel` alimenté), mais personne n'écrit encore l'arête `near→cable`/`connects_to→landing_point` elle-même.
+- [ ] #8 **re-sémantisé** : `cyber_threat→hosted_in→zone` (la géoloc d'un C2 ≠ sa cible) ; `derived_from→gdelt` **uniquement sur correspondance d'entité nommée** (IOC cité dans l'article), jamais co-occurrence pays+fenêtre. Toujours bloqué : ThreatFox exige un `THREATFOX_AUTH_KEY` (inscription humaine sur auth.abuse.ch, non faisable par un agent autonome — confirmé en direct : `POST threatfox-api.abuse.ch/api/v1/` sans clé → `{"error":"Unauthorized"}`).
+- [ ] #9 `gdelt_event→located_in→zone` / `involves→base` (après tier pays, 7a). **Tier pays maintenant livré** (voir Lot 7a) donc ce blocage précis est levé ; #9 reste non fait car GDELT lui-même est inatteignable depuis cet environnement (voir Lot 7a — DNS résout, TLS expire).
+- [ ] **#11 Convergence par rareté + hystérésis** : baseline glissante 7 j du nombre de domaines actifs par zone (seuils anti-bruit) ; alerte sur écart significatif, S_on/S_off + durée min pour qu'elle s'éteigne → `WsMessage::ConvergenceAlert` (déjà mirroré `ws/messages.rs:181`). Pas fait cette passe (aucun producteur), le type WS reste dormant.
+- [x] `api/graph_api.rs:277-365` : map statique `table→relations`, `join_all` — **déjà en place** (`relevant_relations_for_table`, `buffer_unordered` borné). **Cache snapshot court TTL — ajouté cette passe** : cache statique en mémoire par `(table, id, depth, limit)`, TTL 5 s, dans `graph_api.rs` (pas de changement `AppState`/`FromRef` — collision évitée avec le Lot 6 en cours sur les crates caméra).
+- [ ] `api/graph_api.rs:199-250` : index full-text SurrealDB + filtre en SurrealQL (supprime le cap 250) — **pas fait cette passe**, `SEARCH_SCAN_LIMIT = 250` toujours en place ; trier voisins par `score` — déjà en place (`edge_score`/`edges.sort_by`).
+- [x] `frontend/src/components/Graph/GraphEdge.tsx` : rendre `edge.attributes` (score normalisé + explain + timestamp) — **fait cette passe** (+ test `GraphEdge.test.tsx`).
+- [ ] Vérif : `cargo test -p consumer_graph -p api` ; `npm test` ; arêtes multi-domaines dans `/graph/*` ; un `ConvergenceAlert` déclenche **et s'éteint** ; taux d'arêtes/jour par relation loggé (contrôle bruit). **Statut réel (revue Lots 4-7a) : Lot 5 est partiel, pas livré** — #6/#8/#9/#11 restent sans producteur ; ce qui a été fait cette passe (GraphEdge.tsx, cache TTL) ne les débloque pas, seul le tier pays (7a) lève un blocage pour #9.
 
 ## Lot 6 — P2 caméra↔avion (dépend Lots 4-5 + P0-2 levier 3)
 
 - [ ] `consumer_graph/graph_links.rs:12-54` : refondre `link_aircraft_to_nearby_cameras` — lire `view_heading_deg`/`view_fov_deg` (`cameras/types.rs:16-18`), cône horizontal `|bearing−heading| ≤ fov/2`, skip `is_online=false`, pré-filtre R-tree + admission alt < 3 000 m + top-K=3.
-- [ ] Géométrie : azimut géodésique, distance oblique, élévation, **critère pixel** `px = θ_deg × (resolution_h_px / hfov_deg)` — détection ≥ 2 px, reconnaissance ≥ 8 px (Johnson) ; envergure par type via tar1090-db (défaut 36 m narrowbody, pas 60) ; borne `min(horizon 3,86·√h, METAR, limite pixel)`.
+- [ ] Géométrie : azimut géodésique, distance oblique, élévation, **critère pixel** `px = θ_deg × (resolution_h_px / hfov_deg)` — détection ≥ 2 px, reconnaissance ≥ 8 px (Johnson) ; envergure par type via tar1090-db (défaut 36 m narrowbody, pas 60) ; borne `min(horizon 3,86·√h, METAR, limite pixel)`. **Toujours le défaut 36 m** (`cameras/src/visibility.rs:56`, `DEFAULT_WINGSPAN_M`) — vérifié ce lot (revue 4-7a) : tar1090-db (contenu réel inspecté via l'API GitHub) est un registre hex→immatriculation/type, **pas** une table envergure-par-type, la prémisse du plan était fausse sur ce point précis. Pas de correctif appliqué faute d'une source envergure-par-type publique trouvée cette session ; voir `docs/plans/sources.md` Lot 7a pour le détail.
 - [ ] `cameras/src/types.rs` : ajouter `height_agl_m: Option<f64>` **et `resolution_px: Option<u32>`** (défaut 640) — miroir `frontend/src/types/camera.ts` ; vfov heuristique **`hfov×3/4`** (4:3, pas 9/16), ratio par source si connu, marqué dans `explain`.
 - [ ] METAR/`ceiling_ft` : **pondèrent le score de confiance** (heuristiques de surface, pas des mesures obliques) — pénalité forte si avion au-dessus de la couche, pas de coupe binaire.
 - [ ] Prédiction on-demand via `/aircraft/:icao/predict` (IMM militaire / cold-start CV civil) ; projeter contre cônes + critère pixel → fenêtre entrée/sortie + `T-minus` + niveau (détection/reconnaissance), recalcul client (pas de push WS/s). Si T-minus imprécis à 12 s : activer la cadence mil découplée 5 s (P0-1 point 5).
@@ -135,15 +135,15 @@ Gates WS à deux paliers : **A** = hors `AircraftBatch` ≤ 1 MB/min ; **B** = t
 
 ## Lot 7a — P3 quick wins qui débloquent P1/P2 (parallèle aux Lots 4-6)
 
-- [ ] `gdelt` : réparer l'ingest (couche 0→réel) — prérequis #9.
-- [ ] `cyber` : **ThreatFox** — créer l'Auth-Key sur auth.abuse.ch, env `THREATFOX_AUTH_KEY`, noter le fair-use dans `sources.md`.
-- [ ] `services` : enrichir `Aircraft` via **tar1090-db** (hex→type/registration/**envergure** — prérequis critère pixel Lot 6, ODC-BY) + **plane-alert-db** (militaire→agence).
-- [ ] `maritime::ais` : **vérifier les ToS AISStream d'abord** (site illisible derrière Cloudflare à l'audit), puis remplacer le flux finlandais (client WS persistant avec reconnect/backpressure — effort réel medium) ; retirer `is_sanctioned: false` codé en dur.
-- [ ] Sanctions : **OpenSanctions** (⚠ **CC-BY-NC 4.0** — acceptable en expérimental, décision notée ; alternative libre : listes primaires OFAC SDN/UE/ONU) → peupler `is_sanctioned`.
-- [ ] `graph/src/zones.rs` : ajouter le **tier pays** (prérequis #8/#9) — l'existant est airport(20)/city(32)/region(8), zéro pays ; les 20 zones airport servent déjà de pré-filtre P2.
-- [ ] Seed **OurAirports** (PDDL) — géométrie piste P2.
-- [ ] **Audit légal des streams hardcodés existants** : `providers/generic.rs:163,173` (Wowza coréen en IP nue) — provenance + CGU par stream ; documenter ou retirer. Même filtre que pour les sources candidates.
-- [ ] Vérif : `cargo test` (crates touchés) ; `curl /maritime|/cyber|/gdelt` > 0 item ; décision écrite par stream hardcodé dans `sources.md`.
+- [ ] `gdelt` : réparer l'ingest (couche 0→réel) — prérequis #9. **Toujours cassé, cause reclassée** : vérifié ce lot — `api.gdeltproject.org` résout en DNS (`104.197.47.124`) mais le handshake TLS expire (6 s) depuis cet environnement. Blocage réseau de la sandbox, pas un bug identifiable dans `gdelt/src/api.rs` (qui dégrade déjà proprement vers `Vec::new()`). Aucun changement de code — un correctif non vérifiable n'aurait aucune valeur.
+- [ ] `cyber` : **ThreatFox** — créer l'Auth-Key sur auth.abuse.ch, env `THREATFOX_AUTH_KEY`, noter le fair-use dans `sources.md`. **Confirmé bloqué** : endpoint vivant (`POST threatfox-api.abuse.ch/api/v1/` répond), clé réellement exigée (`{"error":"Unauthorized"}` sans elle). Obtenir la clé nécessite une inscription humaine (vérification e-mail) — hors de portée d'un agent autonome. `THREATFOX_AUTH_KEY` toujours non défini.
+- [ ] `services` : enrichir `Aircraft` via **tar1090-db** (hex→type/registration/**envergure** — prérequis critère pixel Lot 6, ODC-BY) + **plane-alert-db** (militaire→agence). **Non fait, prémisse corrigée** : tar1090-db (vérifié : contenu réel du repo via l'API GitHub) ne contient pas d'envergure par type, et `services/adsb.rs:228-229` alimente déjà `registration`/`aircraft_type` depuis le flux ADS-B lui-même (hex→type serait redondant). plane-alert-db (licence ODbL, vérifiée) est utilisable pour l'agence militaire mais son câblage réel ajouterait un champ à `Aircraft` → miroir WS obligatoire à 3 endroits, jugé hors périmètre chirurgical de cette passe. Détail (fichiers, colonnes, licence) dans `docs/plans/sources.md`.
+- [x] `maritime::ais` : **bug réel trouvé et corrigé** (pas le remplacement de flux prévu) — `retirer is_sanctioned: false codé en dur` : fait, via OFAC (voir ligne Sanctions ci-dessous). Le flux finlandais renvoyait 0 vessel en prod : `ais.rs` déclarait `Accept-Encoding: gzip` sans que `reqwest` ait la feature cargo `gzip` (`backend/Cargo.toml`), donc chaque réponse (compressée) échouait au décodage JSON silencieusement. Corrigé (`features = ["json", "gzip"]`) — mesuré en direct : 0 → 1235 vessels, 1101 avec nom (jointure sur `/api/ais/v1/vessels`). **Le remplacement AISStream.io n'a pas été fait** : ToS toujours pas vérifiables (site illisible derrière Cloudflare, inchangé depuis l'audit initial), et le flux existant fournit maintenant de vraies données — swap non prioritaire vs corriger le bug réel.
+- [x] Sanctions : ~~OpenSanctions~~ → **OFAC SDN**, comme recommandé par la revue (CC-BY-NC écarté). `backend/data/sanctions/ofac_sdn_vessels.json` (1524 entrées `SDN_Type=vessel`, filtrées depuis le CSV officiel, œuvre du gouvernement US = domaine public) + `maritime::sanctions::is_sanctioned_vessel`. **Matching par call sign exact uniquement** — un fallback par nom a été essayé puis retiré : testé en direct, il a produit un faux positif confirmé (navire finlandais « LEO »/`OJTZ` matché sur le nom d'un navire sanctionné Russie/Ukraine sans rapport, `8P2467`) ; un nom d'affichage n'est pas un identifiant unique. `is_sanctioned` est réel en prod (mesuré : navires sanctionnés présents dans `/maritime` par call sign exact).
+- [x] `graph/src/zones.rs` : ajouter le **tier pays** (prérequis #8/#9) — **fait**. 177 pays (Natural Earth 1:110m, CC0 — licence vérifiée) fusionnés dans `global_zones.geojson` (60 → 237 zones), ids préfixés `country-{iso3}` pour ne jamais collisionner avec les régions existantes (`australia` région vs `country-aus` pays). Test réel sur le fichier de prod (`zones::tests::real_zones_file_resolves_country_tier_alongside_region_tier`) + vérifié en base après reseed live : 718 arêtes `camera→located_in→country-*` déjà écrites par `consumer_graph` sans aucun changement de son code (`resolve_location_zone_ids` consommait déjà plusieurs zones par point).
+- [ ] Seed **OurAirports** (PDDL) — géométrie piste P2. Pas fait cette passe (hors périmètre des 4 findings bloquants/majeurs assignés).
+- [ ] **Audit légal des streams hardcodés existants** : `providers/generic.rs:163,173` (Wowza coréen en IP nue) — provenance + CGU par stream ; documenter ou retirer. **Décision prise et documentée dans `sources.md` : à retirer** (même politique qu'Insecam, zéro preuve de consentement opérateur). **Non exécuté dans le code** : `generic.rs` a des modifications non commitées d'un autre agent (Lot 6, providers caméra) au moment de cette revue — retirer ces deux entrées est laissé à qui possède ce fichier pour éviter un conflit d'édition.
+- [ ] Vérif : `cargo test` (crates touchés) — voir vérification finale de la tâche ; `curl /maritime|/cyber|/gdelt` > 0 item — **`/maritime` : 1235** (corrigé) ; **`/cyber` et `/gdelt` : toujours 0** (bloqués côté externe, documenté ci-dessus, pas un bug de code) ; décision écrite par stream hardcodé dans `sources.md` — fait.
 
 ## Lot 7b — P3 différables (après le cœur)
 
@@ -172,7 +172,42 @@ Gates WS à deux paliers : **A** = hors `AircraftBatch` ≤ 1 MB/min ; **B** = t
 - Lot 2 : … (inclure : frame p95 à 30 k, replis activés ou non)
 - Lot 3 : …
 - Lot 4 : … (inclure : bench écriture arêtes/s + p95 batch)
+  - **Correction post-revue (findings bloquants/majeurs Lots 4-7a)** : `sweep_expired_relations`
+    (`graph/relations.rs`) échouait à chaque tick où il supprimait une ligne — `RETURN BEFORE` renvoie
+    `expires_at`/`timestamp` en `datetime` natif, que `Vec<serde_json::Value>` ne sait pas décoder
+    (« Expected any, got datetime »). Corrigé (décodage `surrealdb::types::Value` +
+    `into_json_value()`, même patron que `queries.rs`/`processing.rs`). Test live ajouté et exécuté
+    contre SurrealDB réel : écrit une arête déjà expirée, sweep, `removed==1` et la ligne a disparu —
+    passe. Avant le fix, le sweep loggait un WARN toutes les 30 s dès qu'une ligne expirait ; observé
+    disparu après redémarrage de `consumer_graph` avec le correctif (aucun WARN sweep dans ~4 min de
+    log après restart).
+  - `/graph/neighbors` sur nœuds hub (zones région, ex. `zone:north-america`) : 500 récurrents + un
+    timeout observés par la revue. Cause réelle : `client.rs::is_retryable_connection_error` ne
+    reconnaissait pas « Session not found »/« Specify a namespace to use » (les erreurs que
+    `graph_api.rs` documentait lui-même avoir vues sous charge) — ces erreurs remontaient donc en 500
+    brut au lieu d'un retry + 503. Corrigé : liste étendue + timeout de requête (10 s) dans
+    `with_retry` pour transformer un blocage de 30 s en échec rapide classifié ; `Retry-After` ajouté
+    sur les 503 de `/graph/*` ; cache snapshot 5 s ajouté (`(table,id,depth,limit)`) pour réduire la
+    pression sur la connexion partagée. Un vrai pool de connexions reste à faire (hors périmètre
+    chirurgical de cette passe).
 - Lot 5 : … (inclure : taux d'arêtes/jour par relation)
+  - **Lot 5 est partiel, pas livré** — correction de la déclaration trompeuse relevée par la revue.
+    Fait cette passe : `GraphEdge.tsx` rend `edge.attributes` (score/explain/timestamp, testé) ; cache
+    snapshot court-TTL ajouté à `graph_api.rs`. Toujours sans producteur : #6 (`vessel→near→cable`),
+    #8 (`cyber_threat→hosted_in→zone`), #9 (`gdelt_event→located_in→zone`), #11 (`ConvergenceAlert`).
+    #9 avait un blocage levé (tier pays, Lot 7a) mais reste bloqué côté GDELT lui-même (réseau).
+    `SEARCH_SCAN_LIMIT = 250` toujours en place, non traité cette passe.
 - Lot 6 : … (inclure : % caméras à cap fiable)
-- Lot 7a : …
+  - Non retouché cette passe (hors périmètre des 4 findings assignés), sauf vérification : le défaut
+    `DEFAULT_WINGSPAN_M = 36.0` (`cameras/src/visibility.rs:56`) reste actif — tar1090-db n'est pas la
+    source qu'il faut pour ce champ (voir Lot 7a), aucune source envergure-par-type publique trouvée
+    cette session pour le remplacer.
+- Lot 7a : … Voir le détail ligne par ligne ci-dessus. Résumé : tier pays livré et vérifié en base
+  (237 zones, 718 arêtes `camera→country-*` réelles) ; bug maritime réel trouvé et corrigé
+  (`/maritime` 0 → 1235 vessels) ; sanctions OFAC SDN réelles (`is_sanctioned`, matching call-sign
+  exact après retrait d'un fallback nom qui produisait un faux positif confirmé) ; audit Wowza décidé
+  (à retirer) mais pas exécuté dans le code (collision avec un autre agent sur `generic.rs`) ; GDELT et
+  ThreatFox confirmés bloqués par des causes externes (réseau sandbox / clé d'auth humaine), pas des
+  bugs de code ; tar1090-db/plane-alert-db investigués et non intégrés (prémisse du plan corrigée pour
+  le premier, câblage du second hors périmètre chirurgical — ripple WS).
 - Lot 7b : …

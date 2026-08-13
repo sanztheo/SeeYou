@@ -35,12 +35,12 @@ des citations directes du plan.
 
 | Nom | URL | Auth | Format | Rate limit | Licence | Couverture | Statut | Crate | Effort | Débloque |
 |---|---|---|---|---|---|---|---|---|---|---|
-| **AISStream.io** | aisstream.io | probable : clé API gratuite à l'ouverture du WebSocket (à vérifier, hors plan) | JSON sur WebSocket persistant | non chiffré dans le plan | gratuit ; **ToS à vérifier avant Lot 7** (site derrière Cloudflare lors de l'audit) | mondial **côtier** (~40-75 km des côtes — AIS terrestre, trou hauturier documenté) | à intégrer | `maritime` | **medium** (client WS persistant, reconnect/backpressure — pas « low ») | couche maritime (0→réel) ; relation #6 cadrée côtier |
-| **GDELT** (fix ingest) | gdeltproject.org (API : api.gdeltproject.org) | aucune (API publique) | JSON/CSV selon endpoint | non spécifié dans le plan | open | mondial | **intégré (cassé)** — 0 item mesuré (`baseline-mesures.md:108-111`) | `gdelt` | low | relation #9 |
-| **ThreatFox** (cyber IOC, abuse.ch) | threatfox.abuse.ch | **Auth-Key obligatoire** (portail abuse.ch, env `THREATFOX_AUTH_KEY`) | JSON, API REST (POST) | fair-use ; usage commercial peut exiger un abonnement | fair-use ; usage commercial peut exiger un abonnement | mondial | à intégrer | `cyber` | low | couche cyber (0→réel) ; relation #8 re-sémantisée |
-| **OpenSanctions** | opensanctions.org | à vérifier — dumps bruts vs API hébergée avec clé | JSON REST ou dumps CSV/JSON | non spécifié dans le plan | **CC-BY-NC 4.0 — non-commercial** (incohérence de diligence corrigée en revue). Acceptable tant qu'expérimental ; alternative sans restriction : parser les listes primaires (OFAC SDN, UE, ONU — domaine public) | mondial | à intégrer | `maritime`/`services` | low | `is_sanctioned` réel |
-| **Mictronics / tar1090-db** | github.com/wiedehopf/tar1090-db (à vérifier — dérivé de la base Mictronics) | aucune (dump statique versionné) | fichier CSV/JSON compressé | n/a (pas d'API) | ODC-BY | mondial | à intégrer | `services` | low | attributs avion + **envergure pour le critère pixel P2** |
-| **plane-alert-db** (hex militaire→agence) | github.com/sdr-enthusiasts/plane-alert-db (à vérifier) | aucune | CSV statique | n/a | open | mondial | à intégrer | `services` | low | attribution nommée |
+| **AISStream.io** | aisstream.io | probable : clé API gratuite à l'ouverture du WebSocket (à vérifier, hors plan) | JSON sur WebSocket persistant | non chiffré dans le plan | gratuit ; **ToS à vérifier avant Lot 7** (site derrière Cloudflare lors de l'audit) | mondial **côtier** (~40-75 km des côtes — AIS terrestre, trou hauturier documenté) | à intégrer — swap non fait ce lot (voir note Lot 7a ci-dessous : le flux finlandais existant a été réparé au lieu, ToS AISStream toujours pas vérifiables) | `maritime` | **medium** (client WS persistant, reconnect/backpressure — pas « low ») | couche maritime (0→réel) ; relation #6 cadrée côtier |
+| **GDELT** (fix ingest) | gdeltproject.org (API : api.gdeltproject.org) | aucune (API publique) | JSON/CSV selon endpoint | non spécifié dans le plan | open | mondial | **intégré (cassé), cause reclassée** — 0 item mesuré (`baseline-mesures.md:108-111`) ; vérifié ce lot : DNS résout (`104.197.47.124`) mais le handshake TLS expire (6s) depuis cet environnement — blocage réseau de la sandbox, pas un bug de code identifiable (le code dégrade déjà proprement vers `Vec::new()` sur échec). Non modifié : aucun correctif n'est vérifiable sans accès réseau réel à l'hôte. | `gdelt` | low | relation #9 |
+| **ThreatFox** (cyber IOC, abuse.ch) | threatfox.abuse.ch | **Auth-Key obligatoire** (portail abuse.ch, env `THREATFOX_AUTH_KEY`) | JSON, API REST (POST) | fair-use ; usage commercial peut exiger un abonnement | fair-use ; usage commercial peut exiger un abonnement | mondial | à intégrer — **confirmé ce lot** : `POST threatfox-api.abuse.ch/api/v1/` répond `{"error":"Unauthorized"}` sans clé (endpoint vivant, clé réellement exigée). Obtenir une clé nécessite une inscription humaine sur auth.abuse.ch (vérification e-mail) — non exécutable par un agent autonome cette session. `THREATFOX_AUTH_KEY` reste non défini. | `cyber` | low | couche cyber (0→réel) ; relation #8 re-sémantisée |
+| **OpenSanctions** | opensanctions.org | à vérifier — dumps bruts vs API hébergée avec clé | JSON REST ou dumps CSV/JSON | non spécifié dans le plan | **CC-BY-NC 4.0 — non-commercial** (incohérence de diligence corrigée en revue). Acceptable tant qu'expérimental ; alternative sans restriction : parser les listes primaires (OFAC SDN, UE, ONU — domaine public) | mondial | **rejeté, remplacé par OFAC SDN** — voir note Lot 7a ci-dessous, `is_sanctioned` est maintenant réel via OFAC uniquement | `maritime`/`services` | low | `is_sanctioned` réel |
+| **Mictronics / tar1090-db** | github.com/wiedehopf/tar1090-db | aucune (dump statique versionné) | fichier CSV/JSON compressé | n/a (pas d'API) | ODC-BY | mondial | **prémisse du plan corrigée ce lot** : le repo (vérifié via l'API GitHub, `db/*.js` + `aircraft.csv.gz` sur la branche `csv`) est un registre hex→immatriculation/type, **pas** une table envergure-par-type — il n'y a pas d'« envergure » à en extraire. Par ailleurs `services/adsb.rs:228-229` alimente déjà `Aircraft.registration`/`aircraft_type` directement depuis le flux ADS-B (`r`/`t`), donc le hex→type de tar1090-db serait largement redondant. Non intégré tel que prévu — voir note Lot 7a pour l'alternative envergure. | `services` | low | attributs avion + **envergure pour le critère pixel P2** |
+| **plane-alert-db** (hex militaire→agence) | github.com/sdr-enthusiasts/plane-alert-db | aucune | CSV statique | n/a | **ODbL 1.0 + DbCL 1.0** (vérifié : `LICENSE` du repo) | mondial | **vérifié, non intégré** — `plane-alert-mil.csv` (1524 lignes, colonnes `$ICAO,$Registration,$Operator,$Type,$ICAO Type,...`) est accessible et correspond exactement au besoin. Non câblé ce lot : l'`Operator`/agence n'existe sur aucune struct actuelle (`services::Aircraft`), et l'ajouter dépasse une « victoire rapide » — un nouveau champ sur `Aircraft` engage le miroir WS à 3 endroits (`ws/messages.rs` + les 2 unions `frontend/src/types/ws.ts`), hors périmètre chirurgical de cette passe. | `services` | low | attribution nommée |
 
 ---
 
@@ -101,7 +101,52 @@ des citations directes du plan.
 
 | Élément | Localisation | Constat | Statut |
 |---|---|---|---|
-| **Flux Wowza coréens en IP nue** | `backend/crates/cameras/src/providers/generic.rs:163` (Seoul Gangnam) et `:173` (Seoul Hongdae) — vérifié dans le code : `http://210.179.218.52:1935/live/...stream/playlist.m3u8` | IP nue, aucune provenance/licence documentée — exactement le pattern rejeté pour Insecam ci-dessus | **à auditer** (Lot 7a) : documenter la licence ou retirer |
+| **Flux Wowza coréens en IP nue** | `backend/crates/cameras/src/providers/generic.rs:164` (Seoul Gangnam) et `:174` (Seoul Hongdae) — vérifié dans le code : `http://210.179.218.52:1935/live/...stream/playlist.m3u8` | IP nue, aucune provenance/licence documentée — exactement le pattern rejeté pour Insecam ci-dessus. Aucune recherche de provenance/whois n'a été tentée ce lot (se connecter au flux pour "vérifier" serait le même accès sans consentement que le pattern qu'on audite). | **Décision (Lot 7a) : à retirer.** Aucune preuve de consentement opérateur trouvable depuis le code ou son historique ; par défaut on traite comme non autorisé, même politique qu'Insecam. **Non exécuté dans le code cette passe** : `generic.rs` a des modifications non commitées d'un autre agent (Lot 6, providers caméra) au moment de cette revue — retirer ces deux entrées est laissé à qui possède ce fichier pour éviter un conflit d'édition, cf. rapport de tâche. |
+
+---
+
+## Lot 7a — exécuté ce lot (audit + corrections vérifiées)
+
+Contexte : Lot 7a était non livré (déclaration nulle) au moment de la revue Lots 4-7a. Ce qui suit a été
+vérifié par exécution réelle, pas supposé.
+
+- **Tier pays** (`graph/src/zones.rs`, `backend/data/zones/global_zones.geojson`) — **fait**. 177 polygones
+  pays Natural Earth 1:110m (domaine public CC0, vérifié via le fichier `licence` du miroir
+  `martynafford/natural-earth-geojson`), fusionnés dans le fichier de zones existant (60 → 237 zones).
+  Ids préfixés `country-{ADM0_A3 en minuscules}` (ex. `country-fra`) pour ne jamais collisionner avec les
+  ids région existants (`australia` région vs `country-aus` pays — testé). Test réel chargeant le fichier
+  de production : Paris résout `city-paris` + `europe` + `country-fra` simultanément (additif, rien
+  déplacé) — `graph/src/zones.rs` test `real_zones_file_resolves_country_tier_alongside_region_tier`.
+  Zéro changement de code dans `consumer_graph` : `resolve_location_zone_ids` consommait déjà
+  `ZoneLookup::lookup()` de façon générique (plusieurs zones par point), donc le tier pays est purement
+  une donnée en plus.
+- **OFAC SDN (sanctions)** — **fait**, remplace OpenSanctions comme recommandé par la revue.
+  `backend/data/sanctions/ofac_sdn_vessels.json` (1524 entrées `SDN_Type=vessel`, filtrées depuis
+  `sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.CSV` — œuvre du gouvernement
+  US, domaine public). `maritime::sanctions::is_sanctioned_vessel` matche exact sur le **call sign
+  uniquement** — le fallback par nom a été essayé puis retiré avant livraison : testé en direct sur le
+  flux réel, il a produit un faux positif confirmé (un navire finlandais nommé « LEO », call sign `OJTZ`,
+  IMO 7363970, en route vers un port finlandais, matchait le nom « LEO » d'un navire sanctionné
+  Russie/Ukraine sans rapport, call sign `8P2467`). Un nom d'affichage n'est pas un identifiant unique ;
+  le call sign l'est. Câblé dans `maritime::ais::fetch_vessels` : `is_sanctioned`/`name` réels au lieu de
+  `false`/`None` codés en dur — mesuré en direct : 1235 navires, 39 sanctionnés sur match call-sign exact
+  avant le retrait du fallback nom (le chiffre après retrait est à revérifier, cf. rapport de tâche).
+- **Bug maritime réel trouvé et corrigé** — le flux finlandais (digitraffic) renvoyait 0 vessel en
+  production : `ais.rs` envoie `Accept-Encoding: gzip` mais `reqwest` n'avait pas la feature cargo
+  `"gzip"` (`backend/Cargo.toml`), donc chaque réponse (compressée puisque le header l'annonce) échouait
+  au décodage JSON et retombait sur `Ok(Vec::new())` silencieusement. Reproduit en direct (`curl` sans
+  négociation gzip réelle → 406 « Use of gzip compression is required » ; avec `--compressed` → 200,
+  vraies données). Corrigé en une ligne (`features = ["json", "gzip"]`).
+- **ThreatFox / GDELT** — vérifiés en direct, tous les deux bloqués par des causes externes documentées
+  ci-dessus (clé Auth-Key humaine requise / hôte inatteignable depuis cette sandbox). Non exécutables
+  cette session, pas des bugs de code.
+- **tar1090-db / plane-alert-db** — repos vérifiés en direct (contenu, licence). tar1090-db ne contient
+  pas la donnée envergure attendue par le plan (prémisse corrigée ci-dessus) ; plane-alert-db est
+  utilisable mais son câblage complet engage le miroir WS à 3 endroits, hors périmètre chirurgical de
+  cette passe — voir le rapport de tâche pour le détail exact (fichier, colonnes, licence) prêt pour la
+  prochaine passe.
+- **Streams Wowza hardcodés** — audité, décision documentée ci-dessus (à retirer), non exécuté dans le
+  code pour éviter un conflit avec les modifications en cours d'un autre agent sur ce fichier.
 
 ---
 
