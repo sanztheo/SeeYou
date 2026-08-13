@@ -815,6 +815,8 @@ fn normalize_table_name(raw: &str) -> Option<&'static str> {
         "space_weather_alert" | "space-weather-alert" => Some("space_weather_alert"),
         "military" | "military_base" | "military-base" => Some("military_base"),
         "nuclear" | "nuclear_site" | "nuclear-site" => Some("nuclear_site"),
+        "airport" | "airports" => Some("airport"),
+        "disaster" | "disasters" | "disaster_event" | "disaster-event" => Some("disaster_event"),
         _ => None,
     }
 }
@@ -832,6 +834,8 @@ mod tests {
         assert_eq!(normalize_table_name("fires"), Some("fire_hotspot"));
         assert_eq!(normalize_table_name("earthquakes"), Some("seismic_event"));
         assert_eq!(normalize_table_name("traffic"), Some("traffic_segment"));
+        assert_eq!(normalize_table_name("airports"), Some("airport"));
+        assert_eq!(normalize_table_name("disaster"), Some("disaster_event"));
     }
 
     #[test]
