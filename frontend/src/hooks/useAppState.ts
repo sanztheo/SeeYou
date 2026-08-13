@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useWebSocket } from "./useWebSocket";
 import { useAircraftStore } from "./useAircraftStore";
 import { useSatelliteStore } from "./useSatelliteStore";
@@ -226,6 +226,18 @@ export function useAppState(): AppState {
   });
   const [selectedAircraft, setSelectedAircraft] =
     useState<AircraftPosition | null>(null);
+  // The popup must track the live position: `selectedAircraft` itself is
+  // only written at selection time, so without this lookup its altitude/
+  // speed/position would stay frozen at the click moment while the
+  // billboard on the globe keeps moving with every WS batch.
+  const selectedAircraftLive = useMemo(
+    () =>
+      selectedAircraft
+        ? (aircraftStore.aircraft.get(selectedAircraft.icao) ??
+          selectedAircraft)
+        : null,
+    [selectedAircraft, aircraftStore.aircraft],
+  );
   const [flightRoute, setFlightRoute] = useState<FlightRoute | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [predictions, setPredictions] = useState<
@@ -868,7 +880,7 @@ export function useAppState(): AppState {
     civilianCount: aircraftStore.civilianCount,
     aircraftFilter,
     setAircraftFilter,
-    selectedAircraft,
+    selectedAircraft: selectedAircraftLive,
     setSelectedAircraft,
     flightRoute,
     routeLoading,
