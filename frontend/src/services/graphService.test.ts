@@ -18,7 +18,12 @@ describe("graphService", () => {
   it("calls /graph/neighbors with encoded params", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ root: { table: "aircraft", id: "abc" }, nodes: [], edges: [], truncated: false }),
+      json: async () => ({
+        root: { table: "aircraft", id: "abc" },
+        nodes: [],
+        edges: [],
+        truncated: false,
+      }),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -39,16 +44,35 @@ describe("graphService", () => {
     );
   });
 
+  it("resolves to null (not an error) on 404 -- entity legitimately absent from the graph", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      fetchGraphEntity("aircraft", "civilian-1"),
+    ).resolves.toBeNull();
+    await expect(
+      fetchGraphNeighbors("aircraft", "civilian-1", 1),
+    ).resolves.toBeNull();
+  });
+
   it("fetches zone and search endpoints", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ root: { table: "zone", id: "city-paris" }, nodes: [], edges: [], truncated: false }),
+        json: async () => ({
+          root: { table: "zone", id: "city-paris" },
+          nodes: [],
+          edges: [],
+          truncated: false,
+        }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ([{ ref: { table: "zone", id: "city-paris" }, label: "Paris" }]),
+        json: async () => [
+          { ref: { table: "zone", id: "city-paris" }, label: "Paris" },
+        ],
       });
 
     vi.stubGlobal("fetch", fetchMock);
@@ -58,7 +82,11 @@ describe("graphService", () => {
 
     expect(zone.root.id).toBe("city-paris");
     expect(results[0].label).toBe("Paris");
-    expect(String(fetchMock.mock.calls[0][0])).toContain("/graph/zone/city-paris");
-    expect(String(fetchMock.mock.calls[1][0])).toContain("/graph/search?q=paris");
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      "/graph/zone/city-paris",
+    );
+    expect(String(fetchMock.mock.calls[1][0])).toContain(
+      "/graph/search?q=paris",
+    );
   });
 });

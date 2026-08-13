@@ -102,7 +102,9 @@ describe("useGraphNavigation", () => {
   });
 
   it("sets unavailable on 503", async () => {
-    mockedFetchGraphNeighbors.mockRejectedValue(new Error("graph neighbors failed: 503"));
+    mockedFetchGraphNeighbors.mockRejectedValue(
+      new Error("graph neighbors failed: 503"),
+    );
 
     const { result } = renderHook(() => useGraphNavigation());
 
@@ -112,5 +114,20 @@ describe("useGraphNavigation", () => {
 
     await waitFor(() => expect(result.current.unavailable).toBe(true));
     expect(result.current.snapshot).toBeNull();
+  });
+
+  it("treats a null result (entity absent from the graph) as normal, not an error", async () => {
+    mockedFetchGraphNeighbors.mockResolvedValue(null);
+
+    const { result } = renderHook(() => useGraphNavigation());
+
+    act(() => {
+      result.current.focusEntity({ table: "aircraft", id: "civilian-1" });
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.snapshot).toBeNull();
+    expect(result.current.error).toBeNull();
+    expect(result.current.unavailable).toBe(false);
   });
 });

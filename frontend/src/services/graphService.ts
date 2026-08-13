@@ -8,14 +8,25 @@ async function parseJson<T>(res: Response, context: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+// A 404 here means "this entity isn't in the graph" -- a normal outcome
+// (e.g. GRAPH_AIRCRAFT_FILTER keeps most civil aircraft out of it entirely),
+// not a failure. Real errors (5xx, network) still throw via parseJson.
+async function parseJsonOrNotFound<T>(
+  res: Response,
+  context: string,
+): Promise<T | null> {
+  if (res.status === 404) return null;
+  return parseJson<T>(res, context);
+}
+
 export async function fetchGraphEntity(
   table: string,
   id: string,
   signal?: AbortSignal,
-): Promise<GraphSnapshot> {
+): Promise<GraphSnapshot | null> {
   const url = `${API_URL}/graph/entity/${encodeURIComponent(table)}/${encodeURIComponent(id)}`;
   const res = await fetch(url, { signal });
-  return parseJson<GraphSnapshot>(res, "graph entity");
+  return parseJsonOrNotFound<GraphSnapshot>(res, "graph entity");
 }
 
 export async function fetchGraphNeighbors(
@@ -23,11 +34,11 @@ export async function fetchGraphNeighbors(
   id: string,
   depth: 1 | 2,
   signal?: AbortSignal,
-): Promise<GraphSnapshot> {
+): Promise<GraphSnapshot | null> {
   const params = new URLSearchParams({ depth: String(depth) });
   const url = `${API_URL}/graph/neighbors/${encodeURIComponent(table)}/${encodeURIComponent(id)}?${params.toString()}`;
   const res = await fetch(url, { signal });
-  return parseJson<GraphSnapshot>(res, "graph neighbors");
+  return parseJsonOrNotFound<GraphSnapshot>(res, "graph neighbors");
 }
 
 export async function fetchGraphZone(
