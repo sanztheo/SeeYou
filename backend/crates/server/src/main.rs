@@ -692,22 +692,24 @@ async fn seed_airports(
     client: &graph::GraphClient,
     zone_lookup: &graph::zones::ZoneLookup,
 ) -> anyhow::Result<usize> {
+    // `graph::entities::upsert_batch` chunk size — mirrors
+    // `write_located_in_batches`'s `LOCATED_IN_BATCH_SIZE` below. 5,272
+    // sequential `upsert` calls used to take ~2m44s; batching this is what
+    // brings it down to a handful of round trips.
+    const AIRPORT_BATCH_SIZE: usize = 200;
     const AIRPORTS_JSON: &str = include_str!("../../../data/airports/airports.json");
 
     let airports: Vec<serde_json::Value> =
         serde_json::from_str(AIRPORTS_JSON).context("failed to parse bundled airports.json")?;
 
+    let mut rows = Vec::new();
     let mut edges = Vec::new();
-    let mut seeded = 0usize;
 
     for airport in &airports {
         let Some(id) = airport.get("id").and_then(serde_json::Value::as_str) else {
             continue;
         };
-        graph::entities::upsert(client, "airport", id, airport.clone())
-            .await
-            .with_context(|| format!("failed to upsert airport:{id}"))?;
-        seeded += 1;
+        rows.push((id.to_string(), airport.clone()));
 
         let lat = airport.get("lat").and_then(serde_json::Value::as_f64);
         let lon = airport.get("lon").and_then(serde_json::Value::as_f64);
@@ -730,6 +732,13 @@ async fn seed_airports(
                 }),
         );
     }
+
+    for chunk in rows.chunks(AIRPORT_BATCH_SIZE) {
+        graph::entities::upsert_batch(client, "airport", chunk)
+            .await
+            .context("failed to batch-upsert airports")?;
+    }
+    let seeded = rows.len();
 
     write_located_in_batches(client, &edges).await?;
 
