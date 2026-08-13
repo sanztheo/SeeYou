@@ -6,6 +6,31 @@ use crate::types::Vessel;
 use anyhow::Context;
 use serde::Deserialize;
 
+/// COVERAGE LIMITATION — read before treating `/maritime` as a global layer.
+///
+/// This module's only data source, the Finnish Transport Infrastructure
+/// Agency's digitraffic feed, is **terrestrial AIS for Finnish/Baltic
+/// waters only** (measured live 2026-08-13: 1,239 vessel positions, every
+/// one of them in the Baltic Sea/Gulf of Finland — e.g. a sample vessel sat
+/// at 59.47N 18.75E, off Stockholm). Terrestrial AIS receivers everywhere
+/// (not just this one) top out at roughly 40-75 km from the coast, so even
+/// a well-resourced global terrestrial network has open-ocean gaps by
+/// physics, not by choice — but digitraffic specifically doesn't attempt
+/// global coverage at all: it is a Finnish national agency's own receiver
+/// network, documenting Finnish/Baltic traffic, full stop.
+///
+/// A genuinely global *coastal* AIS source was evaluated for this app and
+/// rejected, not overlooked: AISStream.io advertises worldwide receiver
+/// coverage, but its terms of service could not be verified — both a direct
+/// `curl` and an authenticated fetch tool returned HTTP 403 from every page
+/// tried (`/`, `/terms`, `/terms-of-service`, `/tos`, `/legal`,
+/// `/privacy-policy`, `/documentation`), consistent with the same
+/// Cloudflare block a prior pass hit. The two other AIS candidates in
+/// `docs/plans/sources.md` (Norwegian Coastal Administration, Global Fishing
+/// Watch) are each regional or require a human registration step, so
+/// neither closes this gap either. This app's third globally-covering
+/// source is GDACS (`disasters` crate), not a maritime source — see
+/// `docs/plans/sources.md` for the full evaluation.
 const AIS_URL: &str = "https://meri.digitraffic.fi/api/ais/v1/locations";
 /// Vessel metadata (name, call sign) — a separate digitraffic endpoint from
 /// `AIS_URL`'s live positions. Needed because `AIS_URL`'s GeoJSON features
