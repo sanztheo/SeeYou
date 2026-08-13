@@ -1,10 +1,27 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
+use crate::sanctions::is_sanctioned_vessel;
 use crate::types::Vessel;
 use anyhow::Context;
+use serde::Deserialize;
 
 const AIS_URL: &str = "https://meri.digitraffic.fi/api/ais/v1/locations";
+/// Vessel metadata (name, call sign) — a separate digitraffic endpoint from
+/// `AIS_URL`'s live positions. Needed because `AIS_URL`'s GeoJSON features
+/// carry only `mmsi` in their properties, and both the sanctions match and
+/// a human-readable vessel name require the name/call sign this endpoint
+/// provides.
+const AIS_METADATA_URL: &str = "https://meri.digitraffic.fi/api/ais/v1/vessels";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+#[derive(Debug, Deserialize)]
+struct VesselMetadata {
+    mmsi: u64,
+    name: Option<String>,
+    #[serde(rename = "callSign")]
+    call_sign: Option<String>,
+}
 
 fn nav_stat_type(code: u8) -> &'static str {
     match code {
@@ -39,6 +56,35 @@ fn parse_u8ish(val: &serde_json::Value) -> Option<u8> {
     parse_u64ish(val).and_then(|v| u8::try_from(v).ok())
 }
 
+/// Vessel names/call signs, keyed by MMSI — best-effort. A metadata fetch
+/// failure degrades to an empty map (every vessel falls back to no
+/// name/call sign, `is_sanctioned` stays `false`) rather than failing the
+/// whole `fetch_vessels` call: positions are the primary data, metadata is
+/// an enrichment.
+async fn fetch_vessel_metadata(client: &reqwest::Client) -> HashMap<u64, VesselMetadata> {
+    let response = client
+        .get(AIS_METADATA_URL)
+        .header("Accept", "application/json")
+        .header("Accept-Encoding", "gzip")
+        .header("Digitraffic-User", "seeyou-intelligence")
+        .timeout(REQUEST_TIMEOUT)
+        .send()
+        .await;
+
+    let Ok(response) = response else {
+        return HashMap::new();
+    };
+    if !response.status().is_success() {
+        return HashMap::new();
+    }
+    let entries: Vec<VesselMetadata> = match response.json().await {
+        Ok(parsed) => parsed,
+        Err(_) => return HashMap::new(),
+    };
+
+    entries.into_iter().map(|entry| (entry.mmsi, entry)).collect()
+}
+
 pub async fn fetch_vessels(client: &reqwest::Client) -> anyhow::Result<Vec<Vessel>> {
     let response = client
         .get(AIS_URL)
@@ -67,6 +113,10 @@ pub async fn fetch_vessels(client: &reqwest::Client) -> anyhow::Result<Vec<Vesse
         .cloned()
         .unwrap_or_default();
 
+    // Best-effort — see `fetch_vessel_metadata`'s doc comment. Fetched once
+    // per call rather than per-vessel: one extra small request, not N.
+    let metadata = fetch_vessel_metadata(client).await;
+
     let vessels: Vec<Vessel> = features
         .into_iter()
         .filter_map(|f| {
@@ -91,9 +141,14 @@ pub async fn fetch_vessels(client: &reqwest::Client) -> anyhow::Result<Vec<Vesse
                 .and_then(parse_f64ish)
                 .or_else(|| props.get("cog").and_then(parse_f64ish));
 
+            let meta = metadata.get(&mmsi);
+            let name = meta.and_then(|m| m.name.clone());
+            let call_sign = meta.and_then(|m| m.call_sign.as_deref());
+            let is_sanctioned = is_sanctioned_vessel(call_sign);
+
             Some(Vessel {
                 mmsi: mmsi.to_string(),
-                name: None,
+                name,
                 imo: None,
                 vessel_type: nav_stat.map(nav_stat_type).unwrap_or("unknown").to_string(),
                 lon,
@@ -102,7 +157,7 @@ pub async fn fetch_vessels(client: &reqwest::Client) -> anyhow::Result<Vec<Vesse
                 heading,
                 destination: None,
                 flag: None,
-                is_sanctioned: false,
+                is_sanctioned,
             })
         })
         .collect();
