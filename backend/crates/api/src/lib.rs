@@ -6,6 +6,7 @@ mod cyber;
 mod disasters;
 mod events;
 mod fires;
+mod flight_route;
 mod gdelt;
 mod geocode;
 mod graph_api;

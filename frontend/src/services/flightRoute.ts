@@ -1,6 +1,9 @@
 import type { Airport, FlightRoute } from "../types/aircraft";
+import { API_URL } from "../lib/constants";
 
-const ROUTESET_URL = "https://api.adsb.lol/api/0/routeset";
+// Relayed by the backend: adsb.lol sends no CORS header, so calling it from the
+// browser fails the preflight and the route never resolves.
+const ROUTE_URL = `${API_URL}/flight-route`;
 
 interface AdsbAirport {
   iata: string;
@@ -14,7 +17,6 @@ interface AdsbRouteEntry {
   airport_codes: string;
   _airports: AdsbAirport[];
   callsign: string;
-  plausible: number;
 }
 
 const cache = new Map<string, FlightRoute | null>();
@@ -46,7 +48,6 @@ function isAdsbRouteEntry(v: unknown): v is AdsbRouteEntry {
   const o = v as Record<string, unknown>;
   return (
     typeof o.callsign === "string" &&
-    typeof o.plausible === "number" &&
     Array.isArray(o._airports) &&
     o._airports.every(isAdsbAirport)
   );
@@ -54,8 +55,6 @@ function isAdsbRouteEntry(v: unknown): v is AdsbRouteEntry {
 
 export async function fetchFlightRoute(
   callsign: string,
-  lat: number,
-  lon: number,
 ): Promise<FlightRoute | null> {
   const key = callsign.trim().toUpperCase();
   if (!key) return null;
@@ -64,31 +63,17 @@ export async function fetchFlightRoute(
   if (cached !== undefined) return cached;
 
   try {
-    const res = await fetch(ROUTESET_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ planes: [{ callsign: key, lat, lng: lon }] }),
-    });
+    const res = await fetch(`${ROUTE_URL}/${encodeURIComponent(key)}`);
 
+    // 404 is the normal answer for a callsign with no published route.
     if (!res.ok) {
       cache.set(key, null);
       return null;
     }
 
-    const data: unknown = await res.json();
+    const entry: unknown = await res.json();
 
-    if (!Array.isArray(data) || data.length === 0) {
-      cache.set(key, null);
-      return null;
-    }
-
-    const entry: unknown = data[0];
-    if (!isAdsbRouteEntry(entry) || entry.plausible !== 1) {
-      cache.set(key, null);
-      return null;
-    }
-
-    if (entry._airports.length < 2) {
+    if (!isAdsbRouteEntry(entry) || entry._airports.length < 2) {
       cache.set(key, null);
       return null;
     }

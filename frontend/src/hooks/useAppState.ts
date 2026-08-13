@@ -454,11 +454,7 @@ export function useAppState(): AppState {
     setRouteLoading(true);
     setFlightRoute(null);
 
-    fetchFlightRoute(
-      selectedAircraft.callsign,
-      selectedAircraft.lat,
-      selectedAircraft.lon,
-    )
+    fetchFlightRoute(selectedAircraft.callsign)
       .then((route) => {
         if (!cancelled) setFlightRoute(route);
       })

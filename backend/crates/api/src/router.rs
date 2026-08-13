@@ -31,6 +31,10 @@ where
         .route("/airports", get(super::airports::get_airports))
         .route("/disasters", get(super::disasters::get_disasters))
         .route(
+            "/flight-route/:callsign",
+            get(super::flight_route::lookup_flight_route),
+        )
+        .route(
             "/space-weather",
             get(super::space_weather::get_space_weather),
         )
