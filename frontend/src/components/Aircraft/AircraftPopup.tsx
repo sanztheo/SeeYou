@@ -4,6 +4,7 @@ import type {
   FlightRoute,
   PredictedTrajectory,
 } from "../../types/aircraft";
+import { CameraVisibilityPanel } from "../Camera/CameraVisibilityPanel";
 
 const METERS_TO_FEET = 3.28084;
 const MS_TO_KNOTS = 1.94384;
@@ -176,6 +177,13 @@ export function AircraftPopup({
               label="Position"
               value={`${aircraft.lat.toFixed(4)}, ${aircraft.lon.toFixed(4)}`}
             />
+          </div>
+
+          <div className="pt-1.5 mt-1.5 border-t border-cyan-900/20 space-y-2">
+            <span className="text-cyan-400 text-[10px] font-semibold uppercase tracking-wider">
+              Camera coverage
+            </span>
+            <CameraVisibilityPanel key={aircraft.icao} icao={aircraft.icao} />
           </div>
 
           {flightRoute && (

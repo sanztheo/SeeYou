@@ -1,17 +1,20 @@
 import { useEffect, useRef } from "react";
 import { useCesium } from "resium";
-import {
-  Cartesian3,
-  Color,
-  CustomDataSource,
-  PolygonHierarchy,
-} from "cesium";
+import { Cartesian3, Color, CustomDataSource, PolygonHierarchy } from "cesium";
 import type { Camera } from "../../types/camera";
 import type { CameraViewInfo } from "./cameraView";
 
 interface CameraFocusLayerProps {
   camera: Camera | null;
   view: CameraViewInfo | null;
+  /** Real computed max range in metres (SeeYou v2 P2 Lot 6 —
+   * `cameras::visibility::max_possible_range_km` / a specific sighting's
+   * geometry from `GET /aircraft/:icao/cameras`), overriding the static
+   * per-provider guess in `rangeForSource` when known. Not yet wired from
+   * a caller — `App.tsx`/`Globe.tsx` own the camera-focus selection state
+   * and are outside this lot's file scope; this prop is the hook point for
+   * whoever wires it. */
+  rangeOverrideM?: number;
 }
 
 const EARTH_RADIUS_M = 6_371_000;
@@ -70,9 +73,7 @@ function destinationPoint(
   const sinAng = Math.sin(ang);
   const cosAng = Math.cos(ang);
 
-  const lat2 = Math.asin(
-    sinLat1 * cosAng + cosLat1 * sinAng * Math.cos(brng),
-  );
+  const lat2 = Math.asin(sinLat1 * cosAng + cosLat1 * sinAng * Math.cos(brng));
   const lon2 =
     lon1 +
     Math.atan2(
@@ -111,6 +112,7 @@ function buildConePositions(
 export function CameraFocusLayer({
   camera,
   view,
+  rangeOverrideM,
 }: CameraFocusLayerProps): null {
   const { viewer } = useCesium();
   const dsRef = useRef<CustomDataSource | null>(null);
@@ -135,7 +137,7 @@ export function CameraFocusLayer({
     ds.entities.removeAll();
     if (!camera || !view) return;
 
-    const rangeM = rangeForSource(camera.source);
+    const rangeM = rangeOverrideM ?? rangeForSource(camera.source);
     const conePositions = buildConePositions(camera, view, rangeM);
     const axisEnd = destinationPoint(
       camera.lat,
@@ -167,7 +169,7 @@ export function CameraFocusLayer({
         clampToGround: true,
       },
     });
-  }, [camera, view]);
+  }, [camera, view, rangeOverrideM]);
 
   return null;
 }

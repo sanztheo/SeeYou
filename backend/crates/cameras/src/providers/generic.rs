@@ -83,6 +83,7 @@ async fn fetch_paris(client: &reqwest::Client) -> Vec<Camera> {
                 view_fov_deg: Some(clamp_fov_deg(default_fov_for_source(&source))),
                 view_heading_source: view_heading_deg.map(|_| CameraViewSource::Parsed),
                 view_hint: None,
+                resolution_px: None,
             })
         })
         .collect()
@@ -431,6 +432,7 @@ fn worldwide_cameras() -> Vec<Camera> {
                 view_fov_deg: Some(clamp_fov_deg(default_fov_for_source(&source))),
                 view_heading_source: view_heading_deg.map(|_| CameraViewSource::Parsed),
                 view_hint: None,
+                resolution_px: None,
             }
         })
         .collect()

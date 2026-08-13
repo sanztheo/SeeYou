@@ -69,6 +69,7 @@ fn parse_nyc_cameras(raw: Vec<NycCamera>) -> Vec<Camera> {
                 view_fov_deg: Some(clamp_fov_deg(default_fov_for_source(&source))),
                 view_heading_source,
                 view_hint: (!c.direction.is_empty()).then_some(c.direction),
+                resolution_px: None,
             }
         })
         .collect()

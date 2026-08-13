@@ -12,6 +12,7 @@ reqwest.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
 tokio.workspace = true
+futures-util.workspace = true
 sha1 = "0.10"
 cache = { path = "../cache" }
 bus = { path = "../bus" }

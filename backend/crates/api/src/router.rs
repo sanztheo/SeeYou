@@ -45,6 +45,10 @@ where
             get(super::predict::predict_aircraft),
         )
         .route(
+            "/aircraft/:icao/cameras",
+            get(super::aircraft_cameras::get_aircraft_cameras),
+        )
+        .route(
             "/graph/entity/:entity_type/:id",
             get(super::graph_api::get_entity_graph),
         )

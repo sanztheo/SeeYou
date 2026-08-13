@@ -62,6 +62,7 @@ fn parse_tfl_cameras(places: Vec<TflPlace>) -> Vec<Camera> {
                 view_fov_deg: Some(clamp_fov_deg(default_fov_for_source(&source))),
                 view_heading_source: view_heading_deg.map(|_| CameraViewSource::Parsed),
                 view_hint,
+                resolution_px: None,
             })
         })
         .collect()

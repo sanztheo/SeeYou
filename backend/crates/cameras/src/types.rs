@@ -20,6 +20,12 @@ pub struct Camera {
     pub view_heading_source: Option<CameraViewSource>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub view_hint: Option<String>,
+    /// Sensor horizontal resolution in pixels. No provider populates this yet
+    /// (SeeYou v2 P2 — added for the camera↔aircraft pixel criterion in
+    /// `visibility::assess_camera`); `None` falls back to a conservative
+    /// `visibility::DEFAULT_RESOLUTION_PX` (640).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolution_px: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
