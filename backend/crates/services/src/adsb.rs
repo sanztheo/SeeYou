@@ -44,18 +44,27 @@ const MAX_CONCURRENT_PER_PROVIDER: usize = 1;
 /// requests don't lock into an exact period across polling cycles.
 const JITTER_MAX_MS: u64 = 400;
 
-/// One of the three ADSBX-v2-family providers a region can be fetched from.
-/// Regions are round-robined across all three (see `fetch_all_regions`)
+/// One of the ADSBX-v2-family providers a region can be fetched from.
+/// Regions are round-robined across all of them (see `fetch_all_regions`)
 /// because adsb.lol alone cannot serve the full 43-point grid at a usable
 /// cadence within its measured ~1 request/3s budget.
+///
+/// `AirplanesLive` is defined but deliberately kept out of `PROVIDERS`: on
+/// 2026-08-13 it began answering every region with HTTP 403 and the body
+/// `{"error": "please contact us at contact@airplanes.live"}`. Not a
+/// User-Agent issue (a browser UA gets the same 403) -- they want an access
+/// agreement. Re-add it to `PROVIDERS` once that conversation has happened.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Provider {
     AdsbLol,
     AdsbFi,
+    // Kept out of PROVIDERS while it 403s; its URL shape differs from the other
+    // two and was established empirically, so removing it would lose that.
+    #[allow(dead_code)]
     AirplanesLive,
 }
 
-const PROVIDERS: [Provider; 3] = [Provider::AdsbLol, Provider::AdsbFi, Provider::AirplanesLive];
+const PROVIDERS: [Provider; 2] = [Provider::AdsbLol, Provider::AdsbFi];
 
 impl Provider {
     fn base_url(self) -> &'static str {
@@ -532,12 +541,20 @@ mod tests {
 
     #[test]
     fn grid_points_split_evenly_across_providers() {
-        let mut counts = [0usize; 3];
+        let mut counts = vec![0usize; PROVIDERS.len()];
         for i in 0..GRID_POINTS.len() {
             counts[i % PROVIDERS.len()] += 1;
         }
-        // 43 grid points across 3 providers: adsb.lol (index 0) takes the remainder.
-        assert_eq!(counts, [15, 14, 14]);
+
+        assert_eq!(counts.iter().sum::<usize>(), GRID_POINTS.len());
+        // Round-robin: the earliest providers absorb the remainder, and no two
+        // shares differ by more than one region.
+        let base = GRID_POINTS.len() / PROVIDERS.len();
+        let remainder = GRID_POINTS.len() % PROVIDERS.len();
+        for (i, count) in counts.iter().enumerate() {
+            let expected = if i < remainder { base + 1 } else { base };
+            assert_eq!(*count, expected, "provider {i} got an uneven share");
+        }
     }
 
     #[test]
