@@ -267,3 +267,58 @@ par le viewport (P0-10).
   (ex. `caltrans-d7-675` et `otc-4086`, même nom et même géométrie).
 - Chemin météo du Lot 6 jamais observé en réel : aucune station METAR à moins de 150 km des avions
   testés. Testé unitairement seulement.
+
+---
+
+## Condition (6) — vérifiée par exécution le 2026-08-13
+
+Serveur relancé à la main après le commit du Lot 7a, et non sur rapport d'agent.
+
+Journal de démarrage :
+
+```
+zone seed completed count=237
+airport seed completed count=5272
+GDELT events updated count=147
+GDACS disasters updated count=19
+```
+
+| Endpoint | Avant | Après |
+|---|---|---|
+| `/gdelt` | 0 | **147 événements** |
+| `/airports` | route inexistante | **5 272 aéroports** |
+| `/disasters` | route inexistante | **19 alertes** |
+| `/maritime` | 0 | **1 257 navires** |
+| `/cyber` | 0 | 0 — assumé, ThreatFox écarté |
+
+Les nœuds alimentent réellement des relations, ce que « `located_in` a grossi » ne suffisait pas
+à prouver :
+
+| Domaine source | Arêtes `located_in` |
+|---|---|
+| `airport` | 10 198 |
+| `vessel` | 1 729 |
+| `gdelt_event` | 352 |
+| `disaster_event` | 35 |
+| `camera` | 19 670 |
+
+Nœuds : `airport` 5 272, `gdelt_event` 200, `vessel` 1 298, `disaster_event` 20.
+
+**Cause racine GDELT :** le crate interrogeait `api.gdeltproject.org/api/v2/geo/geo?query=*`,
+l'API GEO 2.0 qui géolocalise des articles de presse et répond 404 sur ce paramètre. Il ne lisait
+donc jamais le flux d'événements. Corrigé sur `data.gdeltproject.org/gdeltv2/lastupdate.txt` →
+`.export.CSV.zip` (Event 2.0, 61 colonnes, régénéré toutes les 15 min).
+
+**Défauts connus restants**, révélés par un test navigateur réel et non par les tests automatisés :
+
+1. `flightRoute.ts:3` appelle `api.adsb.lol/api/0/routeset` directement depuis le navigateur —
+   bloqué par CORS, la feature route de vol ne fonctionne jamais. Il faut un proxy backend.
+2. `airport` n'est pas dans `normalize_table_name` (`graph_api.rs:796`) → 404 sur
+   `/graph/neighbors/airport/*` alors que les 5 272 nœuds existent.
+3. Un nœud légitimement absent du graph (avion civil, filtré par `GRAPH_AIRCRAFT_FILTER`) remonte
+   en erreur console au lieu d'être traité comme un cas normal.
+4. Les caméras de `seeing_now` sont dupliquées dans `will_see`.
+5. Le seed des 5 272 aéroports prend ~2 min 44 s en `UPSERT` séquentiels : `graph::entities` n'a pas
+   de variante batchée, alors que `link_batch` fait exactement ça pour les arêtes depuis le Lot 4.
+6. `airport` et `disaster_event` écrivent au graph directement depuis `server::main` sans passer par
+   le bus, contrairement à tous les autres domaines.
