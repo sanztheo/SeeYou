@@ -20,6 +20,7 @@ db = { path = "../db" }
 cables = { path = "../cables" }
 cameras = { path = "../cameras" }
 cyber = { path = "../cyber" }
+disasters = { path = "../disasters" }
 events = { path = "../events" }
 fires = { path = "../fires" }
 gdelt = { path = "../gdelt" }

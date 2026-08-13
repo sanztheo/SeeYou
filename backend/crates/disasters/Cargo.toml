@@ -1,0 +1,11 @@
+[package]
+name = "disasters"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+reqwest.workspace = true
+serde.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+quick-xml.workspace = true

@@ -53,11 +53,11 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let ws_broadcast = ws::Broadcaster::new(BROADCAST_CAPACITY);
-    let graph_client = match initialize_graph_client().await {
-        Ok(client) => Some(client),
+    let (graph_client, airport_zone_lookup) = match initialize_graph_client().await {
+        Ok((client, zone_lookup)) => (Some(client), Some(zone_lookup)),
         Err(error) => {
             warn!(error = %error, "graph client unavailable; /graph endpoints will return 503");
-            None
+            (None, None)
         }
     };
 
@@ -433,6 +433,42 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    // GDACS (disasters): no bus topic exists for this domain and adding one
+    // is outside this task's exclusive perimeter (`backend/crates/bus/`
+    // isn't a file this task may touch) — so unlike every other tracker in
+    // this file, graph relations are written directly here rather than via
+    // `consumer_graph`'s bus subscription. This mirrors the pattern
+    // `initialize_graph_client`'s zone/airport seeding already uses (a
+    // direct write against the same `graph::GraphClient`), just on a
+    // recurring poll instead of once at startup.
+    let disasters_poll_interval = Duration::from_secs(config.disasters_poll_interval_secs);
+    tokio::spawn({
+        let client = http_client.clone();
+        let graph_client = graph_client.clone();
+        let zone_lookup = airport_zone_lookup.clone();
+        async move {
+            loop {
+                match disasters::gdacs::fetch_disasters(&client).await {
+                    Ok(events) => {
+                        let count = events.len();
+                        if let (Some(graph_client), Some(zone_lookup)) =
+                            (&graph_client, &zone_lookup)
+                        {
+                            if let Err(error) =
+                                write_disasters_to_graph(graph_client, zone_lookup, &events).await
+                            {
+                                tracing::warn!(error = %error, "failed to write GDACS disasters to graph");
+                            }
+                        }
+                        tracing::info!(count, "GDACS disasters updated");
+                    }
+                    Err(e) => tracing::warn!(error = %e, "GDACS fetch failed"),
+                }
+                tokio::time::sleep(disasters_poll_interval).await;
+            }
+        }
+    });
+
     let cyber_poll_interval = Duration::from_secs(config.cyber_poll_interval_secs);
     tokio::spawn({
         let client = http_client.clone();
@@ -607,7 +643,8 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn initialize_graph_client() -> anyhow::Result<graph::GraphClient> {
+async fn initialize_graph_client() -> anyhow::Result<(graph::GraphClient, graph::zones::ZoneLookup)>
+{
     let graph_config = graph::GraphConfig::from_env();
     let client = graph::GraphClient::connect(&graph_config)
         .await
@@ -628,7 +665,147 @@ async fn initialize_graph_client() -> anyhow::Result<graph::GraphClient> {
         .with_context(|| format!("failed to seed zones from {zones_path}"))?;
     info!(count = stats.upserted, "zone seed completed");
 
-    Ok(client)
+    let zone_lookup = graph::zones::ZoneLookup::from_geojson_path(&zones_path)
+        .with_context(|| format!("failed to build zone lookup from {zones_path}"))?;
+
+    // Airports are static reference data (OurAirports, re-downloaded and
+    // re-filtered by hand, not polled at runtime — see
+    // `docs/plans/sources.md`) — seeded once here rather than through a
+    // recurring tracker. A seed failure shouldn't take down `/graph/*`
+    // entirely, so it's logged and swallowed rather than propagated with
+    // `?`.
+    match seed_airports(&client, &zone_lookup).await {
+        Ok(count) => info!(count, "airport seed completed"),
+        Err(error) => {
+            warn!(error = %error, "airport seed failed; airport graph relations may be incomplete")
+        }
+    }
+
+    Ok((client, zone_lookup))
+}
+
+/// Upserts every bundled airport as a graph entity and links it to its
+/// containing zone(s) via `located_in` — idempotent (deterministic entity
+/// and edge ids), so re-running this on every process start just re-affirms
+/// the same rows rather than duplicating them.
+async fn seed_airports(
+    client: &graph::GraphClient,
+    zone_lookup: &graph::zones::ZoneLookup,
+) -> anyhow::Result<usize> {
+    const AIRPORTS_JSON: &str = include_str!("../../../data/airports/airports.json");
+
+    let airports: Vec<serde_json::Value> =
+        serde_json::from_str(AIRPORTS_JSON).context("failed to parse bundled airports.json")?;
+
+    let mut edges = Vec::new();
+    let mut seeded = 0usize;
+
+    for airport in &airports {
+        let Some(id) = airport.get("id").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        graph::entities::upsert(client, "airport", id, airport.clone())
+            .await
+            .with_context(|| format!("failed to upsert airport:{id}"))?;
+        seeded += 1;
+
+        let lat = airport.get("lat").and_then(serde_json::Value::as_f64);
+        let lon = airport.get("lon").and_then(serde_json::Value::as_f64);
+        let (Some(lat), Some(lon)) = (lat, lon) else {
+            continue;
+        };
+
+        edges.extend(
+            zone_lookup
+                .lookup(lat, lon)
+                .into_iter()
+                .filter(|zone_match| zone_match.contains)
+                .map(|zone_match| graph::relations::RelationEdge {
+                    from_table: "airport",
+                    from_id: id.to_string(),
+                    relation: "located_in",
+                    to_table: "zone",
+                    to_id: zone_match.zone_id,
+                    attributes: located_in_membership_attributes("server::seed_airports"),
+                }),
+        );
+    }
+
+    write_located_in_batches(client, &edges).await?;
+
+    Ok(seeded)
+}
+
+/// Writes every fetched GDACS disaster as a graph entity, linked to its
+/// containing zone(s) via `located_in`. Events over open ocean (tropical
+/// cyclones especially) commonly resolve to zero containing zones — no
+/// country polygon covers open water — so `located_in` is honestly absent
+/// for those rather than forced onto a nearest zone that may be hundreds of
+/// km away.
+async fn write_disasters_to_graph(
+    client: &graph::GraphClient,
+    zone_lookup: &graph::zones::ZoneLookup,
+    disasters: &[disasters::DisasterEvent],
+) -> anyhow::Result<()> {
+    let mut edges = Vec::new();
+
+    for disaster in disasters {
+        let payload = serde_json::to_value(disaster)
+            .context("failed to serialize disaster event for graph upsert")?;
+        graph::entities::upsert(client, "disaster_event", &disaster.event_id, payload)
+            .await
+            .with_context(|| format!("failed to upsert disaster_event:{}", disaster.event_id))?;
+
+        edges.extend(
+            zone_lookup
+                .lookup(disaster.lat, disaster.lon)
+                .into_iter()
+                .filter(|zone_match| zone_match.contains)
+                .map(|zone_match| graph::relations::RelationEdge {
+                    from_table: "disaster_event",
+                    from_id: disaster.event_id.clone(),
+                    relation: "located_in",
+                    to_table: "zone",
+                    to_id: zone_match.zone_id,
+                    attributes: located_in_membership_attributes("server::gdacs_tracker"),
+                }),
+        );
+    }
+
+    write_located_in_batches(client, &edges).await
+}
+
+/// `graph::relations::link_batch` doesn't chunk its input itself (by
+/// design — see its doc comment); chunk size mirrors
+/// `consumer_graph::constants::RELATE_BATCH_CHUNK_SIZE` (200). Plain
+/// sequential `.await` per chunk, not bounded concurrency: both call sites
+/// run at most a few thousand edges, once at startup or once per 15-minute
+/// poll — not a hot path worth the extra machinery.
+async fn write_located_in_batches(
+    client: &graph::GraphClient,
+    edges: &[graph::relations::RelationEdge],
+) -> anyhow::Result<()> {
+    const LOCATED_IN_BATCH_SIZE: usize = 200;
+
+    for chunk in edges.chunks(LOCATED_IN_BATCH_SIZE) {
+        graph::relations::link_batch(client, chunk)
+            .await
+            .context("failed to write located_in batch")?;
+    }
+
+    Ok(())
+}
+
+fn located_in_membership_attributes(source: &str) -> serde_json::Value {
+    let timestamp = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+
+    graph::relations::relation_attributes(
+        None,
+        Some(&timestamp),
+        Some(graph::relations::CONTAINMENT_SCORE),
+        Some(source),
+        Some(serde_json::json!({ "rule": "located_in:zone_membership" })),
+    )
 }
 
 async fn publish_json<T: Serialize>(

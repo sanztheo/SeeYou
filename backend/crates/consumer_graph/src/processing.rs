@@ -35,7 +35,7 @@ impl GraphBusConsumer {
                 self.link_aircraft_relations(&entity_id, &normalized_payload, &location_zone_ids)
                     .await?;
             }
-            "camera" | "traffic_segment" | "weather" => {
+            "camera" | "traffic_segment" | "weather" | "gdelt_event" | "vessel" => {
                 self.link_to_zones(
                     table,
                     &entity_id,
@@ -132,7 +132,7 @@ impl GraphBusConsumer {
                     )
                 })?;
             }
-            "camera" | "traffic_segment" | "weather" => {
+            "camera" | "traffic_segment" | "weather" | "gdelt_event" | "vessel" => {
                 self.link_to_zones(
                     table,
                     &entity_id,

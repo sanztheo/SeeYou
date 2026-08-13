@@ -1,7 +1,9 @@
 mod aircraft_cameras;
+mod airports;
 mod cables;
 pub mod cameras;
 mod cyber;
+mod disasters;
 mod events;
 mod fires;
 mod gdelt;

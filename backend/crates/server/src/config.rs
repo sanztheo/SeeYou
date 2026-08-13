@@ -12,6 +12,10 @@ const DEFAULT_FIRES_POLL_INTERVAL_SECS: u64 = 1800;
 const DEFAULT_CABLES_POLL_INTERVAL_SECS: u64 = 86400;
 const DEFAULT_GDELT_POLL_INTERVAL_SECS: u64 = 900;
 const DEFAULT_MARITIME_POLL_INTERVAL_SECS: u64 = 600;
+// GDACS disaster alerts evolve over hours/days (a cyclone or flood doesn't
+// meaningfully change in minutes), so this matches GDELT's cadence rather
+// than the sub-minute cadence of a live-position feed.
+const DEFAULT_DISASTERS_POLL_INTERVAL_SECS: u64 = 900;
 const DEFAULT_CYBER_POLL_INTERVAL_SECS: u64 = 900;
 const DEFAULT_SPACE_WEATHER_POLL_INTERVAL_SECS: u64 = 900;
 
@@ -31,6 +35,7 @@ pub struct Config {
     pub cables_poll_interval_secs: u64,
     pub gdelt_poll_interval_secs: u64,
     pub maritime_poll_interval_secs: u64,
+    pub disasters_poll_interval_secs: u64,
     pub cyber_poll_interval_secs: u64,
     pub space_weather_poll_interval_secs: u64,
 }
@@ -101,6 +106,10 @@ impl Config {
             maritime_poll_interval_secs: parse_env_u64(
                 "MARITIME_POLL_INTERVAL_SECS",
                 DEFAULT_MARITIME_POLL_INTERVAL_SECS,
+            )?,
+            disasters_poll_interval_secs: parse_env_u64(
+                "DISASTERS_POLL_INTERVAL_SECS",
+                DEFAULT_DISASTERS_POLL_INTERVAL_SECS,
             )?,
             cyber_poll_interval_secs: parse_env_u64(
                 "CYBER_POLL_INTERVAL_SECS",

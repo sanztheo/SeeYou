@@ -28,6 +28,8 @@ where
         .route("/gdelt", get(super::gdelt::get_gdelt))
         .route("/maritime", get(super::maritime::get_maritime))
         .route("/cyber", get(super::cyber::get_cyber))
+        .route("/airports", get(super::airports::get_airports))
+        .route("/disasters", get(super::disasters::get_disasters))
         .route(
             "/space-weather",
             get(super::space_weather::get_space_weather),

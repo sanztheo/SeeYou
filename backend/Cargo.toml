@@ -18,6 +18,7 @@ members = [
     "crates/fires",
     "crates/gdelt",
     "crates/maritime",
+    "crates/disasters",
     "crates/cyber",
     "crates/space_weather",
     "crates/consumer_redis",
@@ -55,3 +56,5 @@ geojson = "0.24"
 rustls = { version = "0.23.37", features = ["ring"] }
 tracing-appender = "0.2"
 rstar = "0.12"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+quick-xml = "0.36"
