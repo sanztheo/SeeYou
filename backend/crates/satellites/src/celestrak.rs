@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -6,6 +8,20 @@ use crate::types::{SatelliteCategory, TleData};
 
 const CELESTRAK_BASE: &str = "https://celestrak.org/NORAD/elements/gp.php";
 const FETCH_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Last successful payload per group. CelesTrak refreshes GP data every two
+/// hours and answers 403 in between with "GP data has not updated since your
+/// last successful download" -- that is a freshness check, not a rejection, so
+/// the right response is to keep serving what we already have.
+fn tle_cache() -> &'static Mutex<HashMap<String, Vec<TleData>>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, Vec<TleData>>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// True when a non-success body is CelesTrak saying the data is unchanged.
+fn is_unchanged_since_last_download(body: &str) -> bool {
+    body.contains("has not updated since your last successful")
+}
 
 const TLE_GROUPS: &[(&str, SatelliteCategory)] = &[
     ("stations", SatelliteCategory::Station),
@@ -76,11 +92,28 @@ pub async fn fetch_tle_group(
 
     let status = resp.status();
     if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        if is_unchanged_since_last_download(&body) {
+            if let Some(cached) = tle_cache()
+                .lock()
+                .expect("TLE cache poisoned")
+                .get(group)
+                .cloned()
+            {
+                tracing::debug!(group, count = cached.len(), "TLE unchanged, serving cache");
+                return Ok(cached);
+            }
+        }
         anyhow::bail!("CelesTrak returned HTTP {status} for group {group}");
     }
 
     let text = resp.text().await?;
-    Ok(parse_tle_text(&text, category))
+    let tles = parse_tle_text(&text, category);
+    tle_cache()
+        .lock()
+        .expect("TLE cache poisoned")
+        .insert(group.to_string(), tles.clone());
+    Ok(tles)
 }
 
 /// Fetch all TLE groups concurrently, same pattern as `adsb::fetch_all_regions`.
@@ -119,4 +152,35 @@ pub async fn fetch_all_tle(client: &reqwest::Client) -> (Vec<TleData>, usize, us
     }
 
     (all_tle, total, failed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Verbatim body CelesTrak returns with a 403 between refreshes.
+    const UNCHANGED_BODY: &str = "GP data has not updated since your last successful\n\
+                                  download of GROUP=active at 2026-08-13 10:37:06 UTC.\n\
+                                  Data is updated once every 2 hours.";
+
+    #[test]
+    fn recognises_the_unchanged_data_response() {
+        assert!(is_unchanged_since_last_download(UNCHANGED_BODY));
+    }
+
+    #[test]
+    fn does_not_mistake_other_failures_for_unchanged_data() {
+        assert!(!is_unchanged_since_last_download("Service Unavailable"));
+        assert!(!is_unchanged_since_last_download("Invalid GROUP"));
+        assert!(!is_unchanged_since_last_download(""));
+    }
+
+    #[test]
+    fn every_requested_group_is_distinct() {
+        let mut names: Vec<&str> = TLE_GROUPS.iter().map(|(g, _)| *g).collect();
+        let before = names.len();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), before, "a TLE group is requested twice");
+    }
 }
