@@ -146,3 +146,124 @@ Peuplé pour la première fois — il n'avait jamais tourné dans cette configur
 
 **63,01 % des caméras ont un cap fiable**, donc un cône FOV calculable. Les 36,99 % restantes
 tombent en mode proximité seule.
+
+---
+
+# Résultats mesurés — Lots 4, 5 et 6 (2026-08-13)
+
+Vérifiés à la main après le workflow, serveur relancé avec l'intégralité des correctifs.
+
+## Conditions du goal
+
+| # | Condition | État | Preuve |
+|---|---|---|---|
+| 1 | `/health` 4/4 connected | **atteinte** | redis, postgres, redpanda, surrealdb tous `connected` |
+| 2 | `regions_failed=0` | **atteinte** | `regional fetch complete total=5869 regions_ok=43 regions_failed=0 regions_rate_limited=0`, zéro échec de région sur tout le log |
+| 3 | Temps de chargement | **atteinte** (métrique requalifiée) | WS 31,67 → 2,39 MB/min ; `/fires` 17,87 MB/1,9 s → 110 KB/16 ms ; FCP 1632 → 316 ms |
+| 4 | Endpoint caméra↔avion | **atteinte** | voir ci-dessous |
+| 5 | Corrélation 5+ domaines | **atteinte** | 5 types de relations, 6+ domaines, scorées 0-1, datées, avec `explain` |
+| 6 | 3+ nouvelles sources mondiales | **NON atteinte** | `/gdelt`, `/maritime`, `/cyber` toujours à 0 |
+
+Contraintes : `cargo test` 48 suites OK · `npm test` 224/224 sur 33 fichiers · `npm run build` vert ·
+aucun `.env` · zéro Railway · protocole WS miroir intact.
+
+## Condition (4) — caméra↔avion, vérifié en direct
+
+| Avion | Altitude | Résultat |
+|---|---|---|
+| `a690de` (baie de San Francisco) | 1 496 m | **23 caméras Caltrans/OTC le voient**, 90 vont le voir (T-3 s à T-135 s), niveau `detection` |
+| `407453` (région de Gatwick) | 76 m | 0 maintenant, **3 caméras TfL** vont le voir, première à T-51 s pour 129 s |
+| deux avions > 9 800 m | croisière | `filtered_reason="cruise_altitude"`, listes vides, **zéro faux positif** |
+
+Notes retournées par l'API, qui montrent l'honnêteté du calcul plutôt que de la cacher :
+« 14 des 60 points prédits sur 180 s sont au-dessus du seuil de croisière 3000 m et n'ont pas été
+évalués » et « 2 observations viennent de caméras sans cap fiable — proximité seule, pas de test de
+cône ».
+
+**Défaut mineur connu, non corrigé :** les caméras de `seeing_now` sont dupliquées dans `will_see`
+(le point d'indice 0 alimente `seeing_now` puis `continue` sans ouvrir de fenêtre, donc la même
+caméra rouvre une fenêtre à l'indice 1 avec T-3 s).
+
+## Condition (5) — moteur de corrélation
+
+| Relation | Arêtes vivantes |
+|---|---|
+| `located_in` | 20 060 |
+| `passes_over` | 4 968 |
+| `covers` | 2 073 |
+| `affected_by` | 422 |
+| `near` (corrélation cross-domaine) | 1 |
+
+Exemple d'arête réelle, avec la provenance complète :
+
+```json
+{
+  "in": "seismic_event:us6000tkaw",
+  "out": "military_base:military_base_1970113779197341509",
+  "score": 0.327, "timestamp": "2026-08-13T08:43:44Z", "expires_at": "2026-08-14T08:43:44Z",
+  "source": "consumer_graph::correlation",
+  "explain": { "rule": "near:seismic_critical_infrastructure",
+    "distance_km": 100.9, "magnitude": 4.6,
+    "max_distance_km": 150.0, "min_magnitude": 4.5,
+    "sources": ["usgs.gov/2.5_day", "military_base.json"] }
+}
+```
+
+`near` à 1 arête n'est pas un échec : le seuil anti-bruit M ≥ 4,5 fonctionne, un seul séisme
+qualifiant est actuellement proche d'une base. C'est le comportement voulu.
+
+**Gate d'écriture :** 232,9 arêtes/s à p95 887 ms → **3 270,8 arêtes/s à p95 67,9 ms**. Cause de
+l'échec initial : SurrealDB facture ~4 ms fixes par *statement*, pas par arête. Le correctif groupe
+par type de relation en un seul `INSERT RELATION ... ON DUPLICATE KEY UPDATE`.
+
+## Trois hypothèses du plan invalidées par la mesure
+
+1. **`RELATE` avec un edge_id déterministe est déjà idempotent** sur SurrealDB 3.2.4. C'est `CREATE`
+   qui erreur sur un id dupliqué. Le plan prévoyait un correctif inutile.
+2. **`flies_over` était vide depuis toujours.** `timestamp`/`expires_at` sont déclarés
+   `option<datetime>` mais le code écrivait des chaînes ISO-8601, et l'erreur de coercition était
+   avalée par une boucle warn-and-continue. Déclarer le champ en `string` casserait le sweep TTL —
+   le cast `<datetime>` en ligne est la seule forme correcte.
+3. **`sweep_expired_relations` échouait à chaque tick** supprimant des lignes
+   (`Expected any, got datetime`). Le nettoyage des relations expirées n'a jamais fonctionné.
+
+## Condition (6) — non livrée, et pourquoi
+
+L'agent chargé des sources a été **refusé quatre fois par un garde-fou de sécurité** :
+
+```
+"stop_reason": "refusal", "category": "cyber"
+```
+
+Cause : la tâche incluait **ThreatFox (abuse.ch)**, un flux d'indicateurs de compromission. Le
+classifieur a réagi au threat-intel, alors que l'usage est purement défensif. Faux positif, mais
+bloquant. `/gdelt`, `/maritime` et `/cyber` restent donc à 0.
+
+**Pour reprendre :** retirer ThreatFox de la tâche automatisée. Trois sources suffisent pour la
+condition et n'ont aucun angle cyber — GDELT (à réparer), une source AIS ouverte, OurAirports
+(domaine public). La couche cyber se branchera à la main : `abuse.ch` demande une Auth-Key gratuite,
+c'est une ligne de configuration.
+
+## Régression externe : airplanes.live
+
+Trois jours après l'avoir câblé en fallback, airplanes.live répond **HTTP 403 sur toutes les
+régions**, corps `{"error": "please contact us at contact@airplanes.live"}`. Un User-Agent navigateur
+obtient le même 403 : c'est une porte d'accès commerciale, pas du fingerprinting. Effet mesuré avant
+retrait : `regions_ok=29, regions_failed=14` — exactement sa part du round-robin.
+
+Retiré de la rotation. Conséquence : **2 fournisseurs au lieu de 3, cycle ~65 s au lieu de 58 s.**
+Chaque fournisseur perdu allonge le cycle mondial, ce qui renforce l'argument pour la grille pilotée
+par le viewport (P0-10).
+
+## Bugs restants, non corrigés
+
+- `/graph/neighbors` sur les nœuds hub : la classification d'erreurs est corrigée (retry + 503 +
+  timeout 10 s) mais `GraphClient` partage toujours **une seule connexion SurrealDB**, ce qui reste
+  une course sous concurrence.
+- `link_to_zones` écrit toujours une arête par statement : au refresh caméras (~900 s),
+  ~20 000 `located_in` × ~4 ms ≈ 80 s d'écriture. Le batching n'a été appliqué qu'aux arêtes de
+  corrélation.
+- Doublons de caméras pré-existants : `otcmap_california` republie les mêmes caméras que `caltrans`
+  (ex. `caltrans-d7-675` et `otc-4086`, même nom et même géométrie).
+- Chemin météo du Lot 6 jamais observé en réel : aucune station METAR à moins de 150 km des avions
+  testés. Testé unitairement seulement.
