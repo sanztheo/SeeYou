@@ -200,6 +200,51 @@ fn to_camera_sighting(camera: &Camera, assessment: &CameraAssessment) -> CameraS
     }
 }
 
+/// ~11 m at the equator -- tight enough to only merge cameras that are
+/// physically the same device, not two distinct cameras on the same road.
+const LOCATION_DEDUP_SCALE: f64 = 10_000.0;
+
+/// Different providers occasionally republish the exact same physical
+/// camera under a different id (seen in practice: a Caltrans feed and the
+/// OTC Map aggregator that mirrors it). Maps every camera index to the
+/// first index seen at (approximately) the same location, so a sighting
+/// computed for either provider's entry collapses onto one canonical index
+/// instead of counting as two cameras seeing the aircraft.
+fn canonical_camera_indices(cameras: &[Camera]) -> Vec<usize> {
+    let mut first_seen: HashMap<(i64, i64), usize> = HashMap::new();
+    cameras
+        .iter()
+        .enumerate()
+        .map(|(idx, camera)| {
+            let key = (
+                (camera.lat * LOCATION_DEDUP_SCALE).round() as i64,
+                (camera.lon * LOCATION_DEDUP_SCALE).round() as i64,
+            );
+            *first_seen.entry(key).or_insert(idx)
+        })
+        .collect()
+}
+
+/// Collapses raw per-camera assessments for one point onto their canonical
+/// (location-deduplicated) index, keeping the higher-scoring assessment
+/// when two raw indices share a canonical group.
+fn merge_by_canonical_camera(
+    raw: impl IntoIterator<Item = (usize, CameraAssessment)>,
+    canonical_camera: &[usize],
+) -> HashMap<usize, CameraAssessment> {
+    let mut by_canonical: HashMap<usize, CameraAssessment> = HashMap::new();
+    for (cam_idx, assessment) in raw {
+        let canonical_idx = canonical_camera[cam_idx];
+        let better = by_canonical
+            .get(&canonical_idx)
+            .is_none_or(|existing| assessment.score > existing.score);
+        if better {
+            by_canonical.insert(canonical_idx, assessment);
+        }
+    }
+    by_canonical
+}
+
 /// Turns per-point camera visibility into `seeing_now` (point 0) and
 /// deduplicated `will_see` windows (points 1..N). `visible_at(point)` must
 /// return every camera assessment for that point (the caller supplies the
@@ -343,6 +388,7 @@ pub async fn get_aircraft_cameras(
     };
 
     let index = CameraIndex::build(&cameras);
+    let canonical_camera = canonical_camera_indices(&cameras);
     let (weather, weather_note) = nearest_weather(&redis_pool, now_lat, now_lon).await;
     let mut notes: Vec<String> = weather_note.into_iter().collect();
 
@@ -353,14 +399,14 @@ pub async fn get_aircraft_cameras(
         visibility::CRUISE_ALTITUDE_CUTOFF_M,
         STEP_SECS,
         |point| {
-            index
+            let raw = index
                 .candidates_within_km(point.lat, point.lon, radius_km)
                 .into_iter()
                 .filter_map(|cam_idx| {
                     visibility::assess_camera(&cameras[cam_idx], point.lat, point.lon, point.alt_m, &weather)
                         .map(|assessment| (cam_idx, assessment))
-                })
-                .collect()
+                });
+            merge_by_canonical_camera(raw, &canonical_camera)
         },
     );
 
@@ -576,6 +622,80 @@ mod tests {
             will_see[0].t_minus_secs,
             2.0 * STEP_SECS,
             "the window starts at idx 2 (when the camera reacquires it), not idx 0"
+        );
+    }
+
+    fn fixture_camera_at(id: &str, lat: f64, lon: f64) -> Camera {
+        Camera {
+            lat,
+            lon,
+            ..fixture_camera(id)
+        }
+    }
+
+    /// Regression test for the bug this fix targets: Caltrans and the OTC
+    /// Map aggregator both publish "TVB71 -- I-680 : Jackson Avenue" under
+    /// different ids, so the same physical camera counted as two separate
+    /// sightings for one aircraft.
+    #[test]
+    fn canonical_camera_indices_collapses_cameras_at_the_same_location() {
+        let cameras = vec![
+            fixture_camera_at("caltrans-d4-328", 37.34, -121.87),
+            // Same physical camera, mirrored by another provider -- tiny
+            // float jitter within the ~11 m tolerance, not exactly equal.
+            fixture_camera_at("otc-5019", 37.34000001, -121.87000002),
+            fixture_camera_at("caltrans-d4-729", 37.40, -121.90),
+        ];
+
+        let canonical = canonical_camera_indices(&cameras);
+
+        assert_eq!(
+            canonical[0], canonical[1],
+            "two providers mirroring the same physical camera must collapse to one index"
+        );
+        assert_eq!(
+            canonical[2], 2,
+            "a camera at a genuinely different location keeps its own index"
+        );
+    }
+
+    /// End-to-end through `build_sightings`: the two duplicate-location
+    /// cameras above must produce exactly one `seeing_now` entry, keeping
+    /// the higher-scoring provider's identity.
+    #[test]
+    fn duplicate_location_cameras_produce_a_single_sighting() {
+        let cameras = vec![
+            fixture_camera_at("caltrans-d4-328", 0.0, 0.0),
+            fixture_camera_at("otc-5019", 0.0, 0.0),
+        ];
+        let canonical = canonical_camera_indices(&cameras);
+        let points = vec![fixture_point(0.0, 100.0)];
+
+        let mut better = fixture_assessment();
+        better.score = 0.9;
+
+        let (seeing_now, will_see, _) = build_sightings(
+            &points,
+            &cameras,
+            visibility::CRUISE_ALTITUDE_CUTOFF_M,
+            STEP_SECS,
+            |_point| {
+                merge_by_canonical_camera(
+                    [(0, fixture_assessment()), (1, better.clone())],
+                    &canonical,
+                )
+            },
+        );
+
+        assert!(will_see.is_empty());
+        assert_eq!(
+            seeing_now.len(),
+            1,
+            "one physical camera mirrored by two providers must be one sighting: {seeing_now:?}"
+        );
+        assert_eq!(
+            seeing_now[0].score, 0.9,
+            "the higher-scoring provider's assessment must win"
         );
     }
 }
