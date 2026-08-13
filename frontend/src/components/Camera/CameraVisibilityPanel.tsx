@@ -208,7 +208,12 @@ export function CameraVisibilityPanel({
           </span>
           <div className="mt-1">
             {data.will_see.map((s) => (
-              <WillSeeRow key={s.camera_id} sighting={s} />
+              // camera_id alone isn't unique: a camera that drops out and
+              // reacquires the aircraft produces two distinct windows.
+              <WillSeeRow
+                key={`${s.camera_id}-${s.t_minus_secs}`}
+                sighting={s}
+              />
             ))}
           </div>
         </div>

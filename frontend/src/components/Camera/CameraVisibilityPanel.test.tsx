@@ -148,4 +148,51 @@ describe("CameraVisibilityPanel", () => {
       ).toBeInTheDocument();
     });
   });
+
+  it("keys will-see rows uniquely when the same camera has two distinct windows", async () => {
+    // A camera that drops out of view and reacquires the aircraft later
+    // produces two distinct `will_see` windows sharing one camera_id.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const sighting = {
+      camera_id: "otc-4089",
+      camera_name: "US-101 : (4089) Coldwater Canyon",
+      source: "otcmap_california",
+      level: "detection" as const,
+      duration_secs: 30,
+      geometry: {
+        bearing_deg: 200,
+        elevation_deg: 5,
+        horizontal_distance_m: 9000,
+        slant_distance_m: 9200,
+      },
+      explain: [],
+    };
+
+    mockFetchOnce(
+      response({
+        will_see: [
+          { ...sighting, t_minus_secs: 15 },
+          { ...sighting, t_minus_secs: 90 },
+        ],
+      }),
+    );
+
+    render(<CameraVisibilityPanel icao="a1ed21" />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/will see \(2\)/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/T-15s/)).toBeInTheDocument();
+    expect(screen.getByText(/T-1m 30s/)).toBeInTheDocument();
+
+    const duplicateKeyWarning = errorSpy.mock.calls.some((args) =>
+      args.some(
+        (arg) =>
+          typeof arg === "string" && arg.toLowerCase().includes("same key"),
+      ),
+    );
+    expect(duplicateKeyWarning).toBe(false);
+
+    errorSpy.mockRestore();
+  });
 });

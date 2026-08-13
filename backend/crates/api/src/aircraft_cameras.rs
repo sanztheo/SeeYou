@@ -26,6 +26,7 @@ use cache::RedisPool;
 use cameras::visibility::{self, CameraAssessment, CameraIndex, OpticalLevel, WeatherContext};
 use cameras::Camera;
 use prediction::service::SharedPredictor;
+use prediction::PredictedPoint;
 use serde::{Deserialize, Serialize};
 
 /// Fixed prediction window for this endpoint (no query params — the
@@ -199,6 +200,87 @@ fn to_camera_sighting(camera: &Camera, assessment: &CameraAssessment) -> CameraS
     }
 }
 
+/// Turns per-point camera visibility into `seeing_now` (point 0) and
+/// deduplicated `will_see` windows (points 1..N). `visible_at(point)` must
+/// return every camera assessment for that point (the caller supplies the
+/// actual spatial-index + FOV lookup; this function only tracks runs).
+///
+/// A camera already reported in `seeing_now` (visible at idx 0) opens its
+/// run there too, instead of being dropped after populating `seeing_now` —
+/// so a camera that keeps seeing the aircraft into point 1+ extends that
+/// SAME run rather than opening a spurious new one at idx 1 (t_minus=3s).
+/// Any run whose `start_idx` is 0 is therefore just the continuation of
+/// `seeing_now` and is dropped rather than pushed to `will_see`. A camera
+/// that drops out and is seen again later opens a fresh run with
+/// `start_idx > 0`, which IS reported — a genuine future sighting, not a
+/// duplicate.
+fn build_sightings(
+    points: &[PredictedPoint],
+    cameras: &[Camera],
+    cruise_cutoff_m: f64,
+    step_secs: f64,
+    visible_at: impl Fn(&PredictedPoint) -> HashMap<usize, CameraAssessment>,
+) -> (Vec<CameraSighting>, Vec<PredictedCameraSighting>, usize) {
+    let mut seeing_now = Vec::new();
+    let mut open_runs: HashMap<usize, RunState> = HashMap::new();
+    let mut will_see = Vec::new();
+    let mut points_skipped = 0usize;
+
+    for (idx, point) in points.iter().enumerate() {
+        if point.alt_m > cruise_cutoff_m {
+            points_skipped += 1;
+            // Aircraft climbed back above the cutoff — close any open
+            // windows, this point can't extend them.
+            for (cam_idx, run) in open_runs.drain() {
+                if run.start_idx != 0 {
+                    will_see.push(run.into_sighting(&cameras[cam_idx], step_secs));
+                }
+            }
+            continue;
+        }
+
+        let seen_here = visible_at(point);
+
+        if idx == 0 {
+            for (cam_idx, assessment) in seen_here {
+                seeing_now.push(to_camera_sighting(&cameras[cam_idx], &assessment));
+                open_runs.insert(cam_idx, RunState::new(idx, assessment));
+            }
+            continue;
+        }
+
+        let still_open: HashSet<usize> = seen_here.keys().copied().collect();
+        for (cam_idx, assessment) in seen_here {
+            match open_runs.get_mut(&cam_idx) {
+                Some(run) => run.extend(idx, assessment),
+                None => {
+                    open_runs.insert(cam_idx, RunState::new(idx, assessment));
+                }
+            }
+        }
+        let to_close: Vec<usize> = open_runs
+            .keys()
+            .filter(|cam_idx| !still_open.contains(*cam_idx))
+            .copied()
+            .collect();
+        for cam_idx in to_close {
+            if let Some(run) = open_runs.remove(&cam_idx) {
+                if run.start_idx != 0 {
+                    will_see.push(run.into_sighting(&cameras[cam_idx], step_secs));
+                }
+            }
+        }
+    }
+
+    for (cam_idx, run) in open_runs {
+        if run.start_idx != 0 {
+            will_see.push(run.into_sighting(&cameras[cam_idx], step_secs));
+        }
+    }
+
+    (seeing_now, will_see, points_skipped)
+}
+
 /// GET /aircraft/:icao/cameras
 pub async fn get_aircraft_cameras(
     Path(icao): Path<String>,
@@ -265,62 +347,22 @@ pub async fn get_aircraft_cameras(
     let mut notes: Vec<String> = weather_note.into_iter().collect();
 
     let radius_km = visibility::max_possible_range_km();
-    let mut seeing_now = Vec::new();
-    let mut open_runs: HashMap<usize, RunState> = HashMap::new();
-    let mut will_see = Vec::new();
-    let mut points_skipped = 0usize;
-
-    for (idx, point) in trajectory.points.iter().enumerate() {
-        if point.alt_m > visibility::CRUISE_ALTITUDE_CUTOFF_M {
-            points_skipped += 1;
-            // Aircraft climbed back above the cutoff — close any open
-            // windows, this point can't extend them.
-            for (cam_idx, run) in open_runs.drain() {
-                will_see.push(run.into_sighting(&cameras[cam_idx], STEP_SECS));
-            }
-            continue;
-        }
-
-        let seen_here: HashMap<usize, CameraAssessment> = index
-            .candidates_within_km(point.lat, point.lon, radius_km)
-            .into_iter()
-            .filter_map(|cam_idx| {
-                visibility::assess_camera(&cameras[cam_idx], point.lat, point.lon, point.alt_m, &weather)
-                    .map(|assessment| (cam_idx, assessment))
-            })
-            .collect();
-
-        if idx == 0 {
-            for (cam_idx, assessment) in &seen_here {
-                seeing_now.push(to_camera_sighting(&cameras[*cam_idx], assessment));
-            }
-            continue;
-        }
-
-        let still_open: HashSet<usize> = seen_here.keys().copied().collect();
-        for (cam_idx, assessment) in seen_here {
-            match open_runs.get_mut(&cam_idx) {
-                Some(run) => run.extend(idx, assessment),
-                None => {
-                    open_runs.insert(cam_idx, RunState::new(idx, assessment));
-                }
-            }
-        }
-        let to_close: Vec<usize> = open_runs
-            .keys()
-            .filter(|cam_idx| !still_open.contains(*cam_idx))
-            .copied()
-            .collect();
-        for cam_idx in to_close {
-            if let Some(run) = open_runs.remove(&cam_idx) {
-                will_see.push(run.into_sighting(&cameras[cam_idx], STEP_SECS));
-            }
-        }
-    }
-
-    for (cam_idx, run) in open_runs {
-        will_see.push(run.into_sighting(&cameras[cam_idx], STEP_SECS));
-    }
+    let (mut seeing_now, mut will_see, points_skipped) = build_sightings(
+        &trajectory.points,
+        &cameras,
+        visibility::CRUISE_ALTITUDE_CUTOFF_M,
+        STEP_SECS,
+        |point| {
+            index
+                .candidates_within_km(point.lat, point.lon, radius_km)
+                .into_iter()
+                .filter_map(|cam_idx| {
+                    visibility::assess_camera(&cameras[cam_idx], point.lat, point.lon, point.alt_m, &weather)
+                        .map(|assessment| (cam_idx, assessment))
+                })
+                .collect()
+        },
+    );
 
     seeing_now.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
     will_see.sort_by(|a, b| {
@@ -423,5 +465,117 @@ mod tests {
         assert!(result.seeing_now.is_empty());
         assert!(result.will_see.is_empty());
         assert!(result.notes.iter().any(|n| n.contains("cruise cutoff")));
+    }
+
+    fn fixture_camera(id: &str) -> Camera {
+        Camera {
+            id: id.to_string(),
+            name: id.to_string(),
+            lat: 0.0,
+            lon: 0.0,
+            city: "test".to_string(),
+            country: "test".to_string(),
+            source: "test".to_string(),
+            stream_url: "http://example.invalid".to_string(),
+            stream_type: cameras::StreamType::Mjpeg,
+            is_online: true,
+            view_heading_deg: None,
+            view_fov_deg: None,
+            view_heading_source: None,
+            view_hint: None,
+            resolution_px: None,
+        }
+    }
+
+    fn fixture_point(lat: f64, alt_m: f64) -> PredictedPoint {
+        PredictedPoint { lat, lon: 0.0, alt_m }
+    }
+
+    fn fixture_assessment() -> CameraAssessment {
+        CameraAssessment {
+            level: OpticalLevel::Proximity,
+            score: 0.5,
+            px: 10.0,
+            geometry: visibility::SightingGeometry {
+                bearing_deg: 0.0,
+                elevation_deg: 0.0,
+                horizontal_distance_m: 100.0,
+                slant_distance_m: 100.0,
+            },
+            explain: vec![],
+        }
+    }
+
+    /// Regression test for the bug this fix targets: a camera visible at
+    /// idx 0 used to be dropped after populating `seeing_now`, so the same
+    /// camera reopened a `will_see` window at idx 1 (t_minus=3s) as long as
+    /// it kept seeing the aircraft — duplicating it into both lists.
+    #[test]
+    fn build_sightings_does_not_duplicate_a_continuously_visible_camera() {
+        let cameras = vec![fixture_camera("cam-continuous")];
+        let points = vec![
+            fixture_point(0.0, 100.0),
+            fixture_point(0.0, 100.0),
+            fixture_point(0.0, 100.0),
+        ];
+
+        let (seeing_now, will_see, points_skipped) = build_sightings(
+            &points,
+            &cameras,
+            visibility::CRUISE_ALTITUDE_CUTOFF_M,
+            STEP_SECS,
+            |_point| HashMap::from([(0, fixture_assessment())]),
+        );
+
+        assert_eq!(points_skipped, 0);
+        assert_eq!(seeing_now.len(), 1);
+        assert_eq!(seeing_now[0].camera_id, "cam-continuous");
+        assert!(
+            will_see.is_empty(),
+            "a camera seen continuously from now on should not also open a will_see \
+             window for the same run: {will_see:?}"
+        );
+    }
+
+    /// The case the fix must not break: a camera that stops seeing the
+    /// aircraft and picks it up again later is a genuine future sighting,
+    /// not a duplicate of `seeing_now`.
+    #[test]
+    fn build_sightings_reports_a_new_window_when_a_camera_returns_after_dropping_out() {
+        let cameras = vec![fixture_camera("cam-returns")];
+        // lat encodes visibility: the camera sees the aircraft at idx 0 and
+        // idx 2, but not at idx 1 (a real gap, not a rounding artifact).
+        let points = vec![
+            fixture_point(0.0, 100.0),
+            fixture_point(1.0, 100.0),
+            fixture_point(0.0, 100.0),
+        ];
+
+        let (seeing_now, will_see, _) = build_sightings(
+            &points,
+            &cameras,
+            visibility::CRUISE_ALTITUDE_CUTOFF_M,
+            STEP_SECS,
+            |point| {
+                if point.lat == 0.0 {
+                    HashMap::from([(0, fixture_assessment())])
+                } else {
+                    HashMap::new()
+                }
+            },
+        );
+
+        assert_eq!(seeing_now.len(), 1, "idx 0 sighting belongs in seeing_now");
+        assert_eq!(
+            will_see.len(),
+            1,
+            "the camera picking the aircraft back up at idx 2 is a real future window: {will_see:?}"
+        );
+        assert_eq!(will_see[0].camera_id, "cam-returns");
+        assert_eq!(
+            will_see[0].t_minus_secs,
+            2.0 * STEP_SECS,
+            "the window starts at idx 2 (when the camera reacquires it), not idx 0"
+        );
     }
 }
