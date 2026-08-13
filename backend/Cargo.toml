@@ -44,7 +44,7 @@ dotenvy = "0.15"
 futures-util = "0.3"
 uuid = { version = "1", features = ["v4"] }
 url = "2"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "gzip"] }
 chrono = { version = "0.4", features = ["serde"] }
 async-trait = "0.1"
 prost = "0.13"
@@ -54,3 +54,4 @@ surrealdb = { version = "3.0.2", default-features = false, features = ["protocol
 geojson = "0.24"
 rustls = { version = "0.23.37", features = ["ring"] }
 tracing-appender = "0.2"
+rstar = "0.12"

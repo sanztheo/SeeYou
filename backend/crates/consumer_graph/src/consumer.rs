@@ -17,12 +17,17 @@ use crate::{
     aircraft_filter::is_aircraft_admitted,
     constants::{
         DEFAULT_FLIES_OVER_TTL_SECONDS, DEFAULT_NEAREST_ZONE_MAX_DISTANCE_KM,
-        DEFAULT_RELATION_SWEEP_INTERVAL_SECONDS, DEFAULT_TABLE_CACHE_TTL_MS,
+        DEFAULT_PASSES_OVER_TTL_SECONDS, DEFAULT_RELATION_SWEEP_INTERVAL_SECONDS,
+        DEFAULT_TABLE_CACHE_TTL_MS,
     },
+    correlation::{CorrelationEngine, CorrelationThresholds},
     payload::extract_records_for_topic,
 };
 
-const RELATION_TABLES_WITH_TTL: &[&str] = &["flies_over", "monitored_by", "affected_by"];
+// Single source of truth for which relations carry a TTL (also drives the
+// `expires_at` index in `graph::ontology::migrate`) — kept as one constant
+// so the sweep list can't silently drift from the schema.
+use graph::ontology::EPHEMERAL_RELATION_TABLES as RELATION_TABLES_WITH_TTL;
 
 #[derive(Clone, Debug)]
 pub(crate) struct TableCacheEntry {
@@ -35,51 +40,66 @@ pub struct GraphBusConsumer {
     consumer: Option<StreamConsumer>,
     pub(crate) zone_lookup: graph::zones::ZoneLookup,
     pub(crate) flies_over_ttl_seconds: i64,
+    pub(crate) passes_over_ttl_seconds: i64,
     pub(crate) nearest_zone_max_distance_m: f64,
     relation_sweep_interval: Duration,
     pub(crate) table_cache_ttl: Duration,
     pub(crate) table_cache: RwLock<HashMap<String, TableCacheEntry>>,
+    pub(crate) thresholds: CorrelationThresholds,
+    pub(crate) correlation: tokio::sync::Mutex<CorrelationEngine>,
 }
 
 impl GraphBusConsumer {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         client: graph::GraphClient,
         consumer: StreamConsumer,
         zone_lookup: graph::zones::ZoneLookup,
         flies_over_ttl_seconds: i64,
+        passes_over_ttl_seconds: i64,
         nearest_zone_max_distance_m: f64,
         relation_sweep_interval: Duration,
         table_cache_ttl: Duration,
+        thresholds: CorrelationThresholds,
     ) -> Self {
         Self {
             client,
             consumer: Some(consumer),
             zone_lookup,
             flies_over_ttl_seconds,
+            passes_over_ttl_seconds,
             nearest_zone_max_distance_m,
             relation_sweep_interval,
             table_cache_ttl,
             table_cache: RwLock::new(HashMap::new()),
+            thresholds,
+            correlation: tokio::sync::Mutex::new(CorrelationEngine::new()),
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_for_processing(
         client: graph::GraphClient,
         zone_lookup: graph::zones::ZoneLookup,
         flies_over_ttl_seconds: i64,
+        passes_over_ttl_seconds: i64,
         nearest_zone_max_distance_m: f64,
         relation_sweep_interval: Duration,
         table_cache_ttl: Duration,
+        thresholds: CorrelationThresholds,
     ) -> Self {
         Self {
             client,
             consumer: None,
             zone_lookup,
             flies_over_ttl_seconds,
+            passes_over_ttl_seconds,
             nearest_zone_max_distance_m,
             relation_sweep_interval,
             table_cache_ttl,
             table_cache: RwLock::new(HashMap::new()),
+            thresholds,
+            correlation: tokio::sync::Mutex::new(CorrelationEngine::new()),
         }
     }
 
@@ -92,6 +112,11 @@ impl GraphBusConsumer {
         let flies_over_ttl_seconds = parse_env_i64(
             "GRAPH_FLIES_OVER_TTL_SECONDS",
             DEFAULT_FLIES_OVER_TTL_SECONDS,
+        )
+        .max(1);
+        let passes_over_ttl_seconds = parse_env_i64(
+            "GRAPH_PASSES_OVER_TTL_SECONDS",
+            DEFAULT_PASSES_OVER_TTL_SECONDS,
         )
         .max(1);
         let relation_sweep_interval = Duration::from_secs(parse_env_u64(
@@ -112,9 +137,11 @@ impl GraphBusConsumer {
             client,
             zone_lookup,
             flies_over_ttl_seconds,
+            passes_over_ttl_seconds,
             nearest_zone_max_distance_km * 1_000.0,
             relation_sweep_interval,
             table_cache_ttl,
+            CorrelationThresholds::from_env(),
         ))
     }
 
@@ -149,6 +176,11 @@ impl GraphBusConsumer {
             DEFAULT_FLIES_OVER_TTL_SECONDS,
         )
         .max(1);
+        let passes_over_ttl_seconds = parse_env_i64(
+            "GRAPH_PASSES_OVER_TTL_SECONDS",
+            DEFAULT_PASSES_OVER_TTL_SECONDS,
+        )
+        .max(1);
         let relation_sweep_interval = Duration::from_secs(parse_env_u64(
             "GRAPH_RELATION_SWEEP_INTERVAL_SECONDS",
             DEFAULT_RELATION_SWEEP_INTERVAL_SECONDS,
@@ -162,6 +194,7 @@ impl GraphBusConsumer {
             "GRAPH_TABLE_CACHE_TTL_MS",
             DEFAULT_TABLE_CACHE_TTL_MS,
         ));
+        let thresholds = CorrelationThresholds::from_env();
 
         info!(
             zones = zone_lookup.len(),
@@ -169,9 +202,11 @@ impl GraphBusConsumer {
             auto_offset_reset = %auto_offset_reset,
             topics = ?selected_topics,
             flies_over_ttl_seconds,
+            passes_over_ttl_seconds,
             nearest_zone_max_distance_km,
             sweep_interval_seconds = relation_sweep_interval.as_secs(),
             table_cache_ttl_ms = table_cache_ttl.as_millis(),
+            ?thresholds,
             "graph consumer geo-relation settings loaded"
         );
 
@@ -182,9 +217,11 @@ impl GraphBusConsumer {
             consumer,
             zone_lookup,
             flies_over_ttl_seconds,
+            passes_over_ttl_seconds,
             nearest_zone_max_distance_km * 1_000.0,
             relation_sweep_interval,
             table_cache_ttl,
+            thresholds,
         ))
     }
 
@@ -194,6 +231,14 @@ impl GraphBusConsumer {
         });
 
         let records = extract_records_for_topic(&envelope.topic, &payload);
+        // Cross-domain correlation (#2/#10 aircraft, #5 seismic, #7 fire) is
+        // event-driven off this envelope's own batch, not a separate clock —
+        // collected here and run once after the per-entity loop below, so
+        // the R-tree behind it reflects every entity this envelope carried.
+        let mut aircraft_batch = Vec::new();
+        let mut seismic_batch = Vec::new();
+        let mut fire_batch = Vec::new();
+
         for (table, entity_payload) in records {
             // Admission gate: at 30k aircraft/tick post-P0-1, the O(n×m)
             // aircraft↔camera correlation below cannot see every aircraft.
@@ -201,9 +246,20 @@ impl GraphBusConsumer {
                 continue;
             }
 
-            self.process_entity(table, &entity_payload, &envelope.topic)
+            let (entity_id, normalized_payload) = self
+                .process_entity(table, &entity_payload, &envelope.topic)
                 .await?;
+
+            match table {
+                "aircraft" => aircraft_batch.push((entity_id, normalized_payload)),
+                "seismic_event" => seismic_batch.push((entity_id, normalized_payload)),
+                "fire_hotspot" => fire_batch.push((entity_id, normalized_payload)),
+                _ => {}
+            }
         }
+
+        self.run_correlation_pass(aircraft_batch, seismic_batch, fire_batch)
+            .await?;
 
         Ok(())
     }
@@ -294,10 +350,20 @@ fn parse_env_u64(name: &str, default: u64) -> u64 {
         .unwrap_or(default)
 }
 
-fn parse_env_i64(name: &str, default: i64) -> i64 {
+pub(crate) fn parse_env_i64(name: &str, default: i64) -> i64 {
     std::env::var(name)
         .ok()
         .and_then(|raw| raw.parse::<i64>().ok())
+        .unwrap_or(default)
+}
+
+// `pub(crate)` (not just this module's helpers) so
+// `correlation::CorrelationThresholds::from_env` shares the exact same
+// env-parsing behavior instead of duplicating it.
+pub(crate) fn parse_env_usize(name: &str, default: usize) -> usize {
+    std::env::var(name)
+        .ok()
+        .and_then(|raw| raw.parse::<usize>().ok())
         .unwrap_or(default)
 }
 
@@ -360,7 +426,7 @@ fn normalize_topic_alias(topic: &str) -> Option<&'static str> {
     }
 }
 
-fn parse_env_f64(name: &str, default: f64) -> f64 {
+pub(crate) fn parse_env_f64(name: &str, default: f64) -> f64 {
     std::env::var(name)
         .ok()
         .and_then(|raw| raw.parse::<f64>().ok())

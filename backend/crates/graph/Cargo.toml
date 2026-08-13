@@ -12,3 +12,8 @@ tracing.workspace = true
 surrealdb.workspace = true
 geojson.workspace = true
 rustls.workspace = true
+
+[dev-dependencies]
+dotenvy.workspace = true
+chrono.workspace = true
+futures-util.workspace = true

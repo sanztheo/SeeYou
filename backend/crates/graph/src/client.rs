@@ -1,4 +1,4 @@
-use std::{future::Future, sync::Arc};
+use std::{future::Future, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use rustls::crypto::{ring, CryptoProvider};
@@ -9,6 +9,15 @@ use surrealdb::{
 };
 use tokio::sync::RwLock;
 use tracing::warn;
+
+/// Hard ceiling on a single graph query. The shared connection
+/// (`GraphClient::db`) can be occupied by a slow query against a hub node
+/// (a continent-scale zone with thousands of incident edges) — without a
+/// timeout that stalls every other caller sharing the same session for as
+/// long as the slow query runs, observed empirically at ~30s. Bounding it
+/// turns a multi-caller stall into a fast, classified `SERVICE_UNAVAILABLE`
+/// for the caller(s) behind the slow one, instead of an open-ended hang.
+const QUERY_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone)]
 pub struct GraphConfig {
@@ -59,12 +68,12 @@ impl GraphClient {
         Fut: Future<Output = anyhow::Result<T>>,
     {
         let db = self.current_db().await;
-        match operation.clone()(db).await {
+        match run_with_timeout(&operation, db).await {
             Ok(value) => Ok(value),
             Err(error) if is_retryable_connection_error(&error) => {
                 warn!(error = %error, "graph connection lost; reconnecting and retrying once");
                 let db = self.reconnect().await?;
-                operation(db).await
+                run_with_timeout(&operation, db).await
             }
             Err(error) => Err(error),
         }
@@ -91,6 +100,19 @@ impl GraphClient {
             .invalidate()
             .await
             .context("failed to invalidate surrealdb session")
+    }
+}
+
+async fn run_with_timeout<T, Op, Fut>(operation: &Op, db: Surreal<Any>) -> anyhow::Result<T>
+where
+    Op: Fn(Surreal<Any>) -> Fut,
+    Fut: Future<Output = anyhow::Result<T>>,
+{
+    match tokio::time::timeout(QUERY_TIMEOUT, operation(db)).await {
+        Ok(result) => result,
+        Err(_) => Err(anyhow::anyhow!(
+            "graph query timed out after {QUERY_TIMEOUT:?} (connection likely busy or lost)"
+        )),
     }
 }
 
@@ -134,6 +156,19 @@ pub fn is_retryable_connection_error(error: &anyhow::Error) -> bool {
             "not connected",
             "io error",
             "websocket",
+            // Session-loss errors the shared connection actually raises
+            // under concurrent load (verified empirically, see
+            // `api::graph_api`'s `MAX_CONCURRENT_GRAPH_QUERIES` doc comment:
+            // "Session not found: <uuid>", "Specify a namespace to use").
+            // Previously unclassified, so callers hit these as raw
+            // `INTERNAL_SERVER_ERROR` instead of a retry + `SERVICE_UNAVAILABLE`.
+            "session not found",
+            "specify a namespace",
+            "specify a database",
+            // `run_with_timeout`'s own timeout error — a query that hung
+            // long enough to hit `QUERY_TIMEOUT` is exactly the "connection
+            // busy/lost" class this function exists to classify.
+            "timed out",
         ]
         .iter()
         .any(|needle| message.contains(needle))
@@ -219,5 +254,30 @@ mod tests {
     #[test]
     fn ignores_non_connection_errors() {
         assert!(!is_retryable_connection_error(&anyhow!("parse error")));
+    }
+
+    /// Regression: these are the exact error strings the shared connection
+    /// raised under concurrent load (see `api::graph_api`'s
+    /// `MAX_CONCURRENT_GRAPH_QUERIES` doc comment) — a `/graph/neighbors`
+    /// hub-node request returning a raw 500 instead of a retry + 503 traced
+    /// back to these not being classified as retryable.
+    #[test]
+    fn classifies_session_loss_errors_as_retryable() {
+        assert!(is_retryable_connection_error(&anyhow!(
+            "Session not found: 3f1b2c4d-1234-4a5b-9c6d-abcdef123456"
+        )));
+        assert!(is_retryable_connection_error(&anyhow!(
+            "Specify a namespace to use"
+        )));
+        assert!(is_retryable_connection_error(&anyhow!(
+            "Specify a database to use"
+        )));
+    }
+
+    #[test]
+    fn classifies_query_timeout_as_retryable() {
+        assert!(is_retryable_connection_error(&anyhow!(
+            "graph query timed out after 10s (connection likely busy or lost)"
+        )));
     }
 }

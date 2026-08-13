@@ -141,3 +141,50 @@ pub async fn get_table_records(
         .map(SurrealValue::into_json_value)
         .collect())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::get_entity;
+    use crate::{GraphClient, GraphConfig};
+    use futures_util::future::join_all;
+
+    /// Diagnostic for the Lot 5 `/graph/neighbors` latency gate (<200ms):
+    /// isolates whether `get_entity`'s cost is per-call (SDK/network) or
+    /// something specific to `api::graph_api::build_snapshot`'s usage of it.
+    /// Run with `--nocapture` — see the task's verification output for a
+    /// captured run and the root cause it revealed.
+    #[tokio::test]
+    #[ignore = "requires external surrealdb env; diagnostic, not a correctness assertion"]
+    async fn diagnose_get_entity_call_latency() -> anyhow::Result<()> {
+        let _ = dotenvy::dotenv();
+        if std::env::var("SURREALDB_URL").is_err() {
+            return Ok(());
+        }
+        let client = GraphClient::connect(&GraphConfig::from_env()).await?;
+
+        let start = std::time::Instant::now();
+        get_entity(&client, "zone", "north-america").await?;
+        println!(
+            "DIAG single_call_ms={:.2}",
+            start.elapsed().as_secs_f64() * 1000.0
+        );
+
+        let start = std::time::Instant::now();
+        for _ in 0..10 {
+            get_entity(&client, "zone", "north-america").await?;
+        }
+        println!(
+            "DIAG ten_sequential_ms={:.2}",
+            start.elapsed().as_secs_f64() * 1000.0
+        );
+
+        let start = std::time::Instant::now();
+        join_all((0..10).map(|_| get_entity(&client, "zone", "north-america"))).await;
+        println!(
+            "DIAG ten_concurrent_join_all_ms={:.2}",
+            start.elapsed().as_secs_f64() * 1000.0
+        );
+
+        Ok(())
+    }
+}

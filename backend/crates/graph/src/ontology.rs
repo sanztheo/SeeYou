@@ -40,6 +40,13 @@ const RELATION_TABLES: &[&str] = &[
     "derived_from",
 ];
 
+/// Relations with a real validity window (vs. quasi-static membership like
+/// `located_in`/`covers`, which are upserted without a TTL). Drives both the
+/// `expires_at` index above and `consumer_graph`'s sweep loop (single source
+/// of truth — re-exported so the sweep list can't drift from the schema).
+pub const EPHEMERAL_RELATION_TABLES: &[&str] =
+    &["flies_over", "monitored_by", "affected_by", "near", "passes_over"];
+
 const FIELD_DEFINITIONS: &[&str] = &[
     "DEFINE FIELD id ON TABLE zone TYPE string;",
     "DEFINE FIELD name ON TABLE zone TYPE string;",
@@ -87,7 +94,11 @@ const FIELD_DEFINITIONS: &[&str] = &[
     "DEFINE FIELD lat ON TABLE satellite TYPE number;",
     "DEFINE FIELD lon ON TABLE satellite TYPE number;",
     "DEFINE FIELD altitude_km ON TABLE satellite TYPE number;",
-    "DEFINE FIELD velocity_kmh ON TABLE satellite TYPE number;",
+    // Wire unit is km/s everywhere (ws::messages, satellites::propagator) —
+    // this field was declared as velocity_kmh and never matched the actual
+    // payload key; SCHEMALESS tables don't reject the mismatch, they just
+    // leave this declared field permanently unpopulated (dormant, `seeyou-v2.md` §Schéma).
+    "DEFINE FIELD velocity_km_s ON TABLE satellite TYPE number;",
     "DEFINE FIELD timestamp ON TABLE satellite TYPE datetime;",
     "DEFINE FIELD id ON TABLE event TYPE string;",
     "DEFINE FIELD type ON TABLE event TYPE string;",
@@ -208,6 +219,9 @@ const FIELD_DEFINITIONS: &[&str] = &[
     "DEFINE FIELD source ON TABLE passes_over TYPE string;",
     "DEFINE FIELD score ON TABLE passes_over TYPE number;",
     "DEFINE FIELD timestamp ON TABLE passes_over TYPE datetime;",
+    // A LEO satellite crosses a zone in ~2 minutes; without expires_at this
+    // relation would be written once and never swept (seeyou-v2.md §4b).
+    "DEFINE FIELD expires_at ON TABLE passes_over TYPE datetime;",
     "DEFINE FIELD source ON TABLE involves TYPE string;",
     "DEFINE FIELD score ON TABLE involves TYPE number;",
     "DEFINE FIELD timestamp ON TABLE involves TYPE datetime;",
@@ -220,6 +234,7 @@ const FIELD_DEFINITIONS: &[&str] = &[
     "DEFINE FIELD source ON TABLE near TYPE string;",
     "DEFINE FIELD score ON TABLE near TYPE number;",
     "DEFINE FIELD timestamp ON TABLE near TYPE datetime;",
+    "DEFINE FIELD expires_at ON TABLE near TYPE datetime;",
     "DEFINE FIELD source ON TABLE targets TYPE string;",
     "DEFINE FIELD score ON TABLE targets TYPE number;",
     "DEFINE FIELD timestamp ON TABLE targets TYPE datetime;",
@@ -285,6 +300,43 @@ pub async fn migrate(client: &GraphClient) -> anyhow::Result<()> {
             Ok(())
         })
         .await?;
+
+    // Two mono-column indexes per relation, not a composite (in, out):
+    // `get_incident_relations` (queries.rs) filters `WHERE in = X OR out = X`,
+    // and a composite index only serves the `in` branch of that OR.
+    for relation in RELATION_TABLES {
+        for (index_suffix, column) in [("in", "`in`"), ("out", "`out`")] {
+            let statement = format!(
+                "DEFINE INDEX IF NOT EXISTS {relation}_{index_suffix} ON TABLE {relation} COLUMNS {column};"
+            );
+            client
+                .with_retry(move |db| {
+                    let statement = statement.clone();
+                    async move {
+                        db.query(statement).await?.check()?;
+                        Ok(())
+                    }
+                })
+                .await?;
+        }
+    }
+
+    // expires_at index for the ephemeral relations only — accelerates
+    // sweep_expired_relations (relations.rs); quasi-static relations
+    // (located_in, covers) have no TTL and don't need this index.
+    for relation in EPHEMERAL_RELATION_TABLES {
+        let statement =
+            format!("DEFINE INDEX IF NOT EXISTS {relation}_expires ON TABLE {relation} COLUMNS expires_at;");
+        client
+            .with_retry(move |db| {
+                let statement = statement.clone();
+                async move {
+                    db.query(statement).await?.check()?;
+                    Ok(())
+                }
+            })
+            .await?;
+    }
 
     Ok(())
 }

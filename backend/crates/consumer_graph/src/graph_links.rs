@@ -1,58 +1,23 @@
-use chrono::{SecondsFormat, Utc};
 use serde_json::{json, Value};
 
 use crate::{
-    constants::{LOW_VISIBILITY_THRESHOLD_M, MONITORED_BY_MAX_DISTANCE_KM},
     consumer::GraphBusConsumer,
-    geo::{extract_lat_lon, extract_visibility_m, haversine_km, intersects_zone_ids},
+    correlation::relation_window,
+    geo::{extract_visibility_m, intersects_zone_ids},
     payload::extract_record_id,
 };
+use graph::relations::score_from_visibility_m;
 
 impl GraphBusConsumer {
-    pub(crate) async fn link_aircraft_to_nearby_cameras(
-        &self,
-        aircraft_id: &str,
-        aircraft_payload: &Value,
-    ) -> anyhow::Result<()> {
-        let Some((aircraft_lat, aircraft_lon)) = extract_lat_lon(aircraft_payload) else {
-            return Ok(());
-        };
-        let (timestamp, expires_at) = self.ephemeral_relation_window();
+    // #2 monitored_by (aircraft->camera) and #10 near (aircraft->military_base)
+    // moved to the R-tree-backed `correlation::CorrelationEngine`
+    // (`run_correlation_pass`, event-driven per bus envelope) — this used to
+    // be a full `load_table_entities("camera")` scan (~11 020 rows) *per
+    // admitted aircraft*, sequentially `.await`ed one RELATE at a time.
 
-        let cameras = self.load_table_entities("camera").await?;
-        for camera_payload in cameras {
-            let Some(camera_id) = extract_record_id("camera", &camera_payload) else {
-                continue;
-            };
-            let Some((camera_lat, camera_lon)) = extract_lat_lon(&camera_payload) else {
-                continue;
-            };
-
-            let distance_km = haversine_km(aircraft_lat, aircraft_lon, camera_lat, camera_lon);
-            if distance_km < MONITORED_BY_MAX_DISTANCE_KM {
-                let attrs = graph::relations::relation_attributes(
-                    Some(&expires_at),
-                    Some(&timestamp),
-                    Some(distance_km),
-                    Some("consumer_graph"),
-                    Some(json!({ "ttl_seconds": self.flies_over_ttl_seconds })),
-                );
-                graph::relations::link_with_attributes(
-                    &self.client,
-                    "aircraft",
-                    aircraft_id,
-                    "monitored_by",
-                    "camera",
-                    &camera_id,
-                    attrs,
-                )
-                .await?;
-            }
-        }
-
-        Ok(())
-    }
-
+    /// #3 `subject -> affected_by -> weather` (existing relation; Lot 5
+    /// asks only to verify/fix its score and TTL, not to rearchitect it —
+    /// weather has a few dozen stations, no R-tree needed).
     pub(crate) async fn link_subject_to_low_visibility_weather(
         &self,
         subject_table: &str,
@@ -62,14 +27,15 @@ impl GraphBusConsumer {
         if subject_zone_ids.is_empty() {
             return Ok(());
         }
-        let (timestamp, expires_at) = self.ephemeral_relation_window();
+        let (timestamp, expires_at) = relation_window(self.flies_over_ttl_seconds);
+        let threshold_m = self.thresholds.weather_low_visibility_threshold_m;
 
         let weather_entities = self.load_table_entities("weather").await?;
         for weather_payload in weather_entities {
             let Some(visibility_m) = extract_visibility_m(&weather_payload) else {
                 continue;
             };
-            if visibility_m >= LOW_VISIBILITY_THRESHOLD_M {
+            if visibility_m >= threshold_m {
                 continue;
             }
 
@@ -82,14 +48,18 @@ impl GraphBusConsumer {
                 continue;
             }
 
+            let score = score_from_visibility_m(visibility_m, threshold_m);
             let attrs = graph::relations::relation_attributes(
                 Some(&expires_at),
                 Some(&timestamp),
-                Some(visibility_m),
+                Some(score),
                 Some("consumer_graph"),
                 Some(json!({
+                    "rule": "affected_by:low_visibility_weather",
                     "visibility_m": visibility_m,
-                    "ttl_seconds": self.flies_over_ttl_seconds
+                    "visibility_threshold_m": threshold_m,
+                    "ttl_seconds": self.flies_over_ttl_seconds,
+                    "sources": ["metar"],
                 })),
             );
             graph::relations::link_with_attributes(
@@ -116,10 +86,12 @@ impl GraphBusConsumer {
         let Some(visibility_m) = extract_visibility_m(weather_payload) else {
             return Ok(());
         };
-        if visibility_m >= LOW_VISIBILITY_THRESHOLD_M || weather_zone_ids.is_empty() {
+        let threshold_m = self.thresholds.weather_low_visibility_threshold_m;
+        if visibility_m >= threshold_m || weather_zone_ids.is_empty() {
             return Ok(());
         }
-        let (timestamp, expires_at) = self.ephemeral_relation_window();
+        let (timestamp, expires_at) = relation_window(self.flies_over_ttl_seconds);
+        let score = score_from_visibility_m(visibility_m, threshold_m);
 
         for subject_table in ["aircraft", "traffic_segment"] {
             let subjects = self.load_table_entities(subject_table).await?;
@@ -135,11 +107,14 @@ impl GraphBusConsumer {
                 let attrs = graph::relations::relation_attributes(
                     Some(&expires_at),
                     Some(&timestamp),
-                    Some(visibility_m),
+                    Some(score),
                     Some("consumer_graph"),
                     Some(json!({
+                        "rule": "affected_by:low_visibility_weather",
                         "visibility_m": visibility_m,
-                        "ttl_seconds": self.flies_over_ttl_seconds
+                        "visibility_threshold_m": threshold_m,
+                        "ttl_seconds": self.flies_over_ttl_seconds,
+                        "sources": ["metar"],
                     })),
                 );
                 graph::relations::link_with_attributes(
@@ -156,14 +131,5 @@ impl GraphBusConsumer {
         }
 
         Ok(())
-    }
-
-    fn ephemeral_relation_window(&self) -> (String, String) {
-        let now = Utc::now();
-        let timestamp = now.to_rfc3339_opts(SecondsFormat::Secs, true);
-        let expires_at = (now + chrono::Duration::seconds(self.flies_over_ttl_seconds))
-            .to_rfc3339_opts(SecondsFormat::Secs, true);
-
-        (timestamp, expires_at)
     }
 }

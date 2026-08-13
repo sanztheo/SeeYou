@@ -12,12 +12,16 @@ use crate::{
 };
 
 impl GraphBusConsumer {
+    /// Upserts one entity and its non-batched (zone/weather) relations,
+    /// returning the resolved `(entity_id, normalized_payload)` so the
+    /// caller (`consumer.rs::handle_envelope`) can feed the *same* id into
+    /// the batched cross-domain correlation pass without re-deriving it.
     pub(crate) async fn process_entity(
         &self,
         table: &str,
         entity_payload: &Value,
         topic: &str,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<(String, Value)> {
         let normalized_payload = normalize_entity_payload(table, entity_payload);
         let entity_id = resolve_entity_id(table, None, &normalized_payload);
         graph::entities::upsert(&self.client, table, &entity_id, normalized_payload.clone())
@@ -32,15 +36,36 @@ impl GraphBusConsumer {
                     .await?;
             }
             "camera" | "traffic_segment" | "weather" => {
-                self.link_to_zones(table, &entity_id, "located_in", &location_zone_ids, None)
-                    .await?;
+                self.link_to_zones(
+                    table,
+                    &entity_id,
+                    "located_in",
+                    &location_zone_ids,
+                    Some(self.membership_attributes("located_in")),
+                )
+                .await?;
             }
             _ => {}
         }
 
+        // Feeds the R-tree-backed correlation engine (correlation.rs) — the
+        // domains that near/monitored_by relations query against.
+        if matches!(table, "camera" | "military_base" | "nuclear_site") {
+            self.correlation
+                .lock()
+                .await
+                .ingest(table, &entity_id, &normalized_payload);
+        }
+
         if table == "weather" {
-            self.link_to_zones(table, &entity_id, "covers", &location_zone_ids, None)
-                .await?;
+            self.link_to_zones(
+                table,
+                &entity_id,
+                "covers",
+                &location_zone_ids,
+                Some(self.membership_attributes("covers")),
+            )
+            .await?;
             self.link_subjects_affected_by_weather(
                 &entity_id,
                 &normalized_payload,
@@ -50,8 +75,14 @@ impl GraphBusConsumer {
         }
 
         if table == "satellite" {
-            self.link_to_zones(table, &entity_id, "passes_over", &location_zone_ids, None)
-                .await?;
+            self.link_to_zones(
+                table,
+                &entity_id,
+                "passes_over",
+                &location_zone_ids,
+                Some(self.passes_over_attributes()),
+            )
+            .await?;
         }
 
         if table == "traffic_segment" {
@@ -66,7 +97,7 @@ impl GraphBusConsumer {
             "graph entity upserted from bus envelope"
         );
 
-        Ok(())
+        Ok((entity_id, normalized_payload))
     }
 
     pub(crate) async fn process_entity_on_demand(
@@ -102,33 +133,51 @@ impl GraphBusConsumer {
                 })?;
             }
             "camera" | "traffic_segment" | "weather" => {
-                self.link_to_zones(table, &entity_id, "located_in", &location_zone_ids, None)
-                    .await
-                    .with_context(|| {
-                        format!(
-                            "failed to create located_in relations on demand for {table}:{entity_id}"
-                        )
-                    })?;
+                self.link_to_zones(
+                    table,
+                    &entity_id,
+                    "located_in",
+                    &location_zone_ids,
+                    Some(self.membership_attributes("located_in")),
+                )
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to create located_in relations on demand for {table}:{entity_id}"
+                    )
+                })?;
             }
             _ => {}
         }
 
         if table == "weather" {
-            self.link_to_zones(table, &entity_id, "covers", &location_zone_ids, None)
-                .await
-                .with_context(|| {
-                    format!("failed to create covers relations on demand for {table}:{entity_id}")
-                })?;
+            self.link_to_zones(
+                table,
+                &entity_id,
+                "covers",
+                &location_zone_ids,
+                Some(self.membership_attributes("covers")),
+            )
+            .await
+            .with_context(|| {
+                format!("failed to create covers relations on demand for {table}:{entity_id}")
+            })?;
         }
 
         if table == "satellite" {
-            self.link_to_zones(table, &entity_id, "passes_over", &location_zone_ids, None)
-                .await
-                .with_context(|| {
-                    format!(
-                        "failed to create passes_over relations on demand for {table}:{entity_id}"
-                    )
-                })?;
+            self.link_to_zones(
+                table,
+                &entity_id,
+                "passes_over",
+                &location_zone_ids,
+                Some(self.passes_over_attributes()),
+            )
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to create passes_over relations on demand for {table}:{entity_id}"
+                )
+            })?;
         }
 
         Ok(())
@@ -151,8 +200,10 @@ impl GraphBusConsumer {
         )
         .await?;
 
-        self.link_aircraft_to_nearby_cameras(aircraft_id, payload)
-            .await?;
+        // #2 monitored_by and #10 near->military_base run as a batched,
+        // event-driven pass over the whole envelope's admitted aircraft
+        // (`consumer.rs::handle_envelope` -> `run_correlation_pass`), not
+        // per-entity here — see `correlation.rs`.
         self.link_subject_to_low_visibility_weather("aircraft", aircraft_id, location_zone_ids)
             .await?;
 
@@ -302,9 +353,49 @@ impl GraphBusConsumer {
         graph::relations::relation_attributes(
             Some(&expires_at),
             Some(&timestamp),
-            None,
+            Some(graph::relations::CONTAINMENT_SCORE),
             Some("consumer_graph"),
-            Some(json!({ "ttl_seconds": self.flies_over_ttl_seconds })),
+            Some(json!({
+                "rule": "flies_over:zone_containment",
+                "ttl_seconds": self.flies_over_ttl_seconds,
+            })),
+        )
+    }
+
+    /// #4b: a LEO satellite crosses a zone in ~2 minutes — without a TTL
+    /// this relation would be written once and never swept (the bug this
+    /// fixes: the old call site passed `attributes: None`, so `passes_over`
+    /// previously had no score/timestamp/expires_at/source at all).
+    fn passes_over_attributes(&self) -> Value {
+        let now = Utc::now();
+        let expires_at = (now + chrono::Duration::seconds(self.passes_over_ttl_seconds))
+            .to_rfc3339_opts(SecondsFormat::Secs, true);
+        let timestamp = now.to_rfc3339_opts(SecondsFormat::Secs, true);
+
+        graph::relations::relation_attributes(
+            Some(&expires_at),
+            Some(&timestamp),
+            Some(graph::relations::CONTAINMENT_SCORE),
+            Some("consumer_graph"),
+            Some(json!({
+                "rule": "passes_over:satellite_ground_track",
+                "ttl_seconds": self.passes_over_ttl_seconds,
+            })),
+        )
+    }
+
+    /// `located_in`/`covers`: quasi-static zone membership, upserted without
+    /// a TTL (unlike the ephemeral relations above) — still carries
+    /// score/source/explain so every edge stays auditable (Lot 5 §Provenance).
+    fn membership_attributes(&self, relation: &str) -> Value {
+        let timestamp = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
+
+        graph::relations::relation_attributes(
+            None,
+            Some(&timestamp),
+            Some(graph::relations::CONTAINMENT_SCORE),
+            Some("consumer_graph"),
+            Some(json!({ "rule": format!("{relation}:zone_membership") })),
         )
     }
 }
@@ -334,13 +425,15 @@ fn merge_location_zone_ids(
 #[cfg(test)]
 mod tests {
     use super::merge_location_zone_ids;
-    use crate::consumer::GraphBusConsumer;
+    use crate::{consumer::GraphBusConsumer, correlation::CorrelationThresholds};
     use anyhow::Context;
+    use bus::{topics, BusEnvelope};
     use chrono::Utc;
     use graph::zones::ZoneMatch;
     use serde_json::{json, Value};
     use std::fs;
     use std::time::Duration;
+    use surrealdb::types::Value as SurrealValue;
 
     const PARIS_TEST_ZONE_GEOJSON: &str = r#"
 {
@@ -448,38 +541,62 @@ mod tests {
             client.clone(),
             zone_lookup,
             180,
+            240,
             100_000.0,
             Duration::from_secs(0),
             Duration::from_millis(0),
+            CorrelationThresholds::from_env(),
         );
 
         let suffix = Utc::now().timestamp_micros();
         let aircraft_id = format!("phase2a-aircraft-{suffix}");
         let camera_id = format!("phase2a-camera-{suffix}");
 
+        // Routed through `handle_envelope` (not `process_entity` directly):
+        // #2 monitored_by now runs as a batched, event-driven correlation
+        // pass over the envelope's aircraft, fed by cameras already ingested
+        // into the R-tree — so the camera envelope must land first.
         let camera_payload = json!({
             "id": camera_id,
             "name": "Test Camera",
             "lat": 48.8567,
             "lon": 2.3525
         });
+        let camera_envelope = BusEnvelope::new_json(
+            "1",
+            "tests.camera",
+            topics::CAMERAS,
+            &json!({ "cameras": [camera_payload] }),
+        )
+        .context("failed to build camera envelope")?;
         graph_consumer
-            .process_entity("camera", &camera_payload, "tests.camera")
+            .handle_envelope(camera_envelope)
             .await
-            .context("failed processing camera payload")?;
+            .context("failed processing camera envelope")?;
 
+        // is_military + altitude_m<3000 satisfies both the upstream
+        // `GRAPH_AIRCRAFT_FILTER` admission gate and the #2 monitored_by
+        // altitude threshold in one payload (aircraft_filter.rs, correlation.rs).
         let aircraft_payload = json!({
             "id": aircraft_id,
             "callsign": "N31MK",
             "lat": 48.8566,
             "lon": 2.3522,
-            "altitude": 15175.0,
-            "speed": 197.0
+            "altitude_m": 1500.0,
+            "speed_ms": 100.0,
+            "is_military": true
         });
+        let aircraft_envelope = BusEnvelope::new_json(
+            "1",
+            "tests.aircraft",
+            topics::AIRCRAFT,
+            &json!({ "aircraft": [aircraft_payload] }),
+        )
+        .context("failed to build aircraft envelope")?;
         graph_consumer
-            .process_entity("aircraft", &aircraft_payload, "tests.aircraft")
+            .handle_envelope(aircraft_envelope)
             .await
-            .context("failed processing aircraft payload")?;
+            .context("failed processing aircraft envelope")?;
 
         let flies_over_sql = format!(
             "SELECT count() AS total FROM flies_over WHERE `in` = aircraft:`{}` AND out = zone:`city-paris` GROUP ALL;",
@@ -534,7 +651,17 @@ mod tests {
             })
             .await
             .context("failed querying traversal ids from city-paris")?;
-        let traversal_rows: Vec<Value> = traversal_response.take(0)?;
+        // Unlike the two count queries above (plain numbers), this query's
+        // result contains record references (`<-flies_over<-aircraft`) —
+        // decoding straight into `serde_json::Value` fails ("Expected any,
+        // got record"; verified experimentally). `queries.rs` establishes
+        // the correct pattern: decode into `surrealdb::types::Value` first,
+        // then convert explicitly with `into_json_value()`.
+        let traversal_rows: Vec<SurrealValue> = traversal_response.take(0)?;
+        let traversal_rows: Vec<Value> = traversal_rows
+            .into_iter()
+            .map(SurrealValue::into_json_value)
+            .collect();
         let traversal_contains_aircraft = traversal_rows
             .first()
             .and_then(|row| row.get("aircraft_ids"))
@@ -550,7 +677,7 @@ mod tests {
         assert!(traversal_contains_aircraft);
 
         let cleanup_sql = format!(
-            "DELETE flies_over WHERE `in` = aircraft:`{aircraft_id}`; DELETE monitored_by WHERE `in` = aircraft:`{aircraft_id}`; DELETE aircraft:`{aircraft_id}`; DELETE camera:`{camera_id}`;"
+            "DELETE flies_over WHERE `in` = aircraft:`{aircraft_id}`; DELETE monitored_by WHERE `in` = aircraft:`{aircraft_id}`; DELETE near WHERE `in` = aircraft:`{aircraft_id}`; DELETE aircraft:`{aircraft_id}`; DELETE camera:`{camera_id}`;"
         );
         client
             .with_retry(move |db| {

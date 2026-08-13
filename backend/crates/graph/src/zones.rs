@@ -255,6 +255,38 @@ mod tests {
         assert!(matches[0].distance_m > 0.0);
     }
 
+    /// Lot 7a: the region tier alone (8 continent-scale polygons) made every
+    /// entity outside a city/airport polygon fall back to a continent —
+    /// exactly the hub fan-in the review traced `/graph/neighbors` 500s and
+    /// 30s stalls on `zone:north-america` to. Loads the real seed file (not
+    /// a fixture) and checks the new country tier resolves alongside the
+    /// pre-existing region tier, not instead of it.
+    #[test]
+    fn real_zones_file_resolves_country_tier_alongside_region_tier() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/zones/global_zones.geojson");
+        let lookup = ZoneLookup::from_geojson_path(path).expect("real zones file should parse");
+
+        // 60 pre-existing (20 airport + 32 city + 8 region) + 177 countries.
+        assert_eq!(lookup.len(), 237);
+
+        // Paris: should still match the pre-existing city + region zones,
+        // *and* now the new country zone — additive, nothing displaced.
+        let paris = lookup.lookup(48.8566, 2.3522);
+        let paris_ids: Vec<&str> = paris.iter().map(|m| m.zone_id.as_str()).collect();
+        assert!(paris_ids.contains(&"city-paris"), "{paris_ids:?}");
+        assert!(paris_ids.contains(&"europe"), "{paris_ids:?}");
+        assert!(paris_ids.contains(&"country-fra"), "{paris_ids:?}");
+
+        // Australia (Sydney): the country id is deliberately namespaced
+        // (`country-aus`, not `australia`) — the region tier already used
+        // the bare slug `australia`, and colliding would have silently
+        // overwritten that region zone via `entities::upsert`'s upsert-by-id.
+        let sydney = lookup.lookup(-33.8688, 151.2093);
+        let sydney_ids: Vec<&str> = sydney.iter().map(|m| m.zone_id.as_str()).collect();
+        assert!(sydney_ids.contains(&"australia"), "{sydney_ids:?}");
+        assert!(sydney_ids.contains(&"country-aus"), "{sydney_ids:?}");
+    }
+
     fn sample_geojson() -> &'static str {
         r#"
 {
