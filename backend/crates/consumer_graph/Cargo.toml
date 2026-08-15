@@ -20,3 +20,4 @@ surrealdb.workspace = true
 rstar.workspace = true
 graph = { path = "../graph" }
 runtime_logging = { path = "../runtime_logging" }
+cameras = { path = "../cameras" }

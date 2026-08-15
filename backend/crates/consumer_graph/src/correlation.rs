@@ -22,6 +22,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+use cameras::{
+    visibility::{assess_camera, max_possible_range_km, CameraAssessment, WeatherContext},
+    Camera, CameraViewSource, StreamType,
+};
 use chrono::{SecondsFormat, Utc};
 use futures_util::{stream, StreamExt};
 use rstar::{PointDistance, RTree, RTreeObject, AABB};
@@ -37,8 +41,8 @@ use crate::{
         DEFAULT_MONITORED_BY_MAX_ALTITUDE_M, DEFAULT_MONITORED_BY_TOP_K,
         DEFAULT_MONITORED_BY_TTL_SECONDS, DEFAULT_SEISMIC_MIN_MAGNITUDE,
         DEFAULT_SEISMIC_NEAR_RADIUS_KM, DEFAULT_SEISMIC_NEAR_TTL_SECONDS,
-        LOW_VISIBILITY_THRESHOLD_M, MONITORED_BY_MAX_DISTANCE_KM, RELATE_BATCH_CHUNK_SIZE,
-        RELATE_BATCH_CONCURRENCY, STATIC_DOMAIN_STORE_TTL_SECONDS,
+        LOW_VISIBILITY_THRESHOLD_M, RELATE_BATCH_CHUNK_SIZE, RELATE_BATCH_CONCURRENCY,
+        STATIC_DOMAIN_STORE_TTL_SECONDS,
     },
     geo::{extract_lat_lon, haversine_km},
 };
@@ -103,10 +107,11 @@ fn nearest_within(
     candidates
 }
 
-struct StoredPoint {
+struct StoredPoint<T> {
     lat: f64,
     lon: f64,
     seen_at: Instant,
+    data: T,
 }
 
 /// Per-domain in-memory accumulator + spatial index. Entities are upserted
@@ -114,14 +119,20 @@ struct StoredPoint {
 /// refreshed within the domain's TTL and rebuilds the R-tree — but only
 /// when something actually changed, so a call with nothing dirty and
 /// nothing expired is a cheap no-op (not a rebuild every envelope).
-struct DomainStore {
-    points: HashMap<String, StoredPoint>,
+///
+/// Generic over `T`: military_base/nuclear_site only ever need a point
+/// (`T = ()`), but the camera domain needs to carry its FOV/pixel geometry
+/// fields alongside lat/lon so `correlate_aircraft` can run the real
+/// `cameras::visibility` cone+pixel test on each R-tree candidate instead of
+/// a bare distance check — see `CameraGeoData`.
+struct DomainStore<T> {
+    points: HashMap<String, StoredPoint<T>>,
     index: RTree<IndexedPoint>,
     dirty: bool,
     ttl: Duration,
 }
 
-impl DomainStore {
+impl<T> DomainStore<T> {
     fn new(ttl: Duration) -> Self {
         Self {
             points: HashMap::new(),
@@ -131,13 +142,14 @@ impl DomainStore {
         }
     }
 
-    fn upsert(&mut self, id: String, lat: f64, lon: f64) {
+    fn upsert(&mut self, id: String, lat: f64, lon: f64, data: T) {
         self.points.insert(
             id,
             StoredPoint {
                 lat,
                 lon,
                 seen_at: Instant::now(),
+                data,
             },
         );
         self.dirty = true;
@@ -173,6 +185,73 @@ impl DomainStore {
     fn len(&self) -> usize {
         self.points.len()
     }
+
+    /// Full stored record (coordinates + domain data) for one candidate id
+    /// returned by `nearest_within` — the R-tree/`IndexedPoint` only carries
+    /// `id`/`lat`/`lon`, so callers that need the rest (camera FOV fields)
+    /// look it up here.
+    fn get(&self, id: &str) -> Option<(f64, f64, &T)> {
+        self.points.get(id).map(|point| (point.lat, point.lon, &point.data))
+    }
+}
+
+/// Camera fields `cameras::visibility::assess_camera` needs beyond lat/lon,
+/// read off the bus envelope's camera payload (the same JSON shape
+/// `cameras::Camera` serializes to — see `cameras/src/tracker.rs`). Kept as
+/// its own small struct rather than deserializing straight into
+/// `cameras::Camera`: several of that struct's fields (name/city/country/
+/// stream_url/stream_type/is_online) are irrelevant to the geometry and not
+/// reliably present on every payload (e.g. in tests), so a strict
+/// deserialize would fail on exactly the fields this correlation doesn't use.
+struct CameraGeoData {
+    source: String,
+    view_heading_deg: Option<f64>,
+    view_fov_deg: Option<f64>,
+    view_heading_source: Option<CameraViewSource>,
+    resolution_px: Option<u32>,
+}
+
+impl CameraGeoData {
+    fn from_payload(payload: &Value) -> Self {
+        Self {
+            source: payload
+                .get("source")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            view_heading_deg: payload.get("view_heading_deg").and_then(Value::as_f64),
+            view_fov_deg: payload.get("view_fov_deg").and_then(Value::as_f64),
+            view_heading_source: payload
+                .get("view_heading_source")
+                .and_then(|value| serde_json::from_value(value.clone()).ok()),
+            resolution_px: payload
+                .get("resolution_px")
+                .and_then(Value::as_u64)
+                .map(|value| value as u32),
+        }
+    }
+
+    /// Builds the `cameras::Camera` `assess_camera` expects, with placeholder
+    /// values for the fields the geometry never reads.
+    fn to_camera(&self, id: &str, lat: f64, lon: f64) -> Camera {
+        Camera {
+            id: id.to_string(),
+            name: String::new(),
+            lat,
+            lon,
+            city: String::new(),
+            country: String::new(),
+            source: self.source.clone(),
+            stream_url: String::new(),
+            stream_type: StreamType::Mjpeg,
+            is_online: true,
+            view_heading_deg: self.view_heading_deg,
+            view_fov_deg: self.view_fov_deg,
+            view_heading_source: self.view_heading_source.clone(),
+            view_hint: None,
+            resolution_px: self.resolution_px,
+        }
+    }
 }
 
 /// Anti-noise admission thresholds + TTLs for the Lot 5 cross-domain
@@ -184,7 +263,6 @@ impl DomainStore {
 // external constructs one directly (`from_env` stays `pub(crate)`).
 #[derive(Debug, Clone)]
 pub struct CorrelationThresholds {
-    pub(crate) monitored_by_max_distance_km: f64,
     pub(crate) monitored_by_max_altitude_m: f64,
     pub(crate) monitored_by_top_k: usize,
     pub(crate) monitored_by_ttl_seconds: i64,
@@ -202,10 +280,6 @@ pub struct CorrelationThresholds {
 impl CorrelationThresholds {
     pub(crate) fn from_env() -> Self {
         Self {
-            monitored_by_max_distance_km: parse_env_f64(
-                "GRAPH_MONITORED_BY_MAX_DISTANCE_KM",
-                MONITORED_BY_MAX_DISTANCE_KM,
-            ),
             monitored_by_max_altitude_m: parse_env_f64(
                 "GRAPH_MONITORED_BY_MAX_ALTITUDE_M",
                 DEFAULT_MONITORED_BY_MAX_ALTITUDE_M,
@@ -288,9 +362,11 @@ pub(crate) fn relation_window(ttl_seconds: i64) -> (String, String) {
 /// stored here — they arrive as a batch and are correlated immediately,
 /// they are never themselves the *target* of a lookup.
 pub(crate) struct CorrelationEngine {
-    camera: DomainStore,
-    military_base: DomainStore,
-    nuclear_site: DomainStore,
+    camera: DomainStore<CameraGeoData>,
+    military_base: DomainStore<()>,
+    nuclear_site: DomainStore<()>,
+    started_at: Instant,
+    monitored_by_edges_total: u64,
 }
 
 impl CorrelationEngine {
@@ -299,6 +375,8 @@ impl CorrelationEngine {
             camera: DomainStore::new(Duration::from_secs(CAMERA_STORE_TTL_SECONDS)),
             military_base: DomainStore::new(Duration::from_secs(STATIC_DOMAIN_STORE_TTL_SECONDS)),
             nuclear_site: DomainStore::new(Duration::from_secs(STATIC_DOMAIN_STORE_TTL_SECONDS)),
+            started_at: Instant::now(),
+            monitored_by_edges_total: 0,
         }
     }
 
@@ -308,13 +386,14 @@ impl CorrelationEngine {
         let Some((lat, lon)) = extract_lat_lon(payload) else {
             return;
         };
-        let store = match table {
-            "camera" => &mut self.camera,
-            "military_base" => &mut self.military_base,
-            "nuclear_site" => &mut self.nuclear_site,
-            _ => return,
-        };
-        store.upsert(id.to_string(), lat, lon);
+        match table {
+            "camera" => self
+                .camera
+                .upsert(id.to_string(), lat, lon, CameraGeoData::from_payload(payload)),
+            "military_base" => self.military_base.upsert(id.to_string(), lat, lon, ()),
+            "nuclear_site" => self.nuclear_site.upsert(id.to_string(), lat, lon, ()),
+            _ => {}
+        }
     }
 
     pub(crate) fn domain_sizes(&self) -> (usize, usize, usize) {
@@ -325,13 +404,27 @@ impl CorrelationEngine {
         )
     }
 
-    /// #2 `aircraft -> monitored_by -> camera` (altitude gate, top-K nearest)
-    /// and #10 `aircraft(is_military) -> near -> military_base` (is_military
-    /// gate, no altitude bound). Both gates are re-checked here per-relation
-    /// even though the upstream `GRAPH_AIRCRAFT_FILTER` admission gate
-    /// (`aircraft_filter.rs`) already implies both today — so each relation
-    /// keeps its own correct threshold if that upstream filter is ever
-    /// relaxed independently (e.g. `GRAPH_AIRCRAFT_FILTER=none`).
+    /// Anti-noise volume signal for `monitored_by`: the cumulative edge
+    /// count since this engine started, and that total extrapolated to a
+    /// per-day rate from the engine's own uptime. There is no existing
+    /// windowed-rate metrics infra in this crate to hook into (no other
+    /// relation logs a true "edges/day" either, only raw per-pass counts) —
+    /// this is the simplest honest equivalent, not a claim of parity with a
+    /// pre-existing rate tracker.
+    pub(crate) fn monitored_by_volume(&self) -> (u64, f64) {
+        let uptime_secs = self.started_at.elapsed().as_secs_f64().max(1.0);
+        let per_day = (self.monitored_by_edges_total as f64 / uptime_secs) * 86_400.0;
+        (self.monitored_by_edges_total, per_day)
+    }
+
+    /// #2 `aircraft -> monitored_by -> camera` (altitude gate, real FOV
+    /// cone + pixel-criterion geometry from `cameras::visibility`, top-K
+    /// best-scored) and #10 `aircraft(is_military) -> near -> military_base`
+    /// (is_military gate, no altitude bound). Both gates are re-checked here
+    /// per-relation even though the upstream `GRAPH_AIRCRAFT_FILTER`
+    /// admission gate (`aircraft_filter.rs`) already implies both today — so
+    /// each relation keeps its own correct threshold if that upstream filter
+    /// is ever relaxed independently (e.g. `GRAPH_AIRCRAFT_FILTER=none`).
     pub(crate) fn correlate_aircraft(
         &mut self,
         batch: &[(String, Value)],
@@ -351,6 +444,16 @@ impl CorrelationEngine {
         let (near_timestamp, near_expires) =
             relation_window(thresholds.aircraft_near_base_ttl_seconds);
 
+        // Physically-motivated coarse pre-filter radius: since camera mast
+        // height is a fixed assumed constant (`visibility::ASSUMED_CAMERA_HEIGHT_M`),
+        // this is the optical horizon — the hard upper bound on any camera's
+        // usable range, and always >= the real cone+pixel range `assess_camera`
+        // applies. Replaces the old flat 2 km haversine cutoff (`seeyou-v2.md`
+        // §Catalogue #2: "remplace le haversine 2 km") — the R-tree query is
+        // only a coarse superset here, `assess_camera` below does the exact
+        // (and much tighter, per-camera) cut.
+        let camera_radius_km = max_possible_range_km();
+
         let mut edges = Vec::new();
         for (aircraft_id, payload) in batch {
             let Some((lat, lon)) = extract_lat_lon(payload) else {
@@ -362,42 +465,61 @@ impl CorrelationEngine {
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
 
-            if altitude_m
-                .map(|altitude| altitude < thresholds.monitored_by_max_altitude_m)
-                .unwrap_or(false)
-            {
-                for (camera_id, distance_km) in nearest_within(
-                    camera_index,
-                    lat,
-                    lon,
-                    thresholds.monitored_by_max_distance_km,
-                    thresholds.monitored_by_top_k,
-                ) {
-                    let score =
-                        score_from_distance_km(distance_km, thresholds.monitored_by_max_distance_km);
-                    let explain = json!({
-                        "rule": "monitored_by:aircraft_camera_proximity",
-                        "distance_km": round2(distance_km),
-                        "max_distance_km": thresholds.monitored_by_max_distance_km,
-                        "altitude_m": altitude_m,
-                        "altitude_threshold_m": thresholds.monitored_by_max_altitude_m,
-                        "top_k": thresholds.monitored_by_top_k,
-                        "sources": ["adsb.lol", "cameras"],
-                    });
-                    edges.push(RelationEdge {
-                        from_table: "aircraft",
-                        from_id: aircraft_id.clone(),
-                        relation: "monitored_by",
-                        to_table: "camera",
-                        to_id: camera_id,
-                        attributes: relation_attributes(
-                            Some(&monitored_expires),
-                            Some(&monitored_timestamp),
-                            Some(score),
-                            Some("consumer_graph::correlation"),
-                            Some(explain),
-                        ),
-                    });
+            if let Some(altitude_m) = altitude_m {
+                if altitude_m < thresholds.monitored_by_max_altitude_m {
+                    let weather = WeatherContext::default();
+                    let mut assessed: Vec<(String, CameraAssessment)> =
+                        nearest_within(camera_index, lat, lon, camera_radius_km, usize::MAX)
+                            .into_iter()
+                            .filter_map(|(camera_id, _distance_km)| {
+                                let (cam_lat, cam_lon, camera_data) = self.camera.get(&camera_id)?;
+                                let camera = camera_data.to_camera(&camera_id, cam_lat, cam_lon);
+                                let assessment =
+                                    assess_camera(&camera, lat, lon, altitude_m, &weather)?;
+                                Some((camera_id, assessment))
+                            })
+                            .collect();
+
+                    // Rank by sighting quality (optical level + weather
+                    // confidence), not raw distance — a Recognition-level
+                    // sighting a few km out is a more informative "best
+                    // placed" camera than a Proximity-only one right next to
+                    // the aircraft (no reliable heading to confirm the cone).
+                    // `nearest_within` already returned candidates
+                    // distance-sorted, and `sort_by` is stable, so equal
+                    // scores still tie-break nearest-first.
+                    assessed.sort_by(|a, b| b.1.score.total_cmp(&a.1.score));
+                    assessed.truncate(thresholds.monitored_by_top_k);
+
+                    for (camera_id, assessment) in assessed {
+                        let explain = json!({
+                            "rule": "monitored_by:camera_visibility_geometry",
+                            "level": assessment.level,
+                            "azimuth_deg": round2(assessment.geometry.bearing_deg),
+                            "elevation_deg": round2(assessment.geometry.elevation_deg),
+                            "slant_distance_m": round2(assessment.geometry.slant_distance_m),
+                            "px": round2(assessment.px),
+                            "altitude_m": altitude_m,
+                            "altitude_threshold_m": thresholds.monitored_by_max_altitude_m,
+                            "top_k": thresholds.monitored_by_top_k,
+                            "notes": assessment.explain,
+                            "sources": ["adsb.lol", "cameras"],
+                        });
+                        edges.push(RelationEdge {
+                            from_table: "aircraft",
+                            from_id: aircraft_id.clone(),
+                            relation: "monitored_by",
+                            to_table: "camera",
+                            to_id: camera_id,
+                            attributes: relation_attributes(
+                                Some(&monitored_expires),
+                                Some(&monitored_timestamp),
+                                Some(assessment.score),
+                                Some("consumer_graph::correlation"),
+                                Some(explain),
+                            ),
+                        });
+                    }
                 }
             }
 
@@ -435,6 +557,11 @@ impl CorrelationEngine {
                 }
             }
         }
+
+        self.monitored_by_edges_total += edges
+            .iter()
+            .filter(|edge| edge.relation == "monitored_by")
+            .count() as u64;
 
         edges
     }
@@ -586,6 +713,7 @@ impl GraphBusConsumer {
             return Ok(());
         }
 
+        let pass_start = Instant::now();
         let mut edges = Vec::new();
         {
             let mut engine = self.correlation.lock().await;
@@ -593,6 +721,12 @@ impl GraphBusConsumer {
             let seismic_edges = engine.correlate_seismic(&seismic_batch, &self.thresholds);
             let fire_edges = engine.correlate_fire(&fire_batch, &self.thresholds);
             let (cameras, bases, sites) = engine.domain_sizes();
+            let monitored_by_this_pass = aircraft_edges
+                .iter()
+                .filter(|edge| edge.relation == "monitored_by")
+                .count();
+            let (monitored_by_total, monitored_by_per_day) = engine.monitored_by_volume();
+            let correlation_pass_ms = pass_start.elapsed().as_secs_f64() * 1000.0;
 
             info!(
                 aircraft_in = aircraft_batch.len(),
@@ -604,6 +738,16 @@ impl GraphBusConsumer {
                 camera_domain_size = cameras,
                 military_base_domain_size = bases,
                 nuclear_site_domain_size = sites,
+                correlation_pass_ms = round2(correlation_pass_ms),
+                // Anti-noise volume signal for #2 specifically (the
+                // combined `monitored_by_and_near_aircraft` count above
+                // mixes it with #10's near/military_base edges): this
+                // pass's count, the cumulative total since this
+                // `consumer_graph` process started, and that total
+                // extrapolated to a per-day rate.
+                monitored_by_edges_this_pass = monitored_by_this_pass,
+                monitored_by_edges_total_since_start = monitored_by_total,
+                monitored_by_edges_per_day_estimate = round2(monitored_by_per_day),
                 "correlation pass computed edges"
             );
 
@@ -636,6 +780,7 @@ impl GraphBusConsumer {
         if edges.is_empty() {
             return Ok(());
         }
+        let flush_start = Instant::now();
         let total = edges.len();
         let client = self.client.clone();
 
@@ -657,7 +802,247 @@ impl GraphBusConsumer {
             written += result?;
         }
 
-        info!(edges = total, written, "correlation pass flushed relation batch");
+        let flush_ms = flush_start.elapsed().as_secs_f64() * 1000.0;
+        info!(
+            edges = total,
+            written,
+            flush_ms = round2(flush_ms),
+            "correlation pass flushed relation batch"
+        );
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Meters per degree of latitude near the equator (matches
+    /// `geo::haversine_km`'s own reference point) — used only to place test
+    /// cameras at a known distance from the test aircraft.
+    const METERS_PER_DEGREE_LAT: f64 = 111_195.0;
+
+    fn meters_south(base_lat: f64, meters: f64) -> f64 {
+        base_lat - meters / METERS_PER_DEGREE_LAT
+    }
+
+    fn test_thresholds(monitored_by_top_k: usize) -> CorrelationThresholds {
+        CorrelationThresholds {
+            monitored_by_max_altitude_m: DEFAULT_MONITORED_BY_MAX_ALTITUDE_M,
+            monitored_by_top_k,
+            monitored_by_ttl_seconds: DEFAULT_MONITORED_BY_TTL_SECONDS,
+            aircraft_near_base_radius_km: DEFAULT_AIRCRAFT_NEAR_BASE_RADIUS_KM,
+            aircraft_near_base_ttl_seconds: DEFAULT_AIRCRAFT_NEAR_BASE_TTL_SECONDS,
+            seismic_min_magnitude: DEFAULT_SEISMIC_MIN_MAGNITUDE,
+            seismic_near_radius_km: DEFAULT_SEISMIC_NEAR_RADIUS_KM,
+            seismic_near_ttl_seconds: DEFAULT_SEISMIC_NEAR_TTL_SECONDS,
+            fire_min_frp_mw: DEFAULT_FIRE_MIN_FRP_MW,
+            fire_near_radius_km: DEFAULT_FIRE_NEAR_RADIUS_KM,
+            fire_near_ttl_seconds: DEFAULT_FIRE_NEAR_TTL_SECONDS,
+            weather_low_visibility_threshold_m: LOW_VISIBILITY_THRESHOLD_M,
+        }
+    }
+
+    fn aircraft_batch(lat: f64, lon: f64, altitude_m: f64) -> Vec<(String, Value)> {
+        vec![(
+            "ac-1".to_string(),
+            json!({ "lat": lat, "lon": lon, "altitude_m": altitude_m, "is_military": false }),
+        )]
+    }
+
+    /// Regression test for the fix this task targets: `monitored_by` used to
+    /// rank purely by haversine distance (`MONITORED_BY_MAX_DISTANCE_KM`,
+    /// 2 km flat cutoff). This proves the real `cameras::visibility` geometry
+    /// is wired in instead — a farther camera with a confirmed FOV cone and
+    /// a high pixel count outranks a nearer one with no reliable heading, and
+    /// a camera facing away from the aircraft is excluded outright regardless
+    /// of distance.
+    #[test]
+    fn correlate_aircraft_ranks_monitored_by_edges_on_geometry_not_raw_distance() {
+        let mut engine = CorrelationEngine::new();
+        let aircraft_lat = 0.02;
+        let aircraft_lon = 0.0;
+
+        // cam-a: closest (50 m), but faces away from the aircraft -- excluded
+        // by the FOV cone entirely, no matter how close.
+        engine.ingest(
+            "camera",
+            "cam-a",
+            &json!({
+                "lat": meters_south(aircraft_lat, 50.0),
+                "lon": aircraft_lon,
+                "view_heading_deg": 180.0,
+                "view_fov_deg": 20.0,
+                "view_heading_source": "provider",
+                "resolution_px": 640,
+                "source": "test-a",
+            }),
+        );
+        // cam-b: farther (2000 m), faces the aircraft with a narrow FOV --
+        // clears the pixel criterion at recognition level (score 1.0).
+        engine.ingest(
+            "camera",
+            "cam-b",
+            &json!({
+                "lat": meters_south(aircraft_lat, 2000.0),
+                "lon": aircraft_lon,
+                "view_heading_deg": 0.0,
+                "view_fov_deg": 20.0,
+                "view_heading_source": "provider",
+                "resolution_px": 640,
+                "source": "test-b",
+            }),
+        );
+        // cam-c: closer (200 m) than cam-b, but no reliable heading --
+        // proximity-only (score 0.3), lower than cam-b's recognition score.
+        engine.ingest(
+            "camera",
+            "cam-c",
+            &json!({
+                "lat": meters_south(aircraft_lat, 200.0),
+                "lon": aircraft_lon,
+                "source": "test-c",
+            }),
+        );
+
+        let thresholds = test_thresholds(1);
+        let batch = aircraft_batch(aircraft_lat, aircraft_lon, 400.0);
+        let edges = engine.correlate_aircraft(&batch, &thresholds);
+
+        assert_eq!(edges.len(), 1, "top_k=1 should keep exactly one edge: {edges:?}");
+        let edge = &edges[0];
+        assert_eq!(edge.relation, "monitored_by");
+        assert_eq!(
+            edge.to_id, "cam-b",
+            "the farther recognition-level camera must outrank the closer proximity-only one \
+             and the closest (but out-of-cone) one: {edges:?}"
+        );
+        assert_eq!(edge.attributes["explain"]["level"], "recognition");
+        assert!(edge.attributes["explain"]["azimuth_deg"].is_number());
+        assert!(edge.attributes["explain"]["elevation_deg"].is_number());
+        assert!(edge.attributes["explain"]["slant_distance_m"].is_number());
+        assert!(edge.attributes["explain"]["px"].is_number());
+        assert_eq!(edge.attributes["source"], "consumer_graph::correlation");
+        assert!(edge.attributes["expires_at"].is_string());
+        assert!(edge.attributes["timestamp"].is_string());
+    }
+
+    #[test]
+    fn correlate_aircraft_skips_cruise_altitude_for_monitored_by() {
+        let mut engine = CorrelationEngine::new();
+        let aircraft_lat = 0.02;
+        let aircraft_lon = 0.0;
+
+        engine.ingest(
+            "camera",
+            "cam-close",
+            &json!({
+                "lat": meters_south(aircraft_lat, 100.0),
+                "lon": aircraft_lon,
+                "source": "test",
+            }),
+        );
+
+        let thresholds = test_thresholds(3);
+        // Above DEFAULT_MONITORED_BY_MAX_ALTITUDE_M -- a cruising aircraft is
+        // not visible to any ground camera regardless of proximity.
+        let batch = aircraft_batch(aircraft_lat, aircraft_lon, 9000.0);
+        let edges = engine.correlate_aircraft(&batch, &thresholds);
+
+        assert!(
+            edges.is_empty(),
+            "cruise-altitude aircraft must not produce monitored_by edges: {edges:?}"
+        );
+    }
+
+    #[test]
+    fn correlate_aircraft_caps_monitored_by_at_top_k_nearest() {
+        let mut engine = CorrelationEngine::new();
+        let aircraft_lat = 0.02;
+        let aircraft_lon = 0.0;
+        let distances_m = [100.0, 300.0, 600.0, 1000.0, 2000.0];
+
+        for (idx, distance_m) in distances_m.iter().enumerate() {
+            engine.ingest(
+                "camera",
+                &format!("cam-{idx}"),
+                &json!({
+                    "lat": meters_south(aircraft_lat, *distance_m),
+                    "lon": aircraft_lon,
+                    "source": "test",
+                }),
+            );
+        }
+
+        let thresholds = test_thresholds(3);
+        let batch = aircraft_batch(aircraft_lat, aircraft_lon, 400.0);
+        let edges = engine.correlate_aircraft(&batch, &thresholds);
+
+        assert_eq!(edges.len(), 3, "top_k=3 must cap the edge count: {edges:?}");
+        let ids: Vec<&str> = edges.iter().map(|e| e.to_id.as_str()).collect();
+        assert!(ids.contains(&"cam-0"));
+        assert!(ids.contains(&"cam-1"));
+        assert!(ids.contains(&"cam-2"));
+        assert!(
+            !ids.contains(&"cam-3") && !ids.contains(&"cam-4"),
+            "the two farthest cameras must be dropped by the top-K cap: {edges:?}"
+        );
+    }
+
+    /// The anti-noise volume signal (`run_correlation_pass`'s
+    /// `monitored_by_edges_total_since_start`/`_per_day_estimate` log
+    /// fields): the cumulative count must survive across passes and only
+    /// count `monitored_by`, not #10's `near`/military_base edges from the
+    /// same aircraft batch.
+    #[test]
+    fn monitored_by_volume_accumulates_across_passes_and_ignores_near_edges() {
+        let mut engine = CorrelationEngine::new();
+        let aircraft_lat = 0.02;
+        let aircraft_lon = 0.0;
+
+        engine.ingest(
+            "camera",
+            "cam-a",
+            &json!({ "lat": meters_south(aircraft_lat, 100.0), "lon": aircraft_lon, "source": "test" }),
+        );
+        engine.ingest(
+            "military_base",
+            "base-a",
+            &json!({ "lat": meters_south(aircraft_lat, 100.0), "lon": aircraft_lon }),
+        );
+
+        let thresholds = test_thresholds(3);
+        assert_eq!(engine.monitored_by_volume().0, 0);
+
+        // is_military: true so this batch also produces a near/military_base
+        // edge alongside monitored_by -- the counter must not pick that up.
+        let batch = vec![(
+            "ac-1".to_string(),
+            json!({
+                "lat": aircraft_lat, "lon": aircraft_lon, "altitude_m": 400.0, "is_military": true,
+            }),
+        )];
+        let first_pass = engine.correlate_aircraft(&batch, &thresholds);
+        let monitored_by_in_first_pass = first_pass
+            .iter()
+            .filter(|e| e.relation == "monitored_by")
+            .count() as u64;
+        assert!(
+            first_pass.iter().any(|e| e.relation == "near"),
+            "sanity check: this batch should also produce a near edge: {first_pass:?}"
+        );
+        assert_eq!(engine.monitored_by_volume().0, monitored_by_in_first_pass);
+
+        let second_pass = engine.correlate_aircraft(&batch, &thresholds);
+        let monitored_by_in_second_pass = second_pass
+            .iter()
+            .filter(|e| e.relation == "monitored_by")
+            .count() as u64;
+        assert_eq!(
+            engine.monitored_by_volume().0,
+            monitored_by_in_first_pass + monitored_by_in_second_pass,
+            "the counter must accumulate across passes, not reset"
+        );
+        assert!(engine.monitored_by_volume().1 >= 0.0);
     }
 }

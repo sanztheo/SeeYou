@@ -779,6 +779,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bus",
+ "cameras",
  "chrono",
  "dotenvy",
  "futures-util",
