@@ -158,7 +158,7 @@ interface GlobeProps {
 
   convergenceZones?: ConvergenceZone[];
 
-  onViewportChange?: (bbox: BBox) => void;
+  onViewportChange?: (bbox: BBox | null) => void;
 
   onCameraChange?: (state: CameraState) => void;
   onCursorMove?: (state: CursorState) => void;
@@ -277,7 +277,15 @@ export function Globe({
     lastViewportEmit.current = now;
 
     const rect = viewer.camera.computeViewRectangle();
-    if (!rect) return;
+    if (!rect) {
+      // Horizon in view (tilted/zoomed-out camera) — notify null so
+      // downstream state actually changes and resolveCameraBbox's
+      // last-valid-bbox fallback (cameraService.ts) can kick in. Silently
+      // returning here left viewportBbox frozen at its first-ever value
+      // for the rest of the session, since a no-op never re-renders.
+      onViewportChangeRef.current?.(null);
+      return;
+    }
     onViewportChangeRef.current?.({
       south: rect.south * RAD2DEG,
       west: rect.west * RAD2DEG,
@@ -409,10 +417,7 @@ export function Globe({
       )}
 
       {selectedCamera && selectedCameraView && (
-        <CameraFocusLayer
-          camera={selectedCamera}
-          view={selectedCameraView}
-        />
+        <CameraFocusLayer camera={selectedCamera} view={selectedCameraView} />
       )}
 
       {weatherFilter?.enabled && (
