@@ -20,7 +20,6 @@ pub struct GeocodeResult {
     pub display_name: String,
     pub lat: f64,
     pub lon: f64,
-    #[serde(rename = "type")]
     pub place_type: String,
 }
 
