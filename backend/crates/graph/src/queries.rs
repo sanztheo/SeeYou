@@ -142,6 +142,62 @@ pub async fn get_table_records(
         .collect())
 }
 
+/// Filters on the same field set `api::graph_api`'s search endpoint labels
+/// entities from (id, name, title, callsign, city, description, country,
+/// event_type, type, site_type) — pushed into SurrealDB instead of pulling
+/// a fixed-size page of raw rows into the app and filtering there, which
+/// silently truncated the search to whatever happened to be first in
+/// storage order on tables bigger than that page (camera has 11k+ rows,
+/// fire_hotspot has 150k+). `?? ''` coalesces fields a given table doesn't
+/// have (`string::lowercase` errors on NONE rather than treating it as "no
+/// match").
+pub async fn search_table_records(
+    client: &GraphClient,
+    table: &str,
+    needle_lowercase: &str,
+    limit: usize,
+) -> anyhow::Result<Vec<Value>> {
+    let table = table.to_string();
+    let needle = needle_lowercase.to_string();
+    let mut response = client
+        .with_retry(move |db| {
+            let table = table.clone();
+            let needle = needle.clone();
+            async move {
+                let response = db
+                    .query(
+                        r#"
+                        SELECT * FROM type::table($table)
+                        WHERE string::lowercase(<string>record::id(id)) CONTAINS $needle
+                           OR string::lowercase(<string>(name ?? '')) CONTAINS $needle
+                           OR string::lowercase(<string>(title ?? '')) CONTAINS $needle
+                           OR string::lowercase(<string>(callsign ?? '')) CONTAINS $needle
+                           OR string::lowercase(<string>(city ?? '')) CONTAINS $needle
+                           OR string::lowercase(<string>(description ?? '')) CONTAINS $needle
+                           OR string::lowercase(<string>(country ?? '')) CONTAINS $needle
+                           OR string::lowercase(<string>(event_type ?? '')) CONTAINS $needle
+                           OR string::lowercase(<string>(`type` ?? '')) CONTAINS $needle
+                           OR string::lowercase(<string>(site_type ?? '')) CONTAINS $needle
+                        LIMIT $limit;
+                        "#,
+                    )
+                    .bind(("table", table))
+                    .bind(("needle", needle))
+                    .bind(("limit", limit.max(1) as i64))
+                    .await?
+                    .check()?;
+                Ok(response)
+            }
+        })
+        .await?;
+
+    let records: Vec<SurrealValue> = response.take(0)?;
+    Ok(records
+        .into_iter()
+        .map(SurrealValue::into_json_value)
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::get_entity;
